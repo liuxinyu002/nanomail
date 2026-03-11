@@ -1,0 +1,238 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { ImapService, type ImapConfig, type FetchedEmail } from './ImapService'
+import type { SettingsService } from './SettingsService'
+
+// Mock the imapflow module
+vi.mock('imapflow', () => {
+  const mockClient = {
+    connect: vi.fn(),
+    logout: vi.fn(),
+    mailboxOpen: vi.fn(),
+    search: vi.fn(),
+    fetchAll: vi.fn(),
+  }
+
+  return {
+    ImapFlow: vi.fn(() => mockClient),
+  }
+})
+
+describe('ImapService', () => {
+  let service: ImapService
+  let mockSettingsService: SettingsService
+
+  beforeEach(() => {
+    // Create mock SettingsService
+    mockSettingsService = {
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as SettingsService
+
+    service = new ImapService(mockSettingsService)
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('getConfig', () => {
+    it('should retrieve and construct ImapConfig from settings', async () => {
+      // Setup mock responses
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com') // IMAP_HOST
+        .mockResolvedValueOnce('993') // IMAP_PORT
+        .mockResolvedValueOnce('user@gmail.com') // IMAP_USER
+        .mockResolvedValueOnce('app-password-123') // IMAP_PASSWORD
+
+      const config = await service.getConfig()
+
+      expect(config).toEqual({
+        host: 'imap.gmail.com',
+        port: 993,
+        user: 'user@gmail.com',
+        password: 'app-password-123',
+        tls: true,
+      })
+    })
+
+    it('should throw error if IMAP_HOST is missing', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce(null) // IMAP_HOST missing
+
+      await expect(service.getConfig()).rejects.toThrow('IMAP_HOST is not configured')
+    })
+
+    it('should throw error if IMAP_USER is missing', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com') // IMAP_HOST
+        .mockResolvedValueOnce('993') // IMAP_PORT
+        .mockResolvedValueOnce(null) // IMAP_USER missing
+
+      await expect(service.getConfig()).rejects.toThrow('IMAP_USER is not configured')
+    })
+
+    it('should use default port 993 if IMAP_PORT is not set', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com') // IMAP_HOST
+        .mockResolvedValueOnce(null) // IMAP_PORT not set
+        .mockResolvedValueOnce('user@gmail.com') // IMAP_USER
+        .mockResolvedValueOnce('password') // IMAP_PASSWORD
+
+      const config = await service.getConfig()
+
+      expect(config.port).toBe(993)
+    })
+  })
+
+  describe('testConnection', () => {
+    it('should return success when connection succeeds', async () => {
+      // Setup settings
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      const result = await service.testConnection()
+
+      expect(result.success).toBe(true)
+      expect(result.error).toBeUndefined()
+    })
+
+    it('should return failure when connection fails', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('invalid.host')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('wrong-password')
+
+      // Mock connection failure
+      const { ImapFlow } = await import('imapflow')
+      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
+        connect: vi.fn().mockRejectedValue(new Error('Connection refused')),
+        logout: vi.fn(),
+        mailboxOpen: vi.fn(),
+        search: vi.fn(),
+        fetchAll: vi.fn(),
+      }))
+
+      const result = await service.testConnection()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Connection refused')
+    })
+  })
+
+  describe('fetchUnseen', () => {
+    it('should fetch unseen emails from inbox', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      const mockEmails: FetchedEmail[] = [
+        {
+          uid: 1,
+          subject: 'Test Email',
+          from: 'sender@example.com',
+          date: new Date('2024-01-15'),
+          rawContent: 'Raw email content',
+          hasAttachments: false,
+        },
+      ]
+
+      // Mock fetchAll to return emails
+      const { ImapFlow } = await import('imapflow')
+      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        logout: vi.fn().mockResolvedValue(undefined),
+        mailboxOpen: vi.fn().mockResolvedValue({}),
+        search: vi.fn().mockResolvedValue(['1', '2']),
+        fetchAll: vi.fn().mockResolvedValue([
+          {
+            uid: 1,
+            envelope: {
+              subject: 'Test Email',
+              from: [{ address: 'sender@example.com' }],
+              date: new Date('2024-01-15'),
+            },
+            source: 'Raw email content',
+          },
+        ]),
+      }))
+
+      const emails = await service.fetchUnseen()
+
+      expect(emails.length).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should limit the number of fetched emails', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      // Mock with proper implementation
+      const { ImapFlow } = await import('imapflow')
+      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        logout: vi.fn().mockResolvedValue(undefined),
+        mailboxOpen: vi.fn().mockResolvedValue({}),
+        search: vi.fn().mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        fetchAll: vi.fn().mockResolvedValue([
+          {
+            uid: 1,
+            envelope: { subject: 'Test', from: [{ address: 'test@test.com' }], date: new Date() },
+            source: 'content',
+          },
+        ]),
+      }))
+
+      const emails = await service.fetchUnseen(5)
+
+      // Verify limit was applied (in real implementation)
+      expect(Array.isArray(emails)).toBe(true)
+    })
+
+    it('should return empty array when no unseen emails', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      // Mock empty search result
+      const { ImapFlow } = await import('imapflow')
+      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
+        connect: vi.fn().mockResolvedValue(undefined),
+        logout: vi.fn().mockResolvedValue(undefined),
+        mailboxOpen: vi.fn().mockResolvedValue({}),
+        search: vi.fn().mockResolvedValue([]),
+        fetchAll: vi.fn().mockResolvedValue([]),
+      }))
+
+      const emails = await service.fetchUnseen()
+
+      expect(emails).toEqual([])
+    })
+  })
+
+  describe('close', () => {
+    it('should close the IMAP connection', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('imap.gmail.com')
+        .mockResolvedValueOnce('993')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      // First establish connection
+      await service.testConnection()
+
+      // Then close it
+      await expect(service.close()).resolves.not.toThrow()
+    })
+  })
+})

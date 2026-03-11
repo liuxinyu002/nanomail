@@ -1,0 +1,24 @@
+{
+  "name": "smart-email-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smart Email Agent - AI-powered email management system",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter @smart-email/backend dev\" \"pnpm --filter @smart-email/frontend dev\"",
+    "dev:backend": "pnpm --filter @smart-email/backend dev",
+    "dev:frontend": "pnpm --filter @smart-email/frontend dev",
+    "build": "pnpm --filter @smart-email/shared build && pnpm --filter @smart-email/backend build && pnpm --filter @smart-email/frontend build",
+    "test": "pnpm --filter @smart-email/backend test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,json}\"",
+    "clean": "rm -rf packages/*/dist packages/*/.turbo packages/*/node_modules node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.2.5"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

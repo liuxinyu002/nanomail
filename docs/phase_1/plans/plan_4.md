@@ -29,19 +29,36 @@ Create the main layout shell (Sidebar navigation: Inbox, To-Do, Settings).
 
 **Implementation Notes:**
 ```tsx
-// Layout structure
+// Layout structure with compact sidebar
 const MainLayout: React.FC = () => {
+  const [sidebarExpanded, setSidebarExpanded] = useState(false)
+
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="w-64 border-r">
+      {/* Compact Sidebar - collapsed by default, hover to expand */}
+      <aside
+        className={cn(
+          'transition-all duration-300 ease-in-out border-r border-border/50',
+          sidebarExpanded ? 'w-56' : 'w-16'
+        )}
+        onMouseEnter={() => setSidebarExpanded(true)}
+        onMouseLeave={() => setSidebarExpanded(false)}
+      >
         <div className="p-4">
-          <h1 className="text-xl font-bold">NanoMail</h1>
+          <h1 className={cn(
+            'text-xl font-bold transition-opacity',
+            sidebarExpanded ? 'opacity-100' : 'opacity-0'
+          )}>
+            NanoMail
+          </h1>
+          {!sidebarExpanded && (
+            <span className="text-lg font-bold">NM</span>
+          )}
         </div>
         <nav className="p-4 space-y-2">
-          <NavItem icon={<Inbox />} label="Inbox" path="/inbox" />
-          <NavItem icon={<CheckSquare />} label="To-Do" path="/todos" />
-          <NavItem icon={<Settings />} label="Settings" path="/settings" />
+          <NavItem icon={<Inbox />} label="Inbox" path="/inbox" expanded={sidebarExpanded} />
+          <NavItem icon={<CheckSquare />} label="To-Do" path="/todos" expanded={sidebarExpanded} />
+          <NavItem icon={<Settings />} label="Settings" path="/settings" expanded={sidebarExpanded} />
         </nav>
       </aside>
 
@@ -55,21 +72,23 @@ const MainLayout: React.FC = () => {
 ```
 
 **UI Requirements:**
-- Responsive sidebar (collapsible on mobile)
+- Compact sidebar (w-16 collapsed, w-56 expanded on hover)
+- Minimal border styling (border-border/50)
 - Active route indication
 - Clean typography and spacing
 - Dark mode support (via Tailwind/Shadcn)
+- Icon-only mode when collapsed, full labels on hover
 
 **Deliverables:**
-- [ ] Main layout component with sidebar
-- [ ] Navigation items with icons
+- [ ] Main layout component with compact sidebar
+- [ ] Navigation items with icons and expand/collapse animation
 - [ ] React Router setup
-- [ ] Responsive design
+- [ ] Responsive design with hover expansion
 
 ---
 
-#### T10.2: Settings Form
-Build the Settings form allowing the user to input and save IMAP, SMTP, and LLM API keys.
+#### T10.2: Settings Form with Tabs
+Build the Settings form allowing the user to input and save IMAP, SMTP, and LLM API keys. Use Tabs to organize configuration into logical sections.
 
 **Implementation Notes:**
 ```tsx
@@ -110,42 +129,120 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>IMAP Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* IMAP fields */}
-        </CardContent>
-      </Card>
+    <div className="max-w-2xl mx-auto p-6">
+      <h2 className="text-2xl font-bold mb-6">Settings</h2>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>SMTP Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* SMTP fields */}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="email" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="email">Email Servers</TabsTrigger>
+          <TabsTrigger value="ai">AI Engine</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* LLM provider selector */}
-          {/* Dynamic fields based on provider */}
-        </CardContent>
-      </Card>
+        {/* Email Servers Tab */}
+        <TabsContent value="email" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>IMAP Configuration</CardTitle>
+              <CardDescription>Incoming mail server settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="imap-host">Host</Label>
+                  <Input
+                    id="imap-host"
+                    value={settings.imapHost}
+                    onChange={(e) => setSettings({ ...settings, imapHost: e.target.value })}
+                    placeholder="imap.gmail.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imap-port">Port</Label>
+                  <Input
+                    id="imap-port"
+                    value={settings.imapPort}
+                    onChange={(e) => setSettings({ ...settings, imapPort: e.target.value })}
+                    placeholder="993"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="imap-user">Username</Label>
+                <Input
+                  id="imap-user"
+                  value={settings.imapUser}
+                  onChange={(e) => setSettings({ ...settings, imapUser: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="imap-password">Password</Label>
+                <Input
+                  id="imap-password"
+                  type="password"
+                  value={settings.imapPassword}
+                  onChange={(e) => setSettings({ ...settings, imapPassword: e.target.value })}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-      <Button onClick={handleSave} loading={saving}>
-        Save Settings
-      </Button>
+          <Card>
+            <CardHeader>
+              <CardTitle>SMTP Configuration</CardTitle>
+              <CardDescription>Outgoing mail server settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* SMTP fields - similar structure to IMAP */}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* AI Engine Tab */}
+        <TabsContent value="ai" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>LLM Configuration</CardTitle>
+              <CardDescription>AI model settings for email processing</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="llm-provider">Provider</Label>
+                <Select
+                  value={settings.llmProvider}
+                  onValueChange={(value) => setSettings({ ...settings, llmProvider: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="deepseek">DeepSeek</SelectItem>
+                    <SelectItem value="ollama">Ollama (Local)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Dynamic fields based on provider */}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <div className="mt-6 flex justify-end">
+        <Button onClick={handleSave} loading={saving}>
+          Save Settings
+        </Button>
+      </div>
     </div>
   )
 }
 ```
+
+**UI Requirements:**
+- Use Shadcn `<Tabs>` component to split configuration
+- Tab 1: "Email Servers" (IMAP + SMTP cards)
+- Tab 2: "AI Engine" (LLM configuration)
+- Page should fit within standard desktop height without scrolling for single configuration
+- Clean, organized layout with proper spacing
 
 **Security Considerations:**
 - Mask password fields
@@ -154,8 +251,9 @@ const SettingsPage: React.FC = () => {
 - Handle encrypted storage transparently
 
 **Deliverables:**
-- [ ] Settings form with all required fields
-- [ ] LLM provider selector with dynamic fields
+- [ ] Settings form with Tabs component
+- [ ] Email Servers tab with IMAP and SMTP cards
+- [ ] AI Engine tab with LLM configuration
 - [ ] Save functionality with API integration
 - [ ] Connection test buttons (optional)
 

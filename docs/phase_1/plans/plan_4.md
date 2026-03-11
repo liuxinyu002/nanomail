@@ -270,7 +270,7 @@ The frameless email list and the manual AI dispatch mechanism. This is the prima
 ### Tasks
 
 #### T11.1: Inbox List Component
-Render the inbox list fetching from `/api/emails`. Design as frameless cards (Sender, Title, 15-char snippet).
+Render the inbox list fetching from `/api/emails`. Design as frameless cards (Sender, Title, multi-line snippet).
 
 **Implementation Notes:**
 ```tsx
@@ -285,19 +285,29 @@ interface EmailCardProps {
   }
   selected: boolean
   onSelect: (id: number) => void
+  selectionDisabled?: boolean // For max selection limit
 }
 
-const EmailCard: React.FC<EmailCardProps> = ({ email, selected, onSelect }) => {
+const EmailCard: React.FC<EmailCardProps> = ({
+  email,
+  selected,
+  onSelect,
+  selectionDisabled = false
+}) => {
   return (
     <div
       className={cn(
         'p-4 rounded-lg transition-colors cursor-pointer',
         selected ? 'bg-primary/10 border-primary' : 'hover:bg-muted'
       )}
-      onClick={() => onSelect(email.id)}
+      onClick={() => !selectionDisabled && onSelect(email.id)}
     >
       <div className="flex items-start gap-3">
-        <Checkbox checked={selected} onCheckedChange={() => onSelect(email.id)} />
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onSelect(email.id)}
+          disabled={selectionDisabled}
+        />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
@@ -307,8 +317,9 @@ const EmailCard: React.FC<EmailCardProps> = ({ email, selected, onSelect }) => {
             </span>
           </div>
           <p className="text-sm font-medium truncate">{email.subject}</p>
-          <p className="text-xs text-muted-foreground truncate">
-            {email.snippet.slice(0, 15)}...
+          {/* Multi-line truncation with line-clamp-2 (shows ~80-100 chars) */}
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {email.snippet}
           </p>
         </div>
       </div>
@@ -319,12 +330,14 @@ const EmailCard: React.FC<EmailCardProps> = ({ email, selected, onSelect }) => {
 
 **UI Requirements:**
 - Frameless card design (no borders, subtle hover)
+- Use Tailwind `line-clamp-2` for natural multi-line text truncation
+- Consistent card height with 2-line snippet display (~80-100 characters)
 - Visual indicator for processed/unprocessed emails
 - Spam emails visually muted
 - Responsive grid layout
 
 **Deliverables:**
-- [ ] Email card component
+- [ ] Email card component with line-clamp-2 snippet
 - [ ] Inbox list with pagination
 - [ ] API integration for fetching emails
 - [ ] Loading and error states
@@ -332,7 +345,7 @@ const EmailCard: React.FC<EmailCardProps> = ({ email, selected, onSelect }) => {
 ---
 
 #### T11.2: Multi-Select & AI Action Button
-Implement multi-select checkboxes (enforce max 5 limit) and a floating "Run AI" action button calling `/api/process-emails`.
+Implement multi-select checkboxes (enforce max 5 limit with visual blocking) and a floating "Run AI" action button calling `/api/process-emails`.
 
 **Implementation Notes:**
 ```tsx
@@ -340,19 +353,23 @@ const InboxPage: React.FC = () => {
   const [emails, setEmails] = useState<Email[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [processing, setProcessing] = useState(false)
+  const MAX_SELECTION = 5
 
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
-      } else if (next.size < 5) {
+      } else if (next.size < MAX_SELECTION) {
         next.add(id)
-      } else {
-        toast.warning('Maximum 5 emails can be selected')
       }
       return next
     })
+  }
+
+  // Check if selection is disabled for a specific email
+  const isSelectionDisabled = (emailId: number) => {
+    return selectedIds.size >= MAX_SELECTION && !selectedIds.has(emailId)
   }
 
   const handleRunAI = async () => {
@@ -374,6 +391,18 @@ const InboxPage: React.FC = () => {
 
   return (
     <div className="p-6">
+      {/* Selection limit indicator */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 text-sm text-muted-foreground">
+          {selectedIds.size}/{MAX_SELECTION} emails selected
+          {selectedIds.size >= MAX_SELECTION && (
+            <span className="text-amber-500 ml-2">
+              (Maximum reached)
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Email list */}
       <div className="space-y-2">
         {emails.map(email => (
@@ -382,6 +411,7 @@ const InboxPage: React.FC = () => {
             email={email}
             selected={selectedIds.has(email.id)}
             onSelect={handleSelect}
+            selectionDisabled={isSelectionDisabled(email.id)}
           />
         ))}
       </div>
@@ -390,7 +420,7 @@ const InboxPage: React.FC = () => {
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 right-6">
           <Button onClick={handleRunAI} loading={processing}>
-            Run AI ({selectedIds.size}/5)
+            Run AI ({selectedIds.size}/{MAX_SELECTION})
           </Button>
         </div>
       )}
@@ -399,8 +429,16 @@ const InboxPage: React.FC = () => {
 }
 ```
 
+**UI Requirements:**
+- **Poka-yoke Design**: Disable unselected checkboxes when limit reached
+- Visual feedback: Grayed-out checkboxes with `disabled` prop
+- Selection counter showing X/5 format
+- Warning text when maximum is reached
+- No toast error for clicking disabled items (visual blocking is sufficient)
+
 **Deliverables:**
 - [ ] Multi-select with max 5 limit
+- [ ] Dynamic checkbox disabling: `disabled={selectedIds.size >= 5 && !selectedIds.has(email.id)}`
 - [ ] Visual feedback for selected count
 - [ ] Floating action button
 - [ ] Processing state handling
@@ -473,32 +511,41 @@ The independent Kanban-style or list-style board for extracted Action Items. Use
 ### Tasks
 
 #### T12.1: To-Do List with Urgency Grouping
-Fetch and render To-Dos from `/api/todos`, grouped or sorted by urgency (High, Med, Low).
+Fetch and render To-Dos from `/api/todos`, grouped or sorted by urgency (High, Med, Low). Use minimalist visual design.
 
 **Implementation Notes:**
 ```tsx
 const TodoPage: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([])
+  const [showAllCompleted, setShowAllCompleted] = useState(false)
+  const COMPLETED_LIMIT = 10
 
-  const { high, medium, low } = useMemo(() => {
+  const { high, medium, low, completed } = useMemo(() => {
+    const active = todos.filter(t => t.status !== 'completed')
+    const done = todos.filter(t => t.status === 'completed')
     return {
-      high: todos.filter(t => t.urgency === 'high' && t.status !== 'completed'),
-      medium: todos.filter(t => t.urgency === 'medium' && t.status !== 'completed'),
-      low: todos.filter(t => t.urgency === 'low' && t.status !== 'completed'),
-      completed: todos.filter(t => t.status === 'completed')
+      high: active.filter(t => t.urgency === 'high'),
+      medium: active.filter(t => t.urgency === 'medium'),
+      low: active.filter(t => t.urgency === 'low'),
+      completed: done
     }
   }, [todos])
+
+  // Limit completed items to prevent DOM bloat
+  const displayedCompleted = showAllCompleted
+    ? completed
+    : completed.slice(0, COMPLETED_LIMIT)
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-6">To-Do</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* High Priority */}
+        {/* High Priority - minimal visual with left border accent */}
         <TodoColumn
           title="High Priority"
           todos={high}
-          color="red"
+          priority="high"
           icon={<AlertCircle />}
         />
 
@@ -506,7 +553,7 @@ const TodoPage: React.FC = () => {
         <TodoColumn
           title="Medium"
           todos={medium}
-          color="yellow"
+          priority="medium"
           icon={<Clock />}
         />
 
@@ -514,30 +561,108 @@ const TodoPage: React.FC = () => {
         <TodoColumn
           title="Low"
           todos={low}
-          color="green"
+          priority="low"
           icon={<MinusCircle />}
         />
       </div>
 
-      {/* Completed */}
-      <div className="mt-8">
-        <TodoColumn
-          title="Completed"
-          todos={completed}
-          color="gray"
-          icon={<CheckCircle />}
-          collapsible
-        />
+      {/* Completed - limited display */}
+      {completed.length > 0 && (
+        <div className="mt-8">
+          <TodoColumn
+            title="Completed"
+            todos={displayedCompleted}
+            priority="completed"
+            icon={<CheckCircle />}
+            collapsible
+          />
+          {completed.length > COMPLETED_LIMIT && !showAllCompleted && (
+            <Button
+              variant="ghost"
+              className="mt-2"
+              onClick={() => setShowAllCompleted(true)}
+            >
+              Load More ({completed.length - COMPLETED_LIMIT} remaining)
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Minimalist TodoColumn with subtle priority indication
+const TodoColumn: React.FC<{
+  title: string
+  todos: Todo[]
+  priority: 'high' | 'medium' | 'low' | 'completed'
+  icon: React.ReactNode
+  collapsible?: boolean
+}> = ({ title, todos, priority, icon, collapsible }) => {
+  // Border-left colors for priority indication
+  const borderColors = {
+    high: 'border-l-red-500',
+    medium: 'border-l-amber-500',
+    low: 'border-l-blue-500',
+    completed: 'border-l-muted-foreground'
+  }
+
+  // Badge variants for priority
+  const badgeVariants = {
+    high: 'bg-red-500/10 text-red-500',
+    medium: 'bg-amber-500/10 text-amber-500',
+    low: 'bg-blue-500/10 text-blue-500',
+    completed: 'bg-muted text-muted-foreground'
+  }
+
+  return (
+    <div className="bg-muted/50 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h3 className="font-medium">{title}</h3>
+        <Badge variant="secondary" className={badgeVariants[priority]}>
+          {todos.length}
+        </Badge>
       </div>
+
+      <div className="space-y-2">
+        {todos.map(todo => (
+          <div
+            key={todo.id}
+            className={cn(
+              'p-3 rounded bg-card border-l-2',
+              borderColors[priority]
+            )}
+          >
+            <TodoItem todo={todo} />
+          </div>
+        ))}
+      </div>
+
+      {todos.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          No tasks
+        </p>
+      )}
     </div>
   )
 }
 ```
 
+**UI Requirements:**
+- Minimalist design: remove hardcoded red/yellow/green backgrounds
+- Unified column background: `bg-muted/50` (low saturation)
+- Priority indication via:
+  - Left border color (border-l-{color})
+  - Small Badge component with subtle colors
+- Completed column limited to 10 items with "Load More" button
+- Prevents DOM bloat from unlimited completed items
+
 **Deliverables:**
-- [ ] Urgency-grouped columns
-- [ ] Color coding for urgency levels
+- [ ] Urgency-grouped columns with minimalist styling
+- [ ] Border-left and Badge for priority distinction
 - [ ] Responsive grid layout
+- [ ] Completed column with limit and Load More
 - [ ] Empty state handling
 
 ---
@@ -612,12 +737,12 @@ The real-time AI drafting interface. This is where the ReAct agent shines, strea
 
 ### Tasks
 
-#### T13.1: Assist Reply Button & Modal
-Add an "Assist Reply" button to To-Do cards that opens a modal or side-panel with a short-instruction text input.
+#### T13.1: Assist Reply Button & Sheet
+Add an "Assist Reply" button to To-Do cards that opens a side sheet (not modal) with instruction input. Use Split-Pane layout for better space utilization.
 
 **Implementation Notes:**
 ```tsx
-const AssistReplyModal: React.FC<{
+const AssistReplySheet: React.FC<{
   open: boolean
   onClose: () => void
   todo: Todo
@@ -626,48 +751,89 @@ const AssistReplyModal: React.FC<{
   const [instruction, setInstruction] = useState('')
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Assist Reply</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-[500px] sm:max-w-[600px] flex flex-col">
+        <SheetHeader>
+          <SheetTitle>Assist Reply</SheetTitle>
+          <SheetDescription>
             Draft a reply for: {todo.description}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        {/* Context from original email */}
-        <div className="p-4 bg-muted rounded-lg text-sm">
-          <p className="font-medium">From: {email.sender}</p>
-          <p className="font-medium">Subject: {email.subject}</p>
+        {/* Original email context - compact display */}
+        <div className="p-4 bg-muted rounded-lg text-sm my-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Original Email</span>
+          </div>
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">From:</span> {email.sender}
+          </p>
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Subject:</span> {email.subject}
+          </p>
         </div>
 
         {/* Instruction input */}
-        <Textarea
-          placeholder="Brief instruction (e.g., 'Accept the meeting, suggest Tuesday')"
-          value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          rows={3}
-        />
+        <div className="space-y-2 mb-4">
+          <Label htmlFor="instruction">Your Instructions</Label>
+          <Textarea
+            id="instruction"
+            placeholder="Brief instruction (e.g., 'Accept the meeting, suggest Tuesday')"
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            rows={3}
+          />
+        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => startDraft(instruction)}>
-            Start Draft
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {/* Draft Editor - takes remaining space */}
+        <div className="flex-1 overflow-auto">
+          <DraftEditor
+            emailId={email.id}
+            instruction={instruction}
+            todo={todo}
+            onClose={onClose}
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// Alternative: Split-Pane Layout for larger screens
+const AssistReplySplitPane: React.FC<{
+  email: Email
+  todo: Todo
+}> = ({ email, todo }) => {
+  return (
+    <div className="flex h-full">
+      {/* Left pane: Original email details */}
+      <div className="w-1/2 border-r p-6 overflow-auto">
+        <EmailDetailView email={email} />
+      </div>
+
+      {/* Right pane: Draft interface */}
+      <div className="w-1/2 p-6 flex flex-col">
+        <DraftInterface todo={todo} email={email} />
+      </div>
+    </div>
   )
 }
 ```
 
+**UI Requirements:**
+- Use Shadcn `<Sheet>` instead of `<Dialog>` for side panel
+- Sheet width: 500-600px for comfortable drafting
+- Left side (main screen) remains visible showing original email
+- Right side sheet contains: instruction input, thinking status, draft editor
+- Better space utilization than modal overlay
+
 **Deliverables:**
-- [ ] Modal/side-panel component
+- [ ] Sheet component replacing Dialog
 - [ ] Instruction text input
-- [ ] Context display from original email
+- [ ] Compact context display from original email
 - [ ] Start draft button
+- [ ] Optional: Split-Pane layout for desktop
 
 ---
 

@@ -27,6 +27,7 @@ export interface EmailsResponse {
     subject: string | null
     sender: string | null
     snippet: string | null
+    summary: string | null
     date: string
     isProcessed: boolean
     isSpam: boolean
@@ -109,6 +110,7 @@ export function createEmailRoutes(dataSource: DataSource): Router {
           subject: email.subject,
           sender: email.sender,
           snippet: email.snippet,
+          summary: email.summary,
           date: email.date.toISOString(),
           isProcessed: email.isProcessed,
           isSpam: email.isSpam,

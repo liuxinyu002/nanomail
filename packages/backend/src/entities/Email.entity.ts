@@ -29,6 +29,9 @@ export class Email {
   @Column({ type: 'text', nullable: true })
   bodyText!: string | null
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  summary!: string | null
+
   @Column({ type: 'boolean', default: false })
   hasAttachments!: boolean
 

@@ -102,7 +102,8 @@ export class EmailAnalyzer {
         { id: email.id },
         {
           isSpam: analysis.classification === 'SPAM',
-          isProcessed: true
+          isProcessed: true,
+          summary: analysis.summary || null
         }
       )
 

@@ -1,0 +1,96 @@
+/**
+ * ReAct Agent Loop Types
+ * Reference: nanobot/agent/loop.py
+ */
+
+import type { ToolCallRequest } from '../../llm/types'
+
+/**
+ * Agent message format for ReAct loop
+ */
+export type AgentMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string | null; toolCalls?: ToolCallRequest[] }
+  | { role: 'tool'; content: string; toolCallId: string }
+
+/**
+ * Progress event for streaming
+ * Reference: nanobot/agent/loop.py - on_progress callback
+ */
+export interface ProgressEvent {
+  type: 'thought' | 'action' | 'observation' | 'chunk' | 'done' | 'error'
+  content: string
+  toolName?: string
+  toolInput?: Record<string, unknown>
+  iteration?: number
+}
+
+/**
+ * Agent state during ReAct loop
+ */
+export interface AgentState {
+  iteration: number
+  messages: AgentMessage[]
+  finalContent: string | null
+  toolsUsed: string[]
+  finishReason: 'completed' | 'max_iterations' | 'error'
+}
+
+/**
+ * Agent configuration
+ * Reference: nanobot/agent/loop.py - AgentLoop.__init__()
+ */
+export interface AgentConfig {
+  model: string
+  temperature: number
+  maxTokens: number
+  maxIterations: number // Default: 5 for email drafts
+  memoryWindow: number // Default: 100
+  reasoningEffort?: 'low' | 'medium' | 'high'
+}
+
+/**
+ * Preset configurations for different use cases
+ */
+export const AGENT_PRESETS = {
+  // For email draft generation, simple tool calls
+  draft: {
+    maxIterations: 5,
+    temperature: 0.7
+  },
+  // For more complex multi-step tasks
+  complex: {
+    maxIterations: 10,
+    temperature: 0.7
+  },
+  // For research/exploration tasks
+  research: {
+    maxIterations: 20,
+    temperature: 0.5
+  }
+} as const
+
+export type AgentPreset = keyof typeof AGENT_PRESETS
+
+/**
+ * Default agent configuration
+ */
+export const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  model: 'gpt-4o-mini',
+  temperature: 0.7,
+  maxTokens: 8192,
+  maxIterations: 5,
+  memoryWindow: 100
+}
+
+/**
+ * Interface for email data passed to agent
+ */
+export interface AgentEmail {
+  id: number
+  sender: string | null
+  subject: string | null
+  bodyText: string | null
+  date: Date
+}

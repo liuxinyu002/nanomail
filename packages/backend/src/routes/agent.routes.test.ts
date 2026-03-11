@@ -36,6 +36,13 @@ const createMockDataSource = (emails: Email[] = []) => {
     findOne: vi.fn(async ({ where: { id } }) =>
       emails.find((e) => e.id === id) ?? null
     ),
+    findBy: vi.fn(async ({ id }: { id: { in: number[] } }) => {
+      // Handle In operator pattern
+      if (id && 'in' in id) {
+        return emails.filter((e) => id.in.includes(e.id))
+      }
+      return emails
+    }),
     find: vi.fn(async () => emails),
     save: vi.fn(async (entity) => entity),
     createQueryBuilder: vi.fn()

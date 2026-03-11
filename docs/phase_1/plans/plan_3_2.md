@@ -301,11 +301,11 @@ class ProviderRegistry {
 ```
 
 **Deliverables:**
-- [ ] `LLMProvider` abstract class with `chat()` method
-- [ ] `LLMResponse` and `ToolCallRequest` interfaces
-- [ ] `LiteLLMProvider` implementation with auto-detection
-- [ ] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
-- [ ] Connection test method
+- [x] `LLMProvider` abstract class with `chat()` method
+- [x] `LLMResponse` and `ToolCallRequest` interfaces
+- [x] `LiteLLMProvider` implementation with auto-detection
+- [x] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
+- [x] Connection test method
 
 ---
 
@@ -533,10 +533,10 @@ npm install zod zod-to-json-schema
 ```
 
 **Deliverables:**
-- [ ] `Tool` abstract class using Zod for schema
-- [ ] `ToolRegistry` with Zod validation
-- [ ] `zod-to-json-schema` for OpenAI schema generation
-- [ ] Example tools with Zod schemas
+- [x] `Tool` abstract class using Zod for schema
+- [x] `ToolRegistry` with Zod validation
+- [x] `zod-to-json-schema` for OpenAI schema generation
+- [x] Example tools with Zod schemas
 
 ---
 
@@ -600,22 +600,22 @@ class TokenTruncator {
 ```
 
 **Deliverables:**
-- [ ] Token estimation method
-- [ ] Smart truncation preserving context
-- [ ] Configurable max token limit
+- [x] Token estimation method
+- [x] Smart truncation preserving context
+- [x] Configurable max token limit
 
 ---
 
 ## T7 Completion Checklist
 
-- [ ] `LLMProvider` abstract class with `chat()` method
-- [ ] `LLMResponse` and `ToolCallRequest` interfaces
-- [ ] `LiteLLMProvider` with auto-detection and prefix handling
-- [ ] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
-- [ ] `Tool` abstract class using **Zod** for schema validation
-- [ ] `ToolRegistry` with Zod validation (no custom castParams/validateParams)
-- [ ] `TokenTruncator` utility
-- [ ] Dependencies: `zod`, `zod-to-json-schema`
+- [x] `LLMProvider` abstract class with `chat()` method
+- [x] `LLMResponse` and `ToolCallRequest` interfaces
+- [x] `LiteLLMProvider` with auto-detection and prefix handling
+- [x] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
+- [x] `Tool` abstract class using **Zod** for schema validation
+- [x] `ToolRegistry` with Zod validation (no custom castParams/validateParams)
+- [x] `TokenTruncator` utility
+- [x] Dependencies: `zod`, `zod-to-json-schema`
 
 ---
 

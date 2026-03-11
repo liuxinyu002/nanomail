@@ -1,4 +1,4 @@
-# Phase 3.3: Three-Step AI Pipeline(todo)
+# Phase 3.3: Three-Step AI Pipeline
 
 > **Context:** This is Stage 3 of Phase 3. The synchronous pipeline triggered when the user manually selects emails. Each step builds on the previous one. This follows nanobot's context building and message construction patterns.
 

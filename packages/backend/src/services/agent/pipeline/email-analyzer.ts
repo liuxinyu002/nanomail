@@ -4,22 +4,10 @@
  */
 
 import type { DataSource } from 'typeorm'
-import type { ChatParams } from '../../llm/types'
-import { EmailAnalysisSchema, type EmailAnalysis, type ActionItem } from './schemas'
+import type { LLMProvider, ChatParams } from '../../llm/types'
+import { EmailAnalysisSchema, type EmailAnalysis } from './schemas'
 import { Email } from '../../../entities/Email.entity'
 import { Todo } from '../../../entities/Todo.entity'
-
-/**
- * LLM Provider interface for dependency injection
- */
-export interface LLMProvider {
-  complete(params: ChatParams): Promise<{
-    content: string | null
-    toolCalls: unknown[]
-    finishReason: string
-    usage: { promptTokens: number; completionTokens: number; totalTokens: number }
-  }>
-}
 
 /**
  * Email data for analysis
@@ -62,7 +50,7 @@ export class EmailAnalyzer {
     try {
       const messages = this.buildPrompt(email)
 
-      const response = await this.llmProvider.complete({
+      const response = await this.llmProvider.chat({
         messages,
         temperature: 0.3,
         maxTokens: 500

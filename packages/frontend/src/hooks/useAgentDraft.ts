@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback } from 'react'
+import { createParser } from 'eventsource-parser'
 
 /**
  * SSE event types from the agent loop
@@ -44,6 +45,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 /**
  * React hook for SSE-based draft generation
+ *
+ * Uses eventsource-parser for robust SSE parsing that handles:
+ * - Chunk boundaries (messages split across multiple chunks)
+ * - Reconnection scenarios
+ * - Partial messages
  *
  * @example
  * ```tsx
@@ -97,51 +103,48 @@ export function useAgentDraft(): UseAgentDraftReturn {
         throw new Error('No response body')
       }
 
+      // Use eventsource-parser v3 API for robust SSE parsing
+      // Handles chunk boundaries, reconnection, and partial messages
+      const parser = createParser({
+        onEvent: (event) => {
+          try {
+            const sseEvent = JSON.parse(event.data) as SSEEvent
+            setEvents((prev) => [...prev, sseEvent])
+
+            // Build draft from chunk events
+            if (sseEvent.type === 'chunk') {
+              setDraft((prev) => prev + sseEvent.content)
+            }
+
+            // Handle completion
+            if (sseEvent.type === 'done') {
+              setIsStreaming(false)
+            }
+
+            // Handle errors
+            if (sseEvent.type === 'error') {
+              setError(sseEvent.content)
+              setIsStreaming(false)
+            }
+          } catch {
+            // Skip malformed JSON
+            console.warn('Failed to parse SSE event:', event.data)
+          }
+        },
+        onError: (error) => {
+          console.error('SSE parser error:', error)
+        }
+      })
+
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        // Decode chunk and add to buffer
-        buffer += decoder.decode(value, { stream: true })
-
-        // Process complete SSE messages in buffer
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            try {
-              const jsonStr = line.slice(5).trim()
-              if (!jsonStr) continue
-
-              const sseEvent = JSON.parse(jsonStr) as SSEEvent
-              setEvents((prev) => [...prev, sseEvent])
-
-              // Build draft from chunk events
-              if (sseEvent.type === 'chunk') {
-                setDraft((prev) => prev + sseEvent.content)
-              }
-
-              // Handle completion
-              if (sseEvent.type === 'done') {
-                setIsStreaming(false)
-              }
-
-              // Handle errors
-              if (sseEvent.type === 'error') {
-                setError(sseEvent.content)
-                setIsStreaming(false)
-              }
-            } catch {
-              // Skip malformed JSON
-              console.warn('Failed to parse SSE event:', line)
-            }
-          }
-        }
+        // Feed raw bytes to parser - it handles chunk boundaries
+        parser.feed(decoder.decode(value, { stream: true }))
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -184,7 +187,7 @@ export interface ProcessEmailsResult {
   results: Array<{
     emailId: number
     status: 'fulfilled' | 'rejected'
-    data?: { id: number; status: string }
+    data?: { id: number; status: string; analysis?: unknown }
     error?: string
   }>
 }

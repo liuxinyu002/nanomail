@@ -122,9 +122,9 @@ Snippet: ${email.snippet}
 ```
 
 **Deliverables:**
-- [ ] `SearchEmailsTool` class extending `Tool`
-- [ ] Database search implementation
-- [ ] Tool registered in registry
+- [x] `SearchEmailsTool` class extending `Tool`
+- [x] Database search implementation
+- [x] Tool registered in registry
 
 ---
 
@@ -472,11 +472,11 @@ ${instruction}
 ```
 
 **Deliverables:**
-- [ ] `AgentLoop` class with AsyncGenerator pattern
-- [ ] ReAct Think -> Action -> Observation loop
-- [ ] Preset-based maxIterations (5/10/20) instead of fixed 40
-- [ ] Tool call handling with error recovery
-- [ ] `<think>` tag stripping for reasoning models
+- [x] `AgentLoop` class with AsyncGenerator pattern
+- [x] ReAct Think -> Action -> Observation loop
+- [x] Preset-based maxIterations (5/10/20) instead of fixed 40
+- [x] Tool call handling with error recovery
+- [x] `<tool_call>` tag stripping for reasoning models
 
 ---
 
@@ -756,24 +756,24 @@ const lines = chunk.split('\n')  // DANGEROUS!
 ```
 
 **Deliverables:**
-- [ ] SSE endpoint with proper headers
-- [ ] Event streaming for ReAct states
-- [ ] Character-by-character streaming for final draft
-- [ ] Error handling and graceful shutdown
-- [ ] Frontend SSE client using `eventsource-parser` or `@microsoft/fetch-event-source`
+- [x] SSE endpoint with proper headers
+- [x] Event streaming for ReAct states
+- [x] Character-by-character streaming for final draft
+- [x] Error handling and graceful shutdown
+- [x] Frontend SSE client using `eventsource-parser` or `@microsoft/fetch-event-source`
 
 ---
 
 ## T9 Completion Checklist
 
-- [ ] `SearchEmailsTool` with Zod schema
-- [ ] `AgentLoop` with AsyncGenerator pattern
-- [ ] maxIterations: 5 (draft) / 10 (complex) / 20 (research)
-- [ ] ReAct Think -> Action -> Observation loop
-- [ ] SSE endpoint `/api/agent/draft`
-- [ ] SSE endpoint `/api/process-emails`
-- [ ] Frontend SSE client using **eventsource-parser** or **@microsoft/fetch-event-source`
-- [ ] Dependencies: `eventsource-parser` or `@microsoft/fetch-event-source`
+- [x] `SearchEmailsTool` with Zod schema
+- [x] `AgentLoop` with AsyncGenerator pattern
+- [x] maxIterations: 5 (draft) / 10 (complex) / 20 (research)
+- [x] ReAct Think -> Action -> Observation loop
+- [x] SSE endpoint `/api/agent/draft`
+- [x] SSE endpoint `/api/process-emails`
+- [x] Frontend SSE client using **eventsource-parser** or **@microsoft/fetch-event-source`
+- [x] Dependencies: `eventsource-parser` or `@microsoft/fetch-event-source`
 
 ---
 
@@ -810,31 +810,31 @@ src/
 ## Phase 3 Completion Checklist
 
 ### T7: Hybrid LLM Adapter & Tool Registry (Phase 3.2)
-- [ ] `LLMProvider` abstract class with `chat()` method
-- [ ] `LLMResponse` and `ToolCallRequest` interfaces
-- [ ] `LiteLLMProvider` with auto-detection and prefix handling
-- [ ] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
-- [ ] `Tool` abstract class using **Zod** for schema validation
-- [ ] `ToolRegistry` with Zod validation (no custom castParams/validateParams)
-- [ ] `TokenTruncator` utility
-- [ ] Dependencies: `zod`, `zod-to-json-schema`
+- [x] `LLMProvider` abstract class with `chat()` method
+- [x] `LLMResponse` and `ToolCallRequest` interfaces
+- [x] `LiteLLMProvider` with auto-detection and prefix handling
+- [x] `ProviderRegistry` with OpenAI/DeepSeek/Ollama specs
+- [x] `Tool` abstract class using **Zod** for schema validation
+- [x] `ToolRegistry` with Zod validation (no custom castParams/validateParams)
+- [x] `TokenTruncator` utility
+- [x] Dependencies: `zod`, `zod-to-json-schema`
 
 ### T8: One-Shot Email Analysis Pipeline (Phase 3.3)
-- [ ] `ContextBuilder` with `buildSystemPrompt()`, `buildMessages()`
-- [ ] `MemoryStore` with two-layer memory (async fs.promises API)
-- [ ] `EmailAnalysisSchema` with Zod (classification + summary + action items)
-- [ ] `EmailAnalyzer` with one-shot extraction (single LLM call per email)
-- [ ] `BatchEmailProcessor` with concurrency control and rate limiting
+- [x] `ContextBuilder` with `buildSystemPrompt()`, `buildMessages()`
+- [x] `MemoryStore` with two-layer memory (async fs.promises API)
+- [x] `EmailAnalysisSchema` with Zod (classification + summary + action items)
+- [x] `EmailAnalyzer` with one-shot extraction (single LLM call per email)
+- [x] `BatchEmailProcessor` with concurrency control and rate limiting
 
 ### T9: ReAct Agent & SSE Streaming (Phase 3.4)
-- [ ] `SearchEmailsTool` with Zod schema
-- [ ] `AgentLoop` with AsyncGenerator pattern
-- [ ] maxIterations: 5 (draft) / 10 (complex) / 20 (research)
-- [ ] ReAct Think -> Action -> Observation loop
-- [ ] SSE endpoint `/api/agent/draft`
-- [ ] SSE endpoint `/api/process-emails`
-- [ ] Frontend SSE client using **eventsource-parser** or **@microsoft/fetch-event-source**
-- [ ] Dependencies: `eventsource-parser` or `@microsoft/fetch-event-source`
+- [x] `SearchEmailsTool` with Zod schema
+- [x] `AgentLoop` with AsyncGenerator pattern
+- [x] maxIterations: 5 (draft) / 10 (complex) / 20 (research)
+- [x] ReAct Think -> Action -> Observation loop
+- [x] SSE endpoint `/api/agent/draft`
+- [x] SSE endpoint `/api/process-emails`
+- [x] Frontend SSE client using **eventsource-parser** or **@microsoft/fetch-event-source**
+- [x] Dependencies: `eventsource-parser` or `@microsoft/fetch-event-source`
 
 ---
 

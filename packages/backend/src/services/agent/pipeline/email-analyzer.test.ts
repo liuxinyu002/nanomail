@@ -11,7 +11,7 @@ import { Todo } from '../../../entities/Todo.entity'
 
 // Mock LLM Provider
 const mockLLMProvider = {
-  complete: vi.fn()
+  chat: vi.fn()
 }
 
 // Mock repositories
@@ -68,7 +68,7 @@ describe('EmailAnalyzer', () => {
         ]
       }
 
-      mockLLMProvider.complete.mockResolvedValueOnce({
+      mockLLMProvider.chat.mockResolvedValueOnce({
         content: JSON.stringify(mockResponse),
         toolCalls: [],
         finishReason: 'stop',
@@ -93,7 +93,7 @@ describe('EmailAnalyzer', () => {
     })
 
     it('should use XML tags to isolate email content', async () => {
-      mockLLMProvider.complete.mockResolvedValueOnce({
+      mockLLMProvider.chat.mockResolvedValueOnce({
         content: JSON.stringify({
           classification: 'IMPORTANT',
           confidence: 0.9,
@@ -115,7 +115,7 @@ describe('EmailAnalyzer', () => {
 
       await analyzer.analyze(email as any)
 
-      const callArgs = mockLLMProvider.complete.mock.calls[0][0]
+      const callArgs = mockLLMProvider.chat.mock.calls[0][0]
       const messages = callArgs.messages
 
       // Find the user message with email content
@@ -125,7 +125,7 @@ describe('EmailAnalyzer', () => {
     })
 
     it('should return default fallback for parsing failures', async () => {
-      mockLLMProvider.complete.mockResolvedValueOnce({
+      mockLLMProvider.chat.mockResolvedValueOnce({
         content: 'Invalid JSON response',
         toolCalls: [],
         finishReason: 'stop',
@@ -150,7 +150,7 @@ describe('EmailAnalyzer', () => {
     })
 
     it('should return default fallback for schema validation failures', async () => {
-      mockLLMProvider.complete.mockResolvedValueOnce({
+      mockLLMProvider.chat.mockResolvedValueOnce({
         content: JSON.stringify({
           classification: 'INVALID_CLASS',
           confidence: 1.5,
@@ -177,7 +177,7 @@ describe('EmailAnalyzer', () => {
     })
 
     it('should handle LLM errors gracefully', async () => {
-      mockLLMProvider.complete.mockRejectedValueOnce(new Error('LLM API Error'))
+      mockLLMProvider.chat.mockRejectedValueOnce(new Error('LLM API Error'))
 
       const email = {
         id: 1,
@@ -297,7 +297,7 @@ describe('EmailAnalyzer', () => {
 
   describe('analyzeAndPersist', () => {
     it('should analyze and persist in one operation', async () => {
-      mockLLMProvider.complete.mockResolvedValueOnce({
+      mockLLMProvider.chat.mockResolvedValueOnce({
         content: JSON.stringify({
           classification: 'IMPORTANT',
           confidence: 0.9,
@@ -377,7 +377,7 @@ describe('EmailAnalyzer', () => {
 
   describe('Default Fallback', () => {
     it('should return consistent default values', async () => {
-      mockLLMProvider.complete.mockRejectedValueOnce(new Error('Network error'))
+      mockLLMProvider.chat.mockRejectedValueOnce(new Error('Network error'))
 
       const email = { id: 1, subject: 'Test', bodyText: 'Body', sender: 't@t.com', date: new Date() }
       const result = await analyzer.analyze(email as any)

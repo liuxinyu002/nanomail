@@ -5,12 +5,15 @@
 
 import { Router, Request, Response } from 'express'
 import type { DataSource } from 'typeorm'
+import { In } from 'typeorm'
 import type { LLMProvider } from '../services/llm/types'
 import type { ToolRegistry } from '../services/agent/tools/registry'
 import type { ContextBuilder } from '../services/agent/context/types'
 import type { MemoryStore } from '../services/agent/memory/types'
 import type { TokenTruncator } from '../services/agent/utils/token-truncator'
 import { AgentLoop } from '../services/agent/loop/agent-loop'
+import { EmailAnalyzer, type EmailData } from '../services/agent/pipeline/email-analyzer'
+import { BatchEmailProcessor } from '../services/agent/pipeline/batch-processor'
 import { Email } from '../entities/Email.entity'
 
 /**
@@ -46,6 +49,13 @@ export interface AgentRoutesDeps {
 export function createAgentRoutes(deps: AgentRoutesDeps): Router {
   const router = Router()
   const emailRepository = deps.dataSource.getRepository(Email)
+
+  // Initialize EmailAnalyzer and BatchEmailProcessor
+  const emailAnalyzer = new EmailAnalyzer(deps.llmProvider, deps.dataSource)
+  const batchProcessor = new BatchEmailProcessor(emailAnalyzer, deps.dataSource, {
+    maxConcurrency: 3,
+    delayBetweenBatches: 1000
+  })
 
   /**
    * POST /api/agent/draft
@@ -119,6 +129,7 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
    * POST /api/agent/process-emails
    *
    * Queue emails for AI processing (one-shot email analysis)
+   * Uses BatchEmailProcessor with concurrency control and rate limiting
    */
   router.post('/process-emails', async (req: Request, res: Response) => {
     const { emailIds } = req.body as ProcessEmailsRequest
@@ -134,36 +145,57 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
       return
     }
 
-    // Process emails
-    const results = await Promise.allSettled(
-      emailIds.map(async (id) => {
-        const email = await emailRepository.findOne({ where: { id } })
-        if (!email) {
-          throw new Error(`Email ${id} not found`)
-        }
-
-        // For now, just mark as processed
-        // In full implementation, this would trigger the EmailAnalyzer
-        email.isProcessed = true
-        await emailRepository.save(email)
-
-        return { id, status: 'processed' }
-      })
-    )
-
-    res.json({
-      processed: results.filter((r) => r.status === 'fulfilled').length,
-      failed: results.filter((r) => r.status === 'rejected').length,
-      results: results.map((r, i) => ({
-        emailId: emailIds[i],
-        status: r.status,
-        ...(r.status === 'fulfilled'
-          ? { data: (r as PromiseFulfilledResult<{ id: number; status: string }>).value }
-          : { error: (r as PromiseRejectedResult).reason instanceof Error
-              ? (r as PromiseRejectedResult).reason.message
-              : String((r as PromiseRejectedResult).reason) })
-      }))
+    // Fetch emails from database
+    const emails = await emailRepository.findBy({
+      id: In(emailIds)
     })
+
+    if (emails.length === 0) {
+      res.status(404).json({ error: 'No emails found with the provided IDs' })
+      return
+    }
+
+    // Convert to EmailData format for the analyzer
+    const emailDataList: EmailData[] = emails.map((email) => ({
+      id: email.id,
+      subject: email.subject,
+      sender: email.sender,
+      bodyText: email.bodyText,
+      snippet: email.snippet,
+      date: email.date
+    }))
+
+    try {
+      // Process emails using BatchEmailProcessor with concurrency control
+      const result = await batchProcessor.processBatch(emailDataList)
+
+      // Format response
+      const response = {
+        processed: result.processed,
+        failed: result.failed,
+        results: emailIds.map((id) => {
+          const error = result.errors.find((e) => e.emailId === id)
+          if (error) {
+            return {
+              emailId: id,
+              status: 'rejected' as const,
+              error: error.error
+            }
+          }
+          return {
+            emailId: id,
+            status: 'fulfilled' as const,
+            data: { id, status: 'processed' }
+          }
+        })
+      }
+
+      res.json(response)
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Unknown error during processing'
+      })
+    }
   })
 
   return router

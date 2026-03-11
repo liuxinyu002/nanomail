@@ -23,10 +23,12 @@
     "mailparser": "^3.9.4",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.2",
+    "openai": "^6.27.0",
     "reflect-metadata": "^0.2.1",
     "sqlite3": "^5.1.7",
     "typeorm": "^0.3.20",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

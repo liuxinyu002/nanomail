@@ -1,4 +1,4 @@
-# Phase 3.3: Three-Step AI Pipeline
+# Phase 3.3: Three-Step AI Pipeline(todo)
 
 > **Context:** This is Stage 3 of Phase 3. The synchronous pipeline triggered when the user manually selects emails. Each step builds on the previous one. This follows nanobot's context building and message construction patterns.
 
@@ -169,10 +169,10 @@ class ContextBuilder {
 ```
 
 **Deliverables:**
-- [ ] `ContextBuilder` class with `buildSystemPrompt()`, `buildMessages()`
-- [ ] Bootstrap file loading
-- [ ] Runtime context injection
-- [ ] Tool message handling
+- [x] `ContextBuilder` class with `buildSystemPrompt()`, `buildMessages()`
+- [x] Bootstrap file loading
+- [x] Runtime context injection
+- [x] Tool message handling
 
 ---
 
@@ -305,10 +305,10 @@ class MemoryStore {
 ```
 
 **Deliverables:**
-- [ ] `MemoryStore` class with MEMORY.md + HISTORY.md
-- [ ] History window management
-- [ ] Tool result truncation for large outputs
-- [ ] Async fs.promises API throughout
+- [x] `MemoryStore` class with MEMORY.md + HISTORY.md
+- [x] History window management
+- [x] Tool result truncation for large outputs
+- [x] Async fs.promises API throughout
 
 ---
 
@@ -577,20 +577,20 @@ class BatchEmailProcessor {
 | One-Shot | 1 | ~10s (concurrent) | LOW (10 calls) |
 
 **Deliverables:**
-- [ ] `EmailAnalysisSchema` with Zod
-- [ ] `EmailAnalyzer` with one-shot extraction
-- [ ] `BatchEmailProcessor` with concurrency control
-- [ ] Rate limiting prevention with batch delays
+- [x] `EmailAnalysisSchema` with Zod
+- [x] `EmailAnalyzer` with one-shot extraction
+- [x] `BatchEmailProcessor` with concurrency control
+- [x] Rate limiting prevention with batch delays
 
 ---
 
 ## T8 Completion Checklist
 
-- [ ] `ContextBuilder` class with `buildSystemPrompt()`, `buildMessages()`
-- [ ] `MemoryStore` with two-layer memory (async fs.promises API)
-- [ ] `EmailAnalysisSchema` with Zod (classification + summary + action items)
-- [ ] `EmailAnalyzer` with one-shot extraction (single LLM call per email)
-- [ ] `BatchEmailProcessor` with concurrency control and rate limiting
+- [x] `ContextBuilder` class with `buildSystemPrompt()`, `buildMessages()`
+- [x] `MemoryStore` with two-layer memory (async fs.promises API)
+- [x] `EmailAnalysisSchema` with Zod (classification + summary + action items)
+- [x] `EmailAnalyzer` with one-shot extraction (single LLM call per email)
+- [x] `BatchEmailProcessor` with concurrency control and rate limiting
 
 ---
 

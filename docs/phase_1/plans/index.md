@@ -11,9 +11,9 @@ NanoMail is a **Smart Email Agent** system designed for single-tenant, self-host
 
 ## 技术栈与工作区说明
 本项目采用 pnpm Monorepo 架构，包含三个核心 Workspace：
-- **`@smart-email/shared`**: 前后端共享的 Zod Schemas 和 TypeScript 类型定义 (单一事实来源)。
-- **`@smart-email/backend`**: Node.js + TypeORM + SQLite 提供 REST API、IMAP/SMTP 通信与 SSE Agent 流式输出。
-- **`@smart-email/frontend`**: React + Vite + Tailwind + Shadcn UI 构建的极简卡片式前端。
+- **`@nanomail/shared`**: 前后端共享的 Zod Schemas 和 TypeScript 类型定义 (单一事实来源)。
+- **`@nanomail/backend`**: Node.js + TypeORM + SQLite 提供 REST API、IMAP/SMTP 通信与 SSE Agent 流式输出。
+- **`@nanomail/frontend`**: React + Vite + Tailwind + Shadcn UI 构建的极简卡片式前端。
 
 ## 全局目录架构设计
 

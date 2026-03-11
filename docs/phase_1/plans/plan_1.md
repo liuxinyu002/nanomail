@@ -91,13 +91,13 @@ Configure Tailwind CSS and initialize Shadcn UI in the frontend workspace.
 ---
 
 #### T1.4: Initialize Shared Workspace & Zod Schemas
-Initialize the `@smart-email/shared` package to establish the single source of truth for Data Contracts.
+Initialize the `@nanomail/shared` package to establish the single source of truth for Data Contracts.
 
 **Implementation Notes:**
 - Initialize `package.json` and `tsconfig.json` inside `packages/shared/`
 - Install `zod` as a dependency
 - Create foundational schemas mapping to T2 entities (e.g., `TodoSchema`, `SettingsSchema`) and export their inferred TypeScript types (`z.infer`)
-- Ensure both `frontend` and `backend` workspaces correctly link to `@smart-email/shared` via `workspace:*`
+- Ensure both `frontend` and `backend` workspaces correctly link to `@nanomail/shared` via `workspace:*`
 
 **Deliverables:**
 - [ ] `packages/shared` directory initialized with config
@@ -320,7 +320,7 @@ Write simple unit tests or a verification script to ensure keys are unreadable i
 
 - [ ] Monorepo root configured with pnpm workspaces
 - [ ] Monorepo structure established with backend/frontend separation
-- [ ] Shared workspace (`@smart-email/shared`) initialized with Zod schemas
+- [ ] Shared workspace (`@nanomail/shared`) initialized with Zod schemas
 - [ ] TypeScript configured with strict mode
 - [ ] ESLint and Prettier configured
 - [ ] SQLite database operational with TypeORM

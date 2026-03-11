@@ -4,11 +4,11 @@
   "private": true,
   "description": "Smart Email Agent - AI-powered email management system",
   "scripts": {
-    "dev": "concurrently \"pnpm --filter @smart-email/backend dev\" \"pnpm --filter @smart-email/frontend dev\"",
-    "dev:backend": "pnpm --filter @smart-email/backend dev",
-    "dev:frontend": "pnpm --filter @smart-email/frontend dev",
-    "build": "pnpm --filter @smart-email/shared build && pnpm --filter @smart-email/backend build && pnpm --filter @smart-email/frontend build",
-    "test": "pnpm --filter @smart-email/backend test",
+    "dev": "concurrently \"pnpm --filter @nanomail/backend dev\" \"pnpm --filter @nanomail/frontend dev\"",
+    "dev:backend": "pnpm --filter @nanomail/backend dev",
+    "dev:frontend": "pnpm --filter @nanomail/frontend dev",
+    "build": "pnpm --filter @nanomail/shared build && pnpm --filter @nanomail/backend build && pnpm --filter @nanomail/frontend build",
+    "test": "pnpm --filter @nanomail/backend test",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json}\"",
     "clean": "rm -rf packages/*/dist packages/*/.turbo packages/*/node_modules node_modules"

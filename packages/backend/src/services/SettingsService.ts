@@ -82,4 +82,21 @@ export class SettingsService {
   async delete(key: string): Promise<void> {
     await this.repository.delete({ key })
   }
+
+  /**
+   * Retrieves all settings as a key-value object, automatically decrypting values.
+   *
+   * @returns An object with all settings as key-value pairs
+   * @throws Error if decryption fails for any setting
+   */
+  async getAll(): Promise<Record<string, string>> {
+    const settings = await this.repository.find()
+    const result: Record<string, string> = {}
+
+    for (const setting of settings) {
+      result[setting.key] = this.encryptionService.decrypt(setting.value)
+    }
+
+    return result
+  }
 }

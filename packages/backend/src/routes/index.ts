@@ -1,6 +1,7 @@
 export { createEmailRoutes } from './email.routes'
 export { createTodoRoutes } from './todo.routes'
 export { createAgentRoutes } from './agent.routes'
+export { createSettingsRoutes } from './settings.routes'
 
 // Re-export types
 export type {

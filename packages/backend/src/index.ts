@@ -8,7 +8,7 @@ import { ImapService } from './services/ImapService.js'
 import { MailParserService } from './services/MailParserService.js'
 import { EmailSyncService } from './services/EmailSyncService.js'
 import { SmtpService } from './services/SmtpService.js'
-import { createEmailRoutes, createTodoRoutes } from './routes/index.js'
+import { createEmailRoutes, createTodoRoutes, createSettingsRoutes } from './routes/index.js'
 
 export const APP_VERSION = '0.1.0'
 
@@ -81,6 +81,7 @@ export async function createApp(): Promise<{
   // API routes
   app.use('/api/emails', createEmailRoutes(AppDataSource))
   app.use('/api/todos', createTodoRoutes(AppDataSource))
+  app.use('/api/settings', createSettingsRoutes(settingsService))
 
   // Error handler
   app.use(

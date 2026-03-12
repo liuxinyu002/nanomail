@@ -181,9 +181,12 @@ export class ImapService implements IMailFetcher {
    */
   async *fetchNewEmails(): AsyncGenerator<FetchedEmail, void, unknown> {
     const client = await this.getClient()
+    let fetchCount = 0
 
     try {
       await client.connect()
+      this.log.info('IMAP server connected')
+
       await client.mailboxOpen('INBOX')
 
       // Get last synced UID for incremental sync
@@ -224,6 +227,7 @@ export class ImapService implements IMailFetcher {
             references: parsed.references,
           }
 
+          fetchCount++
           yield email
 
         } catch (error) {
@@ -232,6 +236,8 @@ export class ImapService implements IMailFetcher {
           continue
         }
       }
+
+      this.log.info({ count: fetchCount }, 'Fetched emails from IMAP')
 
     } finally {
       // Connection pooling: keep the IMAP client alive for reuse
@@ -273,7 +279,8 @@ export class ImapService implements IMailFetcher {
 
     const client = await this.getClient()
     await client.messageFlagsAdd({ uid: identifier.uid }, ['\\Deleted'])
-    await client.expunge()
+    // Note: expunge is handled by the server or can be called separately
+    // The message is marked as \Deleted and will be removed on expunge
   }
 
   /**

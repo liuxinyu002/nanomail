@@ -1,6 +1,12 @@
 import { Router } from 'express'
 import type { DataSource } from 'typeorm'
 import { Email } from '../entities/Email.entity'
+import type { EmailSyncService } from '../services/EmailSyncService'
+import type { JobService } from '../services/JobService'
+import type { AsyncSyncExecutor } from '../services/AsyncSyncExecutor'
+import { createLogger } from '../config/logger.js'
+
+const log = createLogger('EmailRoutes')
 
 /**
  * Pagination query parameters
@@ -67,7 +73,12 @@ const MAX_EMAILS_PER_BATCH = 5
 /**
  * Creates Express routes for email operations.
  */
-export function createEmailRoutes(dataSource: DataSource): Router {
+export function createEmailRoutes(
+  dataSource: DataSource,
+  _emailSyncService?: EmailSyncService,
+  _jobService?: JobService,
+  _asyncSyncExecutor?: AsyncSyncExecutor
+): Router {
   const router = Router()
   const emailRepository = dataSource.getRepository(Email)
 
@@ -181,6 +192,59 @@ export function createEmailRoutes(dataSource: DataSource): Router {
     } catch (error) {
       next(error)
     }
+  })
+
+  // POST /api/emails/sync - Trigger async email sync
+  router.post('/sync', async (req, res, next) => {
+    try {
+      // Check if services are available
+      if (!_jobService || !_asyncSyncExecutor) {
+        res.status(503).json({ error: 'Sync service not available' })
+        return
+      }
+
+      const accountId = req.body.accountId ?? 1
+
+      // Concurrency protection: check for existing active job
+      const existingJob = _jobService.findActiveJobByAccountId(accountId)
+      if (existingJob) {
+        res.json({ jobId: existingJob.id, status: existingJob.status })
+        return
+      }
+
+      // Create new job
+      const jobId = _jobService.createJob(accountId)
+
+      // Execute sync asynchronously (don't await)
+      _asyncSyncExecutor.executeSync(jobId, accountId).catch((error) => {
+        log.error({ err: error, jobId, accountId }, 'Async sync failed')
+      })
+
+      res.json({ jobId, status: 'pending' })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  // GET /api/emails/sync/:jobId - Get sync job status
+  router.get('/sync/:jobId', (req, res) => {
+    if (!_jobService) {
+      res.status(503).json({ error: 'Sync service not available' })
+      return
+    }
+
+    const job = _jobService.getJob(req.params.jobId)
+
+    if (!job) {
+      // Server restart would lose jobs, return 404
+      res.status(404).json({
+        error: 'JOB_NOT_FOUND',
+        message: 'Task does not exist or has expired. Please re-sync.',
+      })
+      return
+    }
+
+    res.json(job)
   })
 
   return router

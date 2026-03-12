@@ -61,6 +61,25 @@ export interface SendEmailResponse {
   messageId: string
 }
 
+export interface SyncJobStatus {
+  id: string
+  accountId: number
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  progress?: number
+  result?: {
+    syncedCount: number
+    errors: string[]
+  }
+  error?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TriggerSyncResponse {
+  jobId: string
+  status: 'pending' | 'running'
+}
+
 const MAX_EMAILS_PER_BATCH = 5
 
 /**
@@ -143,6 +162,39 @@ export const EmailService = {
 
     if (!response.ok) {
       throw new Error('Failed to send email')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Trigger an async email sync
+   */
+  async triggerSync(accountId: number = 1): Promise<TriggerSyncResponse> {
+    const response = await fetch('/api/emails/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to trigger sync')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Get sync job status
+   */
+  async getSyncStatus(jobId: string): Promise<SyncJobStatus> {
+    const response = await fetch(`/api/emails/sync/${jobId}`)
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('JOB_NOT_FOUND')
+      }
+      throw new Error('Failed to get sync status')
     }
 
     return response.json()

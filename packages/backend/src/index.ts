@@ -15,6 +15,8 @@ import { ImapService } from './services/ImapService.js'
 import { MailParserService } from './services/MailParserService.js'
 import { EmailSyncService } from './services/EmailSyncService.js'
 import { SmtpService } from './services/SmtpService.js'
+import { JobService } from './services/JobService.js'
+import { AsyncSyncExecutor } from './services/AsyncSyncExecutor.js'
 import { createEmailRoutes, createTodoRoutes, createSettingsRoutes } from './routes/index.js'
 
 export const APP_VERSION = '0.1.0'
@@ -33,6 +35,8 @@ export interface AppServices {
   mailParserService: MailParserService
   emailSyncService: EmailSyncService
   smtpService: SmtpService
+  jobService: JobService
+  asyncSyncExecutor: AsyncSyncExecutor
 }
 
 /**
@@ -59,6 +63,8 @@ export async function createApp(): Promise<{
     mailParserService
   )
   const smtpService = new SmtpService(settingsService)
+  const jobService = new JobService()
+  const asyncSyncExecutor = new AsyncSyncExecutor(emailSyncService, jobService)
 
   const services: AppServices = {
     encryptionService,
@@ -67,6 +73,8 @@ export async function createApp(): Promise<{
     mailParserService,
     emailSyncService,
     smtpService,
+    jobService,
+    asyncSyncExecutor,
   }
 
   // Create Express app
@@ -86,7 +94,12 @@ export async function createApp(): Promise<{
   })
 
   // API routes
-  app.use('/api/emails', createEmailRoutes(AppDataSource))
+  app.use('/api/emails', createEmailRoutes(
+    AppDataSource,
+    emailSyncService,
+    jobService,
+    asyncSyncExecutor
+  ))
   app.use('/api/todos', createTodoRoutes(AppDataSource))
   app.use('/api/settings', createSettingsRoutes(settingsService))
 

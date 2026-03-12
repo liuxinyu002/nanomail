@@ -1,22 +1,68 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { EmailService } from '@/services'
 import { Button } from '@/components/ui'
 import { EmailCard, EmptyInbox } from './EmailCard'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles, RefreshCw } from 'lucide-react'
 
 const MAX_SELECTION = 5
+const POLL_INTERVAL = 2000 // 2 seconds
 
 export function InboxPage() {
   const queryClient = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [processing, setProcessing] = useState(false)
+  const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['emails', 1, 10],
     queryFn: () => EmailService.getEmails({ page: 1, limit: 10 }),
   })
+
+  // Polling effect for sync status
+  useEffect(() => {
+    let isMounted = true
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const poll = async () => {
+      if (!syncingJobId) return
+
+      try {
+        const job = await EmailService.getSyncStatus(syncingJobId)
+        if (!isMounted) return
+
+        if (job.status === 'completed') {
+          const count = job.result?.syncedCount ?? 0
+          toast.success(`Sync completed, ${count} new email${count !== 1 ? 's' : ''}`)
+          setSyncingJobId(null)
+          refetch()
+        } else if (job.status === 'failed') {
+          toast.error(`Sync failed: ${job.error ?? 'Unknown error'}`)
+          setSyncingJobId(null)
+        } else {
+          // Continue polling
+          timeoutId = setTimeout(poll, POLL_INTERVAL)
+        }
+      } catch (error) {
+        if (!isMounted) return
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        if (message === 'JOB_NOT_FOUND') {
+          toast.error('Sync job not found or expired. Please try again.')
+        } else {
+          toast.error('Failed to get sync status')
+        }
+        setSyncingJobId(null)
+      }
+    }
+
+    poll()
+
+    return () => {
+      isMounted = false
+      clearTimeout(timeoutId)
+    }
+  }, [syncingJobId, refetch])
 
   const handleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -37,6 +83,18 @@ export function InboxPage() {
     [selectedIds]
   )
 
+  const handleSync = async () => {
+    if (syncingJobId) return // Already syncing
+
+    try {
+      const response = await EmailService.triggerSync()
+      setSyncingJobId(response.jobId)
+      toast.info('Sync started...')
+    } catch {
+      toast.error('Failed to start sync')
+    }
+  }
+
   const handleRunAI = async () => {
     if (selectedIds.size === 0) return
 
@@ -56,7 +114,27 @@ export function InboxPage() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Inbox</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">Inbox</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={!!syncingJobId}
+          >
+            {syncingJobId ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync
+              </>
+            )}
+          </Button>
+        </div>
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="p-4 rounded-lg bg-muted animate-pulse">
@@ -78,7 +156,27 @@ export function InboxPage() {
   if (isError) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Inbox</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">Inbox</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={!!syncingJobId}
+          >
+            {syncingJobId ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync
+              </>
+            )}
+          </Button>
+        </div>
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-muted-foreground mb-4">Failed to load emails</p>
           <Button variant="outline" onClick={() => refetch()}>
@@ -92,7 +190,27 @@ export function InboxPage() {
   if (!data || data.emails.length === 0) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Inbox</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">Inbox</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={!!syncingJobId}
+          >
+            {syncingJobId ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync
+              </>
+            )}
+          </Button>
+        </div>
         <EmptyInbox />
       </div>
     )
@@ -100,7 +218,27 @@ export function InboxPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Inbox</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Inbox</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSync}
+          disabled={!!syncingJobId}
+        >
+          {syncingJobId ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Sync
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* Selection limit indicator */}
       {selectedIds.size > 0 && (

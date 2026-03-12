@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express'
 import type { SettingsService } from '../services/SettingsService'
+import { createLogger } from '../config/logger.js'
+
+const log = createLogger('SettingsRoutes')
 
 /**
  * Creates settings routes with dependency injection
@@ -17,7 +20,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
       const settings = await settingsService.getAll()
       res.json(settings)
     } catch (error) {
-      console.error('Error fetching settings:', error)
+      log.error({ err: error }, 'Error fetching settings')
       res.status(500).json({ error: 'Failed to fetch settings' })
     }
   })
@@ -29,6 +32,9 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
   router.get('/:key', async (req: Request, res: Response) => {
     try {
       const { key } = req.params
+      if (!key) {
+        return res.status(400).json({ error: 'Key is required' })
+      }
       const value = await settingsService.get(key)
 
       if (value === null) {
@@ -37,7 +43,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
 
       res.json({ key, value })
     } catch (error) {
-      console.error('Error fetching setting:', error)
+      log.error({ err: error, key }, 'Error fetching setting')
       res.status(500).json({ error: 'Failed to fetch setting' })
     }
   })
@@ -63,7 +69,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
 
       res.json({ success: true })
     } catch (error) {
-      console.error('Error saving settings:', error)
+      log.error({ err: error }, 'Error saving settings')
       res.status(500).json({ error: 'Failed to save settings' })
     }
   })
@@ -75,6 +81,9 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
   router.put('/:key', async (req: Request, res: Response) => {
     try {
       const { key } = req.params
+      if (!key) {
+        return res.status(400).json({ error: 'Key is required' })
+      }
       const { value } = req.body
 
       if (typeof value !== 'string') {
@@ -84,7 +93,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
       await settingsService.set(key, value)
       res.json({ success: true })
     } catch (error) {
-      console.error('Error saving setting:', error)
+      log.error({ err: error, key }, 'Error saving setting')
       res.status(500).json({ error: 'Failed to save setting' })
     }
   })
@@ -96,10 +105,13 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
   router.delete('/:key', async (req: Request, res: Response) => {
     try {
       const { key } = req.params
+      if (!key) {
+        return res.status(400).json({ error: 'Key is required' })
+      }
       await settingsService.delete(key)
       res.json({ success: true })
     } catch (error) {
-      console.error('Error deleting setting:', error)
+      log.error({ err: error, key }, 'Error deleting setting')
       res.status(500).json({ error: 'Failed to delete setting' })
     }
   })

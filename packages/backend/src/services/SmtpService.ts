@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import type { SettingsService } from './SettingsService'
+import { createLogger, type Logger } from '../config/logger.js'
 
 /**
  * SMTP configuration retrieved from SettingsService
@@ -59,6 +60,8 @@ const SMTP_SETTINGS = {
  * - Verify connection and handle errors
  */
 export class SmtpService {
+  private readonly log: Logger = createLogger('SmtpService')
+
   constructor(private readonly settingsService: SettingsService) {}
 
   /**
@@ -122,11 +125,14 @@ export class SmtpService {
     try {
       const transporter = await this.createTransporter()
       await transporter.verify()
+      this.log.info('SMTP connection test successful')
       return { success: true }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
+      this.log.error({ err: error }, 'SMTP connection test failed')
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown connection error',
+        error: errorMessage,
       }
     }
   }
@@ -138,6 +144,8 @@ export class SmtpService {
    * @returns SendEmailResult with success status and message ID
    */
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    this.log.info({ to: options.to, subject: options.subject }, 'Starting email send')
+
     try {
       const config = await this.getConfig()
       const transporter = nodemailer.createTransport({
@@ -150,6 +158,8 @@ export class SmtpService {
         },
       })
 
+      this.log.info({ host: config.host }, 'SMTP server connected')
+
       const mailOptions = {
         from: config.user,
         to: options.to,
@@ -160,14 +170,18 @@ export class SmtpService {
 
       const result = await transporter.sendMail(mailOptions)
 
+      this.log.info({ messageId: result.messageId }, 'Email sent successfully')
+
       return {
         success: true,
         messageId: result.messageId,
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown send error'
+      this.log.error({ err: error }, 'Email send failed')
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown send error',
+        error: errorMessage,
       }
     }
   }

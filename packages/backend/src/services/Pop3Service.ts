@@ -215,6 +215,9 @@ export class Pop3Service implements IMailFetcher {
    */
   async *fetchNewEmails(): AsyncGenerator<FetchedEmail, void, unknown> {
     await this.connect()
+    this.log.info('POP3 server connected')
+
+    let fetchCount = 0
 
     try {
       // Step 1: Get UIDL list (reverse order)
@@ -230,6 +233,8 @@ export class Pop3Service implements IMailFetcher {
       if (newUidlItems.length === 0) {
         return
       }
+
+      this.log.info({ count: newUidlItems.length }, 'Found new emails to fetch')
 
       // Step 3: Serial download (streaming)
       const pop3 = await this.getPop3Client()
@@ -255,6 +260,7 @@ export class Pop3Service implements IMailFetcher {
             references: parsed.references,
           }
 
+          fetchCount++
           yield email
 
         } catch (error) {
@@ -263,6 +269,9 @@ export class Pop3Service implements IMailFetcher {
           continue
         }
       }
+
+      this.log.info({ count: fetchCount }, 'Fetched emails from POP3')
+
     } finally {
       // POP3 connection is managed per-session; each fetch cycle creates a fresh connection
       // Connection cleanup is handled by the finally block in getPop3Client
@@ -272,7 +281,7 @@ export class Pop3Service implements IMailFetcher {
   /**
    * Mark as read - POP3 not supported, gracefully degrades to no-op
    */
-  async markAsRead(identifier: EmailIdentifier): Promise<void> {
+  async markAsRead(_identifier: EmailIdentifier): Promise<void> {
     // POP3 protocol does not support server-side state management
     // Graceful degradation: return directly, no exception thrown
     // Upper layer can still update local database status
@@ -282,7 +291,7 @@ export class Pop3Service implements IMailFetcher {
   /**
    * Move to folder - POP3 not supported, gracefully degrades to no-op
    */
-  async moveToFolder(identifier: EmailIdentifier, folder: string): Promise<void> {
+  async moveToFolder(_identifier: EmailIdentifier, _folder: string): Promise<void> {
     // POP3 protocol does not support folder concept
     // Graceful degradation: return directly
     return Promise.resolve()

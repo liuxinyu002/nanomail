@@ -3,12 +3,18 @@ import request from 'supertest'
 import express from 'express'
 import { createEmailRoutes } from './email.routes'
 import type { DataSource, Repository } from 'typeorm'
+import type { EmailSyncService } from '../services/EmailSyncService'
+import type { JobService } from '../services/JobService'
+import type { AsyncSyncExecutor } from '../services/AsyncSyncExecutor'
 import { Email } from '../entities/Email.entity'
 
 describe('EmailRoutes', () => {
   let app: express.Application
   let mockDataSource: DataSource
   let mockRepository: Repository<Email>
+  let mockEmailSyncService: EmailSyncService
+  let mockJobService: JobService
+  let mockAsyncSyncExecutor: AsyncSyncExecutor
 
   beforeEach(() => {
     // Create mock repository
@@ -26,10 +32,36 @@ describe('EmailRoutes', () => {
       isInitialized: true,
     } as unknown as DataSource
 
+    // Create mock EmailSyncService
+    mockEmailSyncService = {
+      sync: vi.fn(),
+      startPolling: vi.fn(),
+      stopPolling: vi.fn(),
+      isPolling: vi.fn(),
+    } as unknown as EmailSyncService
+
+    // Create mock JobService
+    mockJobService = {
+      createJob: vi.fn().mockReturnValue('test-job-uuid'),
+      getJob: vi.fn(),
+      findActiveJobByAccountId: vi.fn(),
+      updateJob: vi.fn(),
+    } as unknown as JobService
+
+    // Create mock AsyncSyncExecutor
+    mockAsyncSyncExecutor = {
+      executeSync: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncSyncExecutor
+
     // Create express app with routes
     app = express()
     app.use(express.json())
-    app.use('/api/emails', createEmailRoutes(mockDataSource))
+    app.use('/api/emails', createEmailRoutes(
+      mockDataSource,
+      mockEmailSyncService,
+      mockJobService,
+      mockAsyncSyncExecutor
+    ))
   })
 
   afterEach(() => {
@@ -180,6 +212,156 @@ describe('EmailRoutes', () => {
         .send({ emailIds: [1, 999] })
 
       expect(response.body.queuedCount).toBe(1)
+    })
+  })
+
+  describe('POST /api/emails/sync', () => {
+    it('should create a new sync job and return jobId', async () => {
+      const response = await request(app)
+        .post('/api/emails/sync')
+        .send({ accountId: 1 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.jobId).toBe('test-job-uuid')
+      expect(response.body.status).toBe('pending')
+    })
+
+    it('should trigger async sync execution', async () => {
+      await request(app)
+        .post('/api/emails/sync')
+        .send({ accountId: 1 })
+
+      expect(mockJobService.createJob).toHaveBeenCalledWith(1)
+      expect(mockAsyncSyncExecutor.executeSync).toHaveBeenCalledWith('test-job-uuid', 1)
+    })
+
+    it('should return existing job if active job exists for account', async () => {
+      vi.mocked(mockJobService.findActiveJobByAccountId).mockReturnValue({
+        id: 'existing-job-id',
+        accountId: 1,
+        status: 'running',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      const response = await request(app)
+        .post('/api/emails/sync')
+        .send({ accountId: 1 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.jobId).toBe('existing-job-id')
+      expect(response.body.status).toBe('running')
+      expect(mockJobService.createJob).not.toHaveBeenCalled()
+    })
+
+    it('should use default accountId if not provided', async () => {
+      const response = await request(app)
+        .post('/api/emails/sync')
+        .send({})
+
+      expect(response.status).toBe(200)
+      expect(mockJobService.createJob).toHaveBeenCalledWith(1)
+    })
+
+    it('should handle executor errors gracefully', async () => {
+      vi.mocked(mockAsyncSyncExecutor.executeSync).mockRejectedValue(new Error('Executor error'))
+
+      // Should still return success immediately
+      const response = await request(app)
+        .post('/api/emails/sync')
+        .send({ accountId: 1 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.jobId).toBe('test-job-uuid')
+    })
+  })
+
+  describe('GET /api/emails/sync/:jobId', () => {
+    it('should return job status for existing job', async () => {
+      const mockJob = {
+        id: 'test-job-id',
+        accountId: 1,
+        status: 'running',
+        progress: 50,
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        updatedAt: new Date('2024-01-15T10:01:00Z'),
+      }
+      vi.mocked(mockJobService.getJob).mockReturnValue(mockJob)
+
+      const response = await request(app)
+        .get('/api/emails/sync/test-job-id')
+
+      expect(response.status).toBe(200)
+      expect(response.body.id).toBe('test-job-id')
+      expect(response.body.status).toBe('running')
+      expect(response.body.progress).toBe(50)
+    })
+
+    it('should return 404 for non-existent job', async () => {
+      vi.mocked(mockJobService.getJob).mockReturnValue(undefined)
+
+      const response = await request(app)
+        .get('/api/emails/sync/non-existent-id')
+
+      expect(response.status).toBe(404)
+      expect(response.body.error).toBe('JOB_NOT_FOUND')
+      expect(response.body.message).toContain('Task does not exist or has expired')
+    })
+
+    it('should return completed job with result', async () => {
+      const mockJob = {
+        id: 'completed-job-id',
+        accountId: 1,
+        status: 'completed',
+        result: { syncedCount: 10, errors: [] },
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        updatedAt: new Date('2024-01-15T10:05:00Z'),
+      }
+      vi.mocked(mockJobService.getJob).mockReturnValue(mockJob)
+
+      const response = await request(app)
+        .get('/api/emails/sync/completed-job-id')
+
+      expect(response.status).toBe(200)
+      expect(response.body.status).toBe('completed')
+      expect(response.body.result.syncedCount).toBe(10)
+    })
+
+    it('should return failed job with error', async () => {
+      const mockJob = {
+        id: 'failed-job-id',
+        accountId: 1,
+        status: 'failed',
+        error: 'Connection timeout',
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        updatedAt: new Date('2024-01-15T10:02:00Z'),
+      }
+      vi.mocked(mockJobService.getJob).mockReturnValue(mockJob)
+
+      const response = await request(app)
+        .get('/api/emails/sync/failed-job-id')
+
+      expect(response.status).toBe(200)
+      expect(response.body.status).toBe('failed')
+      expect(response.body.error).toBe('Connection timeout')
+    })
+
+    it('should handle job with progress', async () => {
+      const mockJob = {
+        id: 'progress-job-id',
+        accountId: 1,
+        status: 'running',
+        progress: 75,
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        updatedAt: new Date('2024-01-15T10:03:00Z'),
+      }
+      vi.mocked(mockJobService.getJob).mockReturnValue(mockJob)
+
+      const response = await request(app)
+        .get('/api/emails/sync/progress-job-id')
+
+      expect(response.status).toBe(200)
+      expect(response.body.progress).toBe(75)
     })
   })
 })

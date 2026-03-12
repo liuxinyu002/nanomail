@@ -26,11 +26,11 @@ export class EmailSyncService {
   private factory: MailFetcherFactory
 
   constructor(
-    private readonly dataSource: DataSource,
+    private readonly _dataSource: DataSource,
     private readonly settingsService: SettingsService,
     private readonly mailParserService: MailParserService
   ) {
-    this.emailRepository = dataSource.getRepository(Email)
+    this.emailRepository = _dataSource.getRepository(Email)
     // Factory injects Repository for Pop3Service use
     this.factory = new MailFetcherFactory(settingsService, this.emailRepository)
     this.log = createLogger('EmailSyncService')

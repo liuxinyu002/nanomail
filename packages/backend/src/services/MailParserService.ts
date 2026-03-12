@@ -1,4 +1,5 @@
 import { simpleParser, type ParsedMail } from 'mailparser'
+import { createLogger, type Logger } from '../config/logger.js'
 
 /**
  * Parsed email data extracted from raw MIME content
@@ -25,6 +26,8 @@ export interface ParsedEmail {
  * - Extract thread context headers (Message-ID, In-Reply-To, References)
  */
 export class MailParserService {
+  private readonly log: Logger = createLogger('MailParser')
+
   /**
    * Parses raw email source into structured data.
    *
@@ -32,18 +35,25 @@ export class MailParserService {
    * @returns ParsedEmail with extracted fields
    */
   async parse(rawSource: string | Buffer): Promise<ParsedEmail> {
-    const parsed: ParsedMail = await simpleParser(rawSource)
+    try {
+      const parsed: ParsedMail = await simpleParser(rawSource)
 
-    return {
-      subject: parsed.subject ?? null,
-      from: parsed.from?.value?.[0]?.address ?? null,
-      text: parsed.text || null,
-      html: parsed.html || null,
-      date: parsed.date ?? null,
-      hasAttachments: this.hasAttachments(parsed),
-      messageId: parsed.messageId ?? null,
-      inReplyTo: parsed.inReplyTo ?? null,
-      references: parsed.references ?? null,
+      this.log.debug({ subject: parsed.subject }, 'Email parsed successfully')
+
+      return {
+        subject: parsed.subject ?? null,
+        from: parsed.from?.value?.[0]?.address ?? null,
+        text: parsed.text || null,
+        html: parsed.html || null,
+        date: parsed.date ?? null,
+        hasAttachments: this.hasAttachments(parsed),
+        messageId: parsed.messageId ?? null,
+        inReplyTo: parsed.inReplyTo ?? null,
+        references: this.normalizeReferences(parsed.references),
+      }
+    } catch (error) {
+      this.log.error({ err: error }, 'Failed to parse email')
+      throw error
     }
   }
 
@@ -52,6 +62,15 @@ export class MailParserService {
    */
   private hasAttachments(parsed: ParsedMail): boolean {
     return Array.isArray(parsed.attachments) && parsed.attachments.length > 0
+  }
+
+  /**
+   * Normalizes references to always be an array or null.
+   */
+  private normalizeReferences(references: string | string[] | null | undefined): string[] | null {
+    if (!references) return null
+    if (Array.isArray(references)) return references
+    return [references]
   }
 
   /**

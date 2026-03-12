@@ -2,11 +2,20 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 
 interface SettingsForm {
+  // Protocol type
+  PROTOCOL_TYPE: 'IMAP' | 'POP3'
+
   // IMAP
   IMAP_HOST: string
   IMAP_PORT: string
   IMAP_USER: string
   IMAP_PASS: string
+
+  // POP3
+  POP3_HOST: string
+  POP3_PORT: string
+  POP3_USER: string
+  POP3_PASS: string
 
   // SMTP
   SMTP_HOST: string
@@ -21,10 +30,15 @@ interface SettingsForm {
 }
 
 const defaultSettings: SettingsForm = {
+  PROTOCOL_TYPE: 'IMAP',
   IMAP_HOST: '',
   IMAP_PORT: '',
   IMAP_USER: '',
   IMAP_PASS: '',
+  POP3_HOST: '',
+  POP3_PORT: '',
+  POP3_USER: '',
+  POP3_PASS: '',
   SMTP_HOST: '',
   SMTP_PORT: '',
   SMTP_USER: '',
@@ -97,51 +111,137 @@ export function SettingsPage() {
 
         {/* Email Servers Tab */}
         <TabsContent value="email" className="space-y-6 mt-6">
+          {/* Protocol Type Selector */}
           <Card>
             <CardHeader>
-              <CardTitle>IMAP Configuration</CardTitle>
-              <CardDescription>Incoming mail server settings</CardDescription>
+              <CardTitle>Receive Protocol</CardTitle>
+              <CardDescription>Select the protocol for receiving emails</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="imap-host">IMAP Host</Label>
-                <Input
-                  id="imap-host"
-                  placeholder="imap.example.com"
-                  value={settings.IMAP_HOST}
-                  onChange={handleChange('IMAP_HOST')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="imap-port">IMAP Port</Label>
-                <Input
-                  id="imap-port"
-                  placeholder="993"
-                  value={settings.IMAP_PORT}
-                  onChange={handleChange('IMAP_PORT')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="imap-user">IMAP User</Label>
-                <Input
-                  id="imap-user"
-                  placeholder="user@example.com"
-                  value={settings.IMAP_USER}
-                  onChange={handleChange('IMAP_USER')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="imap-password">IMAP Password</Label>
-                <Input
-                  id="imap-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={settings.IMAP_PASS}
-                  onChange={handleChange('IMAP_PASS')}
-                />
+            <CardContent>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="protocol"
+                    value="IMAP"
+                    checked={settings.PROTOCOL_TYPE === 'IMAP'}
+                    onChange={() => updateSetting('PROTOCOL_TYPE', 'IMAP')}
+                    className="w-4 h-4"
+                  />
+                  <span>IMAP</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="protocol"
+                    value="POP3"
+                    checked={settings.PROTOCOL_TYPE === 'POP3'}
+                    onChange={() => updateSetting('PROTOCOL_TYPE', 'POP3')}
+                    className="w-4 h-4"
+                  />
+                  <span>POP3</span>
+                </label>
               </div>
             </CardContent>
           </Card>
+
+          {/* IMAP Configuration - shown when IMAP is selected */}
+          {settings.PROTOCOL_TYPE === 'IMAP' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>IMAP Configuration</CardTitle>
+                <CardDescription>Incoming mail server settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="imap-host">IMAP Host</Label>
+                  <Input
+                    id="imap-host"
+                    placeholder="imap.example.com"
+                    value={settings.IMAP_HOST}
+                    onChange={handleChange('IMAP_HOST')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imap-port">IMAP Port</Label>
+                  <Input
+                    id="imap-port"
+                    placeholder="993"
+                    value={settings.IMAP_PORT}
+                    onChange={handleChange('IMAP_PORT')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imap-user">IMAP User</Label>
+                  <Input
+                    id="imap-user"
+                    placeholder="user@example.com"
+                    value={settings.IMAP_USER}
+                    onChange={handleChange('IMAP_USER')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imap-password">IMAP Password</Label>
+                  <Input
+                    id="imap-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={settings.IMAP_PASS}
+                    onChange={handleChange('IMAP_PASS')}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* POP3 Configuration - shown when POP3 is selected */}
+          {settings.PROTOCOL_TYPE === 'POP3' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>POP3 Configuration</CardTitle>
+                <CardDescription>Incoming mail server settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pop3-host">POP3 Host</Label>
+                  <Input
+                    id="pop3-host"
+                    placeholder="pop.example.com"
+                    value={settings.POP3_HOST}
+                    onChange={handleChange('POP3_HOST')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pop3-port">POP3 Port</Label>
+                  <Input
+                    id="pop3-port"
+                    placeholder="995"
+                    value={settings.POP3_PORT}
+                    onChange={handleChange('POP3_PORT')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pop3-user">POP3 User</Label>
+                  <Input
+                    id="pop3-user"
+                    placeholder="user@example.com"
+                    value={settings.POP3_USER}
+                    onChange={handleChange('POP3_USER')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pop3-password">POP3 Password</Label>
+                  <Input
+                    id="pop3-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={settings.POP3_PASS}
+                    onChange={handleChange('POP3_PASS')}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

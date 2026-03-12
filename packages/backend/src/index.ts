@@ -1,3 +1,9 @@
+import { config } from 'dotenv'
+import { resolve } from 'path'
+
+// Load .env from project root (monorepo root)
+config({ path: resolve(__dirname, '../../../.env') })
+
 import 'reflect-metadata'
 import express from 'express'
 import cors from 'cors'
@@ -48,7 +54,7 @@ export async function createApp(): Promise<{
   const mailParserService = new MailParserService()
   const emailSyncService = new EmailSyncService(
     AppDataSource,
-    imapService,
+    settingsService,
     mailParserService
   )
   const smtpService = new SmtpService(settingsService)

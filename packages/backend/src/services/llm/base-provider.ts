@@ -66,11 +66,11 @@ export abstract class LLMProvider {
     const sanitized: ChatMessage[] = []
 
     for (const msg of messages) {
-      const clean: Partial<ChatMessage> = {}
+      const clean: Record<string, unknown> = {}
 
-      for (const key of Object.keys(msg) as (keyof ChatMessage)[]) {
+      for (const key of Object.keys(msg)) {
         if (allowedKeys.has(key)) {
-          clean[key] = msg[key]
+          clean[key] = msg[key as keyof ChatMessage]
         }
       }
 
@@ -79,7 +79,7 @@ export abstract class LLMProvider {
         clean.content = null
       }
 
-      sanitized.push(clean as ChatMessage)
+      sanitized.push(clean as unknown as ChatMessage)
     }
 
     return sanitized

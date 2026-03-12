@@ -3,16 +3,10 @@
  * Reference: nanobot/agent/loop.py
  */
 
-import type { ToolCallRequest } from '../../llm/types'
+import type { ContextMessage } from '../context/types'
 
-/**
- * Agent message format for ReAct loop
- */
-export type AgentMessage =
-  | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
-  | { role: 'assistant'; content: string | null; toolCalls?: ToolCallRequest[] }
-  | { role: 'tool'; content: string; toolCallId: string }
+// Re-export ContextMessage as AgentMessage for backward compatibility
+export type AgentMessage = ContextMessage
 
 /**
  * Progress event for streaming
@@ -31,7 +25,7 @@ export interface ProgressEvent {
  */
 export interface AgentState {
   iteration: number
-  messages: AgentMessage[]
+  messages: ContextMessage[]
   finalContent: string | null
   toolsUsed: string[]
   finishReason: 'completed' | 'max_iterations' | 'error'

@@ -62,6 +62,50 @@ export const EmailWithLabelsSchema = EmailSchema.extend({
   labels: z.array(LabelSchema)
 })
 
+/**
+ * Sync job status enum
+ */
+export const SyncJobStatusSchema = z.enum(['pending', 'running', 'completed', 'failed'])
+
+/**
+ * Schema for SyncJob - tracks async email sync operations
+ */
+export const SyncJobSchema = z.object({
+  id: z.string().uuid(),
+  accountId: z.number().int().positive(),
+  status: SyncJobStatusSchema,
+  progress: z.number().min(0).max(100).optional(),
+  result: z.object({
+    syncedCount: z.number().int().nonnegative(),
+    errors: z.array(z.string()),
+  }).optional(),
+  error: z.string().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+/**
+ * Schema for creating a new SyncJob
+ */
+export const CreateSyncJobSchema = SyncJobSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+})
+
+/**
+ * Schema for job creation response
+ */
+export const SyncJobResponseSchema = z.object({
+  jobId: z.string().uuid(),
+  status: SyncJobStatusSchema,
+})
+
+export type SyncJobStatus = z.infer<typeof SyncJobStatusSchema>
+export type SyncJob = z.infer<typeof SyncJobSchema>
+export type CreateSyncJob = z.infer<typeof CreateSyncJobSchema>
+export type SyncJobResponse = z.infer<typeof SyncJobResponseSchema>
+
 export type Email = z.infer<typeof EmailSchema>
 export type CreateEmail = z.infer<typeof CreateEmailSchema>
 export type Label = z.infer<typeof LabelSchema>

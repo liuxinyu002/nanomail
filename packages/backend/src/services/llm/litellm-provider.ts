@@ -199,16 +199,30 @@ export class LiteLLMProvider extends LLMProvider {
    */
   private parseResponse(response: OpenAI.Chat.Completions.ChatCompletion): LLMResponse {
     const choice = response.choices[0]
+    if (!choice) {
+      return {
+        content: null,
+        toolCalls: [],
+        finishReason: 'error',
+        usage: {
+          promptTokens: response.usage?.prompt_tokens ?? 0,
+          completionTokens: response.usage?.completion_tokens ?? 0,
+          totalTokens: response.usage?.total_tokens ?? 0
+        }
+      }
+    }
     const message = choice.message
 
     // Parse tool calls
     const toolCalls: ToolCallRequest[] = []
     if (message.tool_calls) {
       for (const tc of message.tool_calls) {
-        let args = tc.function.arguments
+        // Check if it's a function tool call (not a custom tool call)
+        if (tc.type !== 'function') continue
+        let args: string | Record<string, unknown> = tc.function.arguments
         if (typeof args === 'string') {
           try {
-            args = JSON.parse(args)
+            args = JSON.parse(args) as Record<string, unknown>
           } catch {
             args = {}
           }

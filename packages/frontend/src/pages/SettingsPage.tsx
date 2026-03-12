@@ -1,52 +1,6 @@
 import { useState, useEffect, type ChangeEvent } from 'react'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
-
-interface SettingsForm {
-  // Protocol type
-  PROTOCOL_TYPE: 'IMAP' | 'POP3'
-
-  // IMAP
-  IMAP_HOST: string
-  IMAP_PORT: string
-  IMAP_USER: string
-  IMAP_PASS: string
-
-  // POP3
-  POP3_HOST: string
-  POP3_PORT: string
-  POP3_USER: string
-  POP3_PASS: string
-
-  // SMTP
-  SMTP_HOST: string
-  SMTP_PORT: string
-  SMTP_USER: string
-  SMTP_PASS: string
-
-  // LLM
-  LLM_API_KEY: string
-  LLM_MODEL: string
-  LLM_BASE_URL: string
-}
-
-const defaultSettings: SettingsForm = {
-  PROTOCOL_TYPE: 'IMAP',
-  IMAP_HOST: '',
-  IMAP_PORT: '',
-  IMAP_USER: '',
-  IMAP_PASS: '',
-  POP3_HOST: '',
-  POP3_PORT: '',
-  POP3_USER: '',
-  POP3_PASS: '',
-  SMTP_HOST: '',
-  SMTP_PORT: '',
-  SMTP_USER: '',
-  SMTP_PASS: '',
-  LLM_API_KEY: '',
-  LLM_MODEL: '',
-  LLM_BASE_URL: '',
-}
+import { SettingsFormSchema, defaultSettings, type SettingsForm } from '@nanomail/shared'
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsForm>(defaultSettings)
@@ -59,7 +13,9 @@ export function SettingsPage() {
         const response = await fetch('/api/settings')
         if (response.ok) {
           const data = await response.json()
-          setSettings(prev => ({ ...prev, ...data }))
+          // Validate response with schema
+          const parsed = SettingsFormSchema.partial().parse(data)
+          setSettings(prev => ({ ...prev, ...parsed }))
         }
       } catch (error) {
         console.error('Failed to load settings:', error)

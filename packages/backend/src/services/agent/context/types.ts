@@ -40,6 +40,16 @@ export interface ChatHistoryMessage {
 }
 
 /**
+ * Full message structure including system messages
+ */
+export interface ContextMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string | null
+  toolCalls?: ToolCallRequest[]
+  toolCallId?: string
+}
+
+/**
  * Context builder for constructing system prompts and message history
  * Reference: nanobot/agent/context.py - ContextBuilder class
  */
@@ -106,10 +116,10 @@ export class ContextBuilder {
    * Reference: nanobot/agent/context.py - build_messages()
    */
   async buildMessages(params: {
-    history: ChatHistoryMessage[]
+    history: ContextMessage[]
     currentMessage: string
     runtimeContext?: RuntimeContext
-  }): Promise<Array<{ role: string; content: string }>> {
+  }): Promise<ContextMessage[]> {
     const systemPrompt = await this.buildSystemPrompt()
     const runtimeCtx = this.buildRuntimeContext(params.runtimeContext)
 

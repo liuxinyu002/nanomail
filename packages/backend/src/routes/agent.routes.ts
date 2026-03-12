@@ -6,7 +6,7 @@
 import { Router, Request, Response } from 'express'
 import type { DataSource } from 'typeorm'
 import { In } from 'typeorm'
-import type { LLMProvider } from '../services/llm/types'
+import type { LLMProvider } from '../services/llm/base-provider'
 import type { ToolRegistry } from '../services/agent/tools/registry'
 import type { ContextBuilder } from '../services/agent/context/types'
 import type { MemoryStore } from '../services/agent/memory/types'

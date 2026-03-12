@@ -7,15 +7,23 @@ import type { FetchedEmail, EmailIdentifier } from './types/mail-fetcher.types'
 // Mock node-pop3 module
 vi.mock('node-pop3', () => {
   const mockPop3 = vi.fn().mockImplementation(() => ({
-    UIDL: vi.fn().mockResolvedValue({
-      '1': 'uidl-1',
-      '2': 'uidl-2',
-      '3': 'uidl-3',
-    }),
+    // UIDL returns array format: [["1", "uidl-1"], ["2", "uidl-2"], ...]
+    UIDL: vi.fn().mockResolvedValue([
+      ['1', 'uidl-1'],
+      ['2', 'uidl-2'],
+      ['3', 'uidl-3'],
+    ]),
     RETR: vi.fn().mockResolvedValue('Raw email content'),
     DELE: vi.fn().mockResolvedValue(undefined),
     QUIT: vi.fn().mockResolvedValue(undefined),
-    LIST: vi.fn().mockResolvedValue({ '1': 100, '2': 200, '3': 300 }),
+    // LIST also returns array format
+    LIST: vi.fn().mockResolvedValue([
+      ['1', '100'],
+      ['2', '200'],
+      ['3', '300'],
+    ]),
+    // EventEmitter methods for error handling
+    on: vi.fn(),
   }))
 
   return { default: mockPop3 }
@@ -106,7 +114,7 @@ describe('Pop3Service - IMailFetcher Implementation', () => {
         .mockResolvedValueOnce('pop.gmail.com')  // POP3_HOST
         .mockResolvedValueOnce('995')            // POP3_PORT
         .mockResolvedValueOnce('user@gmail.com') // POP3_USER
-        .mockResolvedValueOnce('password')       // POP3_PASSWORD
+        .mockResolvedValueOnce('password')       // POP3_PASS
     })
 
     it('should return AsyncGenerator', async () => {

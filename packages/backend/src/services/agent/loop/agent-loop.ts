@@ -7,7 +7,8 @@
  * Uses AsyncGenerator for streaming support.
  */
 
-import type { LLMProvider, LLMResponse, ToolCallRequest } from '../../llm/types'
+import type { LLMResponse } from '../../llm/types'
+import type { LLMProvider } from '../../llm/base-provider'
 import type { ToolRegistry } from '../tools/registry'
 import type { ContextBuilder } from '../context/types'
 import type { MemoryStore } from '../memory/types'
@@ -40,7 +41,7 @@ export class AgentLoop {
   private provider: LLMProvider
   private toolRegistry: ToolRegistry
   private contextBuilder: ContextBuilder
-  private memoryStore: MemoryStore
+  private _memoryStore: MemoryStore // Prefix with underscore to indicate intentionally unused
   private tokenTruncator: TokenTruncator
   private config: AgentConfig
 
@@ -55,13 +56,13 @@ export class AgentLoop {
     // Apply preset defaults if specified
     const presetConfig = params.config?.preset
       ? AGENT_PRESETS[params.config.preset]
-      : {}
+      : null
 
     this.config = {
       model: params.config?.model ?? DEFAULT_AGENT_CONFIG.model,
-      temperature: params.config?.temperature ?? presetConfig.temperature ?? DEFAULT_AGENT_CONFIG.temperature,
+      temperature: params.config?.temperature ?? presetConfig?.temperature ?? DEFAULT_AGENT_CONFIG.temperature,
       maxTokens: params.config?.maxTokens ?? DEFAULT_AGENT_CONFIG.maxTokens,
-      maxIterations: params.config?.maxIterations ?? presetConfig.maxIterations ?? DEFAULT_AGENT_CONFIG.maxIterations,
+      maxIterations: params.config?.maxIterations ?? presetConfig?.maxIterations ?? DEFAULT_AGENT_CONFIG.maxIterations,
       memoryWindow: params.config?.memoryWindow ?? DEFAULT_AGENT_CONFIG.memoryWindow,
       reasoningEffort: params.config?.reasoningEffort
     }
@@ -69,7 +70,7 @@ export class AgentLoop {
     this.provider = params.provider
     this.toolRegistry = params.toolRegistry
     this.contextBuilder = params.contextBuilder
-    this.memoryStore = params.memoryStore
+    this._memoryStore = params.memoryStore
     this.tokenTruncator = params.tokenTruncator
   }
 

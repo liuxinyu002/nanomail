@@ -77,7 +77,7 @@ describe('Security Verification', () => {
     it('should NOT store plaintext in raw database file', async () => {
       const plaintext = 'plaintext-password-12345'
 
-      await settingsService.set('SMTP_PASSWORD', plaintext)
+      await settingsService.set('SMTP_PASS', plaintext)
 
       // Read raw database file
       const dbContent = fs.readFileSync(testDbPath, 'utf-8')

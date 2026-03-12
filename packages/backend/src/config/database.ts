@@ -11,7 +11,7 @@ export const AppDataSource = new DataSource({
   database: path.resolve(__dirname, '../../data/database.sqlite'),
   entities: [Settings, Email, Todo, Label],
   synchronize: process.env.NODE_ENV !== 'production',
-  logging: process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'production'
+  logging: false
 })
 
 export async function initializeDatabase(): Promise<void> {

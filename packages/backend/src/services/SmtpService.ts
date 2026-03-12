@@ -48,7 +48,7 @@ const SMTP_SETTINGS = {
   HOST: 'SMTP_HOST',
   PORT: 'SMTP_PORT',
   USER: 'SMTP_USER',
-  PASSWORD: 'SMTP_PASSWORD',
+  PASSWORD: 'SMTP_PASS',
 } as const
 
 /**
@@ -85,7 +85,7 @@ export class SmtpService {
     }
 
     if (!password) {
-      throw new Error('SMTP_PASSWORD is not configured')
+      throw new Error('SMTP_PASS is not configured')
     }
 
     const port = portStr ? parseInt(portStr, 10) : 587

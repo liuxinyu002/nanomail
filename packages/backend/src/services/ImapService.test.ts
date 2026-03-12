@@ -43,7 +43,7 @@ describe('ImapService', () => {
         .mockResolvedValueOnce('imap.gmail.com') // IMAP_HOST
         .mockResolvedValueOnce('993') // IMAP_PORT
         .mockResolvedValueOnce('user@gmail.com') // IMAP_USER
-        .mockResolvedValueOnce('app-password-123') // IMAP_PASSWORD
+        .mockResolvedValueOnce('app-password-123') // IMAP_PASS
 
       const config = await service.getConfig()
 
@@ -77,7 +77,7 @@ describe('ImapService', () => {
         .mockResolvedValueOnce('imap.gmail.com') // IMAP_HOST
         .mockResolvedValueOnce(null) // IMAP_PORT not set
         .mockResolvedValueOnce('user@gmail.com') // IMAP_USER
-        .mockResolvedValueOnce('password') // IMAP_PASSWORD
+        .mockResolvedValueOnce('password') // IMAP_PASS
 
       const config = await service.getConfig()
 

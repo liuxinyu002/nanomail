@@ -45,6 +45,9 @@ RUN npm run build
 # Stage 2: Build Backend
 FROM node:20-alpine AS backend-builder
 
+# Install build dependencies for native modules (sqlite3/better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app/backend
 
 # Copy backend package files
@@ -68,8 +71,11 @@ COPY --from=backend-builder /app/backend/package.json ./
 # Copy built frontend (served by backend)
 COPY --from=frontend-builder /app/frontend/dist ./public
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# Create data directory for SQLite and set proper ownership
+RUN mkdir -p /app/data && chown -R node:node /app
+
+# Switch to non-root user for security
+USER node
 
 # Expose port
 EXPOSE 3000
@@ -78,8 +84,8 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/database.sqlite
 
-# Start server
-CMD ["node", "dist/index.js"]
+# Start server with database migration
+CMD ["sh", "-c", "npm run db:migrate && node dist/index.js"]
 ```
 
 **Build Considerations:**
@@ -87,6 +93,9 @@ CMD ["node", "dist/index.js"]
 - Multi-stage build reduces final image size
 - Static frontend files served by Node backend
 - Database path configurable via environment
+- **Build tools**: Python3, make, g++ required for native modules (sqlite3/better-sqlite3)
+- **Security**: Runs as non-root `node` user in production
+- **Migrations**: Database migrations run automatically before server start
 
 **Deliverables:**
 - [ ] Multi-stage Dockerfile
@@ -123,6 +132,11 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4}
       - LLM_BASE_URL=${LLM_BASE_URL:-}
+      # Timezone for accurate email timestamps
+      - TZ=${TZ:-UTC}
+    # Enable host.docker.internal on Linux (for local Ollama)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -146,6 +160,9 @@ LLM_API_KEY=sk-your-api-key
 LLM_MODEL=gpt-4
 # LLM_BASE_URL=  # Optional, for custom endpoints
 
+# Timezone (important for email timestamps)
+TZ=UTC  # e.g., America/New_York, Europe/London, Asia/Shanghai
+
 # IMAP Configuration (set via UI after first run)
 # SMTP Configuration (set via UI after first run)
 ```
@@ -155,6 +172,7 @@ LLM_MODEL=gpt-4
 - `MASTER_KEY` must be set before first run
 - Volume ensures data persistence across container restarts
 - Healthcheck enables automatic recovery
+- **Linux compatibility**: `extra_hosts` enables `host.docker.internal` for connecting to local Ollama
 
 **Deliverables:**
 - [ ] docker-compose.yml with volume mounts
@@ -174,18 +192,48 @@ Polish the open-source/delivery assets. Ensure the application is production-rea
 
 ### Tasks
 
-#### T15.1: End-to-End Testing
-Run End-to-End tests: Ingest test email -> trigger pipeline -> generate To-Do -> ask agent to reply -> catch SMTP output.
+#### T15.1: Integration & E2E Testing
+Run Integration tests (API level) and E2E tests (UI level). Ingest test email -> trigger pipeline -> generate To-Do -> ask agent to reply -> catch SMTP output.
+
+**Test Definitions:**
+- **Integration Tests**: Test API endpoints directly using `supertest`. Fast, no browser needed.
+- **E2E Tests**: Test full UI flows using Playwright/Cypress. Slower, but catches real user issues.
+
+> ⚠️ **Critical**: Do NOT call real LLM APIs in automated tests. LLM responses are non-deterministic, slow, and costly. Always mock the LLM service to return fixed responses.
 
 **Test Scenarios:**
 ```typescript
-// E2E Test Suite
+// Integration Test Suite (API level, using supertest)
 
-describe('NanoMail E2E', () => {
+describe('NanoMail Integration Tests', () => {
+  let app: Express;
+
   beforeAll(async () => {
+    // Initialize app with test database
+    app = await createTestApp();
+
+    // ⚠️ CRITICAL: Mock LLM Service to avoid flaky tests
+    // Real LLM calls are slow, expensive, and non-deterministic
+    mockLLMService({
+      summary: 'This is a test summary about the project deadline.',
+      draft: 'Dear Team, Thank you for your email. I will review the proposal.',
+      spamScore: 0
+    });
+
     // Start test SMTP server to capture emails
-    // Seed test emails in mock IMAP
-  })
+    await startTestSmtpServer();
+  });
+
+  afterAll(async () => {
+    // Clean up test database
+    await cleanupTestDatabase();
+
+    // Close all connections
+    await closeTestApp();
+
+    // Stop test SMTP server
+    await stopTestSmtpServer();
+  });
 
   test('Full email processing flow', async () => {
     // 1. Trigger email sync
@@ -195,7 +243,7 @@ describe('NanoMail E2E', () => {
     const emails = await request(app).get('/api/emails')
     expect(emails.body.emails.length).toBeGreaterThan(0)
 
-    // 3. Process emails with AI
+    // 3. Process emails with AI (mocked)
     const emailIds = emails.body.emails.map(e => e.id).slice(0, 2)
     await request(app).post('/api/process-emails').send({ emailIds })
 
@@ -204,22 +252,22 @@ describe('NanoMail E2E', () => {
     const todos = await request(app).get('/api/todos')
     expect(todos.body.todos.length).toBeGreaterThan(0)
 
-    // 5. Trigger agent draft
-    const draftStream = await request(app)
+    // 5. Trigger agent draft (mocked LLM returns fixed response)
+    const draftResponse = await request(app)
       .post('/api/agent/draft')
       .send({
         emailId: emailIds[0],
         instruction: 'Draft a polite acknowledgment'
       })
 
-    // 6. Verify draft is generated
-    expect(draftStream.text).toContain('Dear')
+    // 6. Verify draft is generated (from mock)
+    expect(draftResponse.text).toContain('Dear')
 
     // 7. Send reply (captured by test SMTP server)
     await request(app).post('/api/send-email').send({
       to: 'test@example.com',
       subject: 'Re: Test',
-      body: draftStream.text
+      body: draftResponse.text
     })
 
     // 8. Verify email was captured by test SMTP
@@ -227,27 +275,40 @@ describe('NanoMail E2E', () => {
   })
 
   test('Spam detection', async () => {
-    // Seed known spam email
-    // Process and verify it's flagged as spam
+    // Mock LLM returns high spam score
+    mockLLMService({ spamScore: 0.95 })
+
+    // Seed known spam email and verify it's flagged
   })
 
   test('Summary generation', async () => {
-    // Process email
-    // Verify summary is populated
+    // Process email with mocked LLM
+    // Verify summary matches mock response
   })
+})
+
+// E2E Test Suite (UI level, using Playwright)
+// Run separately, slower but tests real user flows
+describe('NanoMail E2E Tests', () => {
+  // Playwright-based tests for UI interactions
+  // Also mock LLM service at the backend level
 })
 ```
 
 **Testing Tools:**
-- Playwright or Cypress for E2E
-- Jest for backend unit tests
-- Test SMTP server (smtp-sink or mailhog)
+- **Integration Tests**: `supertest` for API testing
+- **E2E Tests**: Playwright or Cypress for UI testing
+- **Unit Tests**: Jest for backend/frontend unit tests
+- **Test SMTP**: smtp-sink or mailhog for capturing outgoing emails
+- **Mock LLM**: Essential to prevent flaky tests - return fixed responses
 
 **Deliverables:**
-- [ ] E2E test suite for critical flows
+- [ ] Integration test suite for API endpoints
+- [ ] E2E test suite for critical UI flows
+- [ ] Mock LLM service for deterministic testing
 - [ ] Test SMTP server integration
 - [ ] CI/CD pipeline configuration
-- [ ] All tests passing
+- [ ] All tests passing with proper cleanup
 
 ---
 
@@ -348,10 +409,58 @@ Note: When running in Docker, use `host.docker.internal` to connect to Ollama on
 
 ## Security
 
+> ⚠️ **CRITICAL WARNING - Production Deployment**
+>
+> If deploying on a VPS, public NAS, or any internet-accessible server:
+> - **NEVER expose port 3000 directly to the internet**
+> - **ALWAYS use a reverse proxy** (Nginx, Caddy, or Traefik) with **HTTPS enabled**
+> - Without HTTPS, your Master Key and email credentials are transmitted in plaintext and can be intercepted
+> - Example Caddy setup:
+>   ```bash
+>   # Caddyfile
+>   mail.yourdomain.com {
+>     reverse_proxy localhost:3000
+>   }
+>   ```
+> - Free SSL certificates are available via Let's Encrypt (automatic with Caddy)
+
 - All credentials are encrypted with AES-256-GCM
 - Master key is required at startup
 - SQLite database stored in persistent Docker volume
 - No external telemetry or tracking
+
+## Backup & Restore
+
+Your email data is stored in the `nanomail-data` Docker volume. Regular backups are essential.
+
+### Backup
+
+```bash
+# Create a backup of the nanomail-data volume
+docker run --rm \
+  -v nanomail-data:/data \
+  -v $(pwd)/backups:/backup \
+  alpine tar czf /backup/nanomail-backup-$(date +%Y%m%d-%H%M%S).tar.gz /data
+```
+
+### Restore
+
+```bash
+# Restore from a backup file
+docker run --rm \
+  -v nanomail-data:/data \
+  -v $(pwd)/backups:/backup \
+  alpine sh -c "cd / && tar xzf /backup/nanomail-backup-TIMESTAMP.tar.gz"
+```
+
+### Automated Backups
+
+For production, consider setting up a cron job:
+
+```bash
+# Add to crontab (daily at 2 AM)
+0 2 * * * cd /path/to/nanomail && docker run --rm -v nanomail-data:/data -v ./backups:/backup alpine tar czf /backup/nanomail-$(date +\%Y\%m\%d).tar.gz /data
+```
 
 ## Development
 
@@ -377,7 +486,8 @@ MIT
 **Deliverables:**
 - [ ] README with quick start guide
 - [ ] LLM configuration examples
-- [ ] Security documentation
+- [ ] Security documentation with HTTPS/reverse proxy warning
+- [ ] Backup & restore instructions
 - [ ] Development instructions
 
 ---
@@ -385,11 +495,20 @@ MIT
 ## Phase 5 Completion Checklist
 
 - [ ] Multi-stage Dockerfile builds successfully
+- [ ] Native module build tools (python3, make, g++) included
+- [ ] Container runs as non-root user
+- [ ] Database migration runs on startup
 - [ ] Docker Compose with persistent volumes
+- [ ] Linux host.docker.internal support via extra_hosts
+- [ ] Timezone configuration supported
 - [ ] Environment configuration documented
-- [ ] E2E tests for critical flows passing
+- [ ] Integration tests for API endpoints
+- [ ] E2E tests for critical UI flows
+- [ ] Mock LLM service prevents flaky tests
+- [ ] Test cleanup (afterAll) implemented
 - [ ] Test SMTP integration working
-- [ ] README comprehensive and clear
+- [ ] README with HTTPS/reverse proxy security warning
+- [ ] Backup & restore documentation
 - [ ] `.env.example` provided
 - [ ] Healthcheck configured
 - [ ] Container runs on NAS/VPS/local machine

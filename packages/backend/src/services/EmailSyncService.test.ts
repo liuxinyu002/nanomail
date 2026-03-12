@@ -37,7 +37,13 @@ describe('EmailSyncService', () => {
       find: vi.fn(),
       findOne: vi.fn(),
       create: vi.fn(),
+      insert: vi.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
       createQueryBuilder: vi.fn().mockReturnValue({
+        insert: vi.fn().mockReturnThis(),
+        into: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        orIgnore: vi.fn().mockReturnThis(),
+        execute: vi.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
         select: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         getMany: vi.fn().mockResolvedValue([]),
@@ -132,13 +138,13 @@ describe('EmailSyncService', () => {
       vi.mocked(mockMailParserService.createSnippet).mockReturnValue('Email body')
 
       // Mock repository
-      vi.mocked(mockRepository.save).mockResolvedValue({ id: 1 } as Email)
+      vi.mocked(mockRepository.create).mockReturnValue({ id: 1 } as Email)
 
       const result = await service.sync()
 
       expect(result.syncedCount).toBe(1)
       expect(result.error).toBeUndefined()
-      expect(mockRepository.save).toHaveBeenCalled()
+      expect(mockRepository.insert).toHaveBeenCalled()
     })
 
     it('should handle empty inbox', async () => {

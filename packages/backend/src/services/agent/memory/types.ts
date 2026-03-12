@@ -115,8 +115,10 @@ export class MemoryStore {
       // Parse entries with per-line error handling
       const entries: HistoryEntry[] = []
       for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        if (!line) continue
         try {
-          entries.push(JSON.parse(lines[i]))
+          entries.push(JSON.parse(line))
         } catch {
           // Log malformed line but continue parsing
           this.log.warn({ line: i + 1 }, 'Skipping malformed JSON')

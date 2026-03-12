@@ -1,4 +1,5 @@
 import type { DataSource, Repository } from 'typeorm'
+import { QueryFailedError } from 'typeorm'
 import cron from 'node-cron'
 import { Email } from '../entities/Email.entity'
 import type { SettingsService } from './SettingsService'
@@ -98,6 +99,11 @@ export class EmailSyncService {
 
   /**
    * Save email to database
+   *
+   * Uses insert() with exception handling for idempotent inserts:
+   * - If message_id already exists, UNIQUE constraint error is caught and ignored
+   * - No "check-then-insert" race condition
+   * - No N+1 query performance issue
    */
   private async saveEmail(email: FetchedEmail): Promise<void> {
     // Parse raw content for text
@@ -124,7 +130,27 @@ export class EmailSyncService {
       references: email.references,
     })
 
-    await this.emailRepository.save(entity)
+    try {
+      await this.emailRepository.insert(entity)
+    } catch (error) {
+      // Check if it's a UNIQUE constraint violation (duplicate message_id)
+      if (error instanceof QueryFailedError) {
+        const driverError = error.driverError as { code?: string; message?: string }
+        // SQLite: code 19 = SQLITE_CONSTRAINT
+        // PostgreSQL: code '23505' = unique_violation
+        if (
+          driverError.code === 'SQLITE_CONSTRAINT' ||
+          driverError.code === 19 ||
+          driverError.code === '23505' ||
+          driverError.message?.includes('UNIQUE constraint failed')
+        ) {
+          this.log.debug({ messageId: email.messageId }, 'Email already exists, insert ignored')
+          return
+        }
+      }
+      // Re-throw unexpected errors
+      throw error
+    }
   }
 
   /**

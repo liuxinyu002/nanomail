@@ -4,7 +4,8 @@
  */
 
 import type { DataSource } from 'typeorm'
-import type { LLMProvider, ChatParams } from '../../llm/types'
+import type { ChatMessage } from '../../llm/types'
+import type { LLMProvider } from '../../llm/base-provider'
 import { EmailAnalysisSchema, type EmailAnalysis } from './schemas'
 import { Email } from '../../../entities/Email.entity'
 import { Todo } from '../../../entities/Todo.entity'
@@ -136,7 +137,7 @@ export class EmailAnalyzer {
   /**
    * Build the prompt for LLM analysis
    */
-  buildPrompt(email: EmailData): Array<{ role: string; content: string }> {
+  buildPrompt(email: EmailData): ChatMessage[] {
     const systemPrompt = `You are an email analysis assistant. Analyze emails and classify them.
 
 Your task is to:
@@ -195,7 +196,7 @@ Respond with JSON only.`
 
     // Handle ```json ... ``` blocks
     const jsonMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
+    if (jsonMatch && jsonMatch[1]) {
       cleaned = jsonMatch[1].trim()
     }
 

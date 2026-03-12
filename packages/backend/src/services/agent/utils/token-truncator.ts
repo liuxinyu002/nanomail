@@ -101,7 +101,7 @@ export class TokenTruncator {
     // Extract signature if preserving
     if (options.preserveSignature) {
       const sigMatch = processedText.match(/(\n\n--\s*\n.*$)/s)
-      if (sigMatch) {
+      if (sigMatch && sigMatch[1]) {
         signaturePart = sigMatch[1]
         processedText = processedText.slice(0, -sigMatch[0].length)
       }

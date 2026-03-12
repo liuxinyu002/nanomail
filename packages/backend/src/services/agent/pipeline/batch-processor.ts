@@ -16,15 +16,6 @@ export interface ProcessorOptions {
 }
 
 /**
- * Processing result for a single email
- */
-interface ProcessResult {
-  emailId: number
-  success: boolean
-  error?: string
-}
-
-/**
  * Batch processing result
  */
 export interface BatchResult {
@@ -98,10 +89,12 @@ export class BatchEmailProcessor {
           result.failed++
           // Use explicit index to get the correct email (indexOf can return wrong match)
           const failedEmail = batch[index]
-          result.errors.push({
-            emailId: failedEmail.id,
-            error: batchResult.reason?.message || 'Unknown error'
-          })
+          if (failedEmail) {
+            result.errors.push({
+              emailId: failedEmail.id,
+              error: batchResult.reason?.message || 'Unknown error'
+            })
+          }
         }
         processedCount++
         onProgress?.(processedCount, total)

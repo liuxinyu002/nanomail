@@ -65,7 +65,7 @@ export class Pop3Service implements IMailFetcher {
     const host = await this.settingsService.get('POP3_HOST')
     const portStr = await this.settingsService.get('POP3_PORT')
     const user = await this.settingsService.get('POP3_USER')
-    const password = await this.settingsService.get('POP3_PASSWORD')
+    const password = await this.settingsService.get('POP3_PASS')
 
     if (!host || !user || !password) {
       throw new Error('POP3 configuration is incomplete')
@@ -84,6 +84,9 @@ export class Pop3Service implements IMailFetcher {
 
   /**
    * Get POP3 client instance
+   *
+   * Note: node-pop3 extends EventEmitter and emits 'error' and 'warn' events.
+   * We must attach listeners to prevent unhandled errors from crashing the process.
    */
   private async getPop3Client(): Promise<POP3> {
     if (this.pop3) return this.pop3
@@ -95,6 +98,39 @@ export class Pop3Service implements IMailFetcher {
       user: config.user,
       password: config.password,
       tls: config.tls,
+    })
+
+    // Attach error listener to prevent unhandled errors
+    // The 'error' event is emitted when socket errors occur
+    this.pop3.on('error', (err: Error & { eventName?: string; code?: string }) => {
+      // Handle expected socket close events gracefully
+      if (
+        err.code === 'EPIPE' ||
+        err.message?.includes('socket has been ended') ||
+        err.message === 'end' ||
+        err.message === 'close'
+      ) {
+        this.log.debug({ eventName: err.eventName }, 'POP3 socket closed by server')
+      } else {
+        this.log.error({ err, eventName: err.eventName }, 'POP3 socket error')
+      }
+      // Reset the client so a fresh connection is created on next use
+      this.pop3 = null
+    })
+
+    // Attach warn listener for non-fatal warnings
+    this.pop3.on('warn', (err: Error & { eventName?: string; code?: string }) => {
+      // Handle expected socket close events gracefully
+      if (
+        err.code === 'EPIPE' ||
+        err.message?.includes('socket has been ended') ||
+        err.message === 'end' ||
+        err.message === 'close'
+      ) {
+        this.log.debug({ eventName: err.eventName }, 'POP3 socket event')
+      } else {
+        this.log.warn({ err }, 'POP3 warning')
+      }
     })
 
     return this.pop3
@@ -110,15 +146,33 @@ export class Pop3Service implements IMailFetcher {
 
   /**
    * Disconnect from the POP3 server
+   *
+   * POP3 servers often close connections aggressively after data transfer,
+   * which can cause EPIPE errors when we try to send QUIT.
+   * These are expected and should be handled gracefully.
    */
   async disconnect(): Promise<void> {
-    if (this.pop3) {
-      try {
-        await this.pop3.QUIT()
-      } catch {
-        // Ignore disconnect errors
-      } finally {
-        this.pop3 = null
+    if (!this.pop3) return
+
+    const client = this.pop3
+    this.pop3 = null
+
+    try {
+      await client.QUIT()
+    } catch (error: unknown) {
+      // Handle expected socket close errors gracefully
+      const err = error as Error & { code?: string; eventName?: string }
+      if (
+        err.code === 'EPIPE' ||
+        err.message?.includes('socket has been ended') ||
+        err.message === 'end' ||
+        err.message === 'close'
+      ) {
+        // Normal POP3 server behavior - connection already closed by server
+        this.log.debug('POP3 server closed connection (expected behavior)')
+      } else {
+        // Unexpected error during disconnect
+        this.log.warn({ err: error }, 'POP3 disconnect error')
       }
     }
   }
@@ -135,6 +189,11 @@ export class Pop3Service implements IMailFetcher {
         user: config.user,
         password: config.password,
         tls: config.tls,
+      })
+
+      // Attach error listener to prevent unhandled errors
+      testPop3.on('error', () => {
+        // Error will be caught by the try-catch
       })
 
       // Try to list emails to verify connection
@@ -157,11 +216,30 @@ export class Pop3Service implements IMailFetcher {
     const pop3 = await this.getPop3Client()
 
     // Execute UIDL command to get full list
-    // node-pop3 returns format: { 1: 'uidl-string-1', 2: 'uidl-string-2', ... }
-    const uidlMap = await pop3.UIDL()
+    // node-pop3 listify() returns: [["1", "uidl-1"], ["2", "uidl-2"], ...]
+    const uidlArray = await pop3.UIDL()
+
+    // Handle both array and object formats (defensive)
+    let uidlEntries: [string, string][]
+    if (Array.isArray(uidlArray)) {
+      // Expected format: [["1", "uidl-1"], ["2", "uidl-2"]]
+      uidlEntries = uidlArray.map((item) => {
+        if (Array.isArray(item)) {
+          return [item[0], item[1]]
+        }
+        // Fallback for unexpected format
+        return ['', '']
+      })
+    } else if (typeof uidlArray === 'object' && uidlArray !== null) {
+      // Fallback: object format { "1": "uidl-1", "2": "uidl-2" }
+      uidlEntries = Object.entries(uidlArray)
+    } else {
+      uidlEntries = []
+    }
 
     // Convert to array and reverse (newest emails first)
-    const uidlList: UidlItem[] = Object.entries(uidlMap)
+    const uidlList: UidlItem[] = uidlEntries
+      .filter(([seq]) => seq && parseInt(seq, 10) > 0) // Filter valid sequence numbers
       .map(([seq, uidl]) => ({
         seq: parseInt(seq, 10),
         uidl: typeof uidl === 'string' ? uidl : String(uidl),
@@ -212,6 +290,7 @@ export class Pop3Service implements IMailFetcher {
    * 2. Batch diff to filter new emails
    * 3. RETR serial download -> parse -> yield
    * 4. Single email failures are logged and continue
+   * 5. Socket errors are caught and handled gracefully
    */
   async *fetchNewEmails(): AsyncGenerator<FetchedEmail, void, unknown> {
     await this.connect()
@@ -272,9 +351,13 @@ export class Pop3Service implements IMailFetcher {
 
       this.log.info({ count: fetchCount }, 'Fetched emails from POP3')
 
+    } catch (error) {
+      // Socket or connection error: log and re-throw
+      this.log.error({ err: error }, 'POP3 connection error during fetch')
+      throw error
     } finally {
-      // POP3 connection is managed per-session; each fetch cycle creates a fresh connection
-      // Connection cleanup is handled by the finally block in getPop3Client
+      // Clean up connection after fetch completes or errors
+      await this.disconnect()
     }
   }
 

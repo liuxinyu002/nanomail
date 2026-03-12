@@ -38,6 +38,29 @@ export interface ProcessEmailsResponse {
   message: string
 }
 
+export interface EmailDetail {
+  id: number
+  subject: string | null
+  sender: string | null
+  snippet: string | null
+  bodyText: string | null
+  date: string
+  isProcessed: boolean
+  isSpam: boolean
+  hasAttachments: boolean
+}
+
+export interface SendEmailRequest {
+  to: string
+  subject: string
+  body: string
+}
+
+export interface SendEmailResponse {
+  success: boolean
+  messageId: string
+}
+
 const MAX_EMAILS_PER_BATCH = 5
 
 /**
@@ -90,6 +113,36 @@ export const EmailService = {
 
     if (!response.ok) {
       throw new Error('Failed to process emails')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Get a single email by ID
+   */
+  async getEmail(id: number): Promise<EmailDetail> {
+    const response = await fetch(`/api/emails/${id}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch email')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Send an email
+   */
+  async sendEmail(data: SendEmailRequest): Promise<SendEmailResponse> {
+    const response = await fetch('/api/emails/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to send email')
     }
 
     return response.json()

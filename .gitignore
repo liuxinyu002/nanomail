@@ -21,6 +21,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# macOS resource fork files
+._*
+
 # Logs
 *.log
 npm-debug.log*
@@ -33,6 +36,11 @@ data/
 
 # Test coverage
 coverage/
+
+# Playwright E2E
+test-results/
+playwright-report/
+playwright/.cache/
 
 # Temporary files
 *.tmp

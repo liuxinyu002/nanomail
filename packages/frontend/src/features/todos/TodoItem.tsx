@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { TodoService, type TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
+import { AssistReplySheet } from './AssistReplySheet'
 
 export interface TodoItemProps {
   todo: TodoItemType
@@ -20,6 +22,7 @@ const urgencyBorderColors: Record<string, string> = {
 export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
   const [optimisticStatus, setOptimisticStatus] = useState<TodoItemType['status'] | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isAssistSheetOpen, setIsAssistSheetOpen] = useState(false)
 
   const currentStatus = optimisticStatus ?? todo.status
   const isCompleted = currentStatus === 'completed'
@@ -80,8 +83,26 @@ export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
           >
             View email
           </Link>
+          {!isCompleted && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-6 px-2"
+              onClick={() => setIsAssistSheetOpen(true)}
+              aria-label={`Assist reply for: ${todo.description}`}
+            >
+              Assist Reply
+            </Button>
+          )}
         </div>
       </div>
+
+      <AssistReplySheet
+        open={isAssistSheetOpen}
+        onOpenChange={setIsAssistSheetOpen}
+        todo={todo}
+        onStatusChange={onStatusChange}
+      />
     </div>
   )
 }

@@ -9,11 +9,16 @@
     "dev:frontend": "pnpm --filter @nanomail/frontend dev",
     "build": "pnpm --filter @nanomail/shared build && pnpm --filter @nanomail/backend build && pnpm --filter @nanomail/frontend build",
     "test": "pnpm --filter @nanomail/backend test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json}\"",
     "clean": "rm -rf packages/*/dist packages/*/.turbo packages/*/node_modules node_modules"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^8.2.2",
     "prettier": "^3.2.5"
   },

@@ -29,6 +29,16 @@ vi.mock('sonner', () => ({
   },
 }))
 
+// Mock AssistReplySheet
+vi.mock('./AssistReplySheet', () => ({
+  AssistReplySheet: ({ open, onOpenChange, todo }: { open: boolean; onOpenChange: (open: boolean) => void; todo: TodoItemType }) => (
+    <div data-testid="assist-reply-sheet" data-open={open}>
+      {open && <span>Assist Reply Sheet for {todo.description}</span>}
+      <button onClick={() => onOpenChange(false)}>Close Sheet</button>
+    </div>
+  ),
+}))
+
 describe('TodoItem', () => {
   const mockTodo: TodoItemType = {
     id: 1,
@@ -212,6 +222,63 @@ describe('TodoItem', () => {
 
       const checkbox = screen.getByRole('checkbox', { name: /review the quarterly report/i })
       expect(checkbox).toBeInTheDocument()
+    })
+  })
+
+  describe('Assist Reply Button', () => {
+    it('should render Assist Reply button for pending todos', () => {
+      render(<TodoItem {...defaultProps} />)
+
+      expect(screen.getByRole('button', { name: /assist reply/i })).toBeInTheDocument()
+    })
+
+    it('should not render Assist Reply button for completed todos', () => {
+      const completedTodo = { ...mockTodo, status: 'completed' as const }
+      render(<TodoItem {...defaultProps} todo={completedTodo} />)
+
+      expect(screen.queryByRole('button', { name: /assist reply/i })).not.toBeInTheDocument()
+    })
+
+    it('should open AssistReplySheet when button is clicked', async () => {
+      render(<TodoItem {...defaultProps} />)
+
+      const assistButton = screen.getByRole('button', { name: /assist reply/i })
+      fireEvent.click(assistButton)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'true')
+      })
+    })
+
+    it('should close AssistReplySheet when onOpenChange is called with false', async () => {
+      render(<TodoItem {...defaultProps} />)
+
+      // Open the sheet
+      const assistButton = screen.getByRole('button', { name: /assist reply/i })
+      fireEvent.click(assistButton)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'true')
+      })
+
+      // Close the sheet
+      const closeButton = screen.getByRole('button', { name: /close sheet/i })
+      fireEvent.click(closeButton)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'false')
+      })
+    })
+
+    it('should pass todo to AssistReplySheet', async () => {
+      render(<TodoItem {...defaultProps} />)
+
+      const assistButton = screen.getByRole('button', { name: /assist reply/i })
+      fireEvent.click(assistButton)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Assist Reply Sheet for Review the quarterly report/i)).toBeInTheDocument()
+      })
     })
   })
 })

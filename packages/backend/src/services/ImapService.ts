@@ -24,7 +24,7 @@ const IMAP_SETTINGS = {
   HOST: 'IMAP_HOST',
   PORT: 'IMAP_PORT',
   USER: 'IMAP_USER',
-  PASSWORD: 'IMAP_PASSWORD',
+  PASSWORD: 'IMAP_PASS',
   LAST_SYNCED_UID: 'LAST_IMAP_SYNCED_UID',
 } as const
 
@@ -74,7 +74,7 @@ export class ImapService implements IMailFetcher {
     }
 
     if (!password) {
-      throw new Error('IMAP_PASSWORD is not configured')
+      throw new Error('IMAP_PASS is not configured')
     }
 
     this.configCache = {
@@ -98,6 +98,39 @@ export class ImapService implements IMailFetcher {
 
     const config = await this.getConfig()
     this.client = this.createClient(config)
+
+    return this.client
+  }
+
+  /**
+   * Gets an active IMAP client with health check and self-healing.
+   *
+   * Strategy:
+   * 1. If instance exists and is healthy (usable), reuse it
+   * 2. If instance exists but is invalid, gracefully cleanup and create new
+   * 3. Always ensure a connected client is returned
+   */
+  private async getActiveClient(): Promise<ImapFlow> {
+    // 1. If instance exists and is healthy, reuse it
+    if (this.client && this.client.usable) {
+      return this.client
+    }
+
+    // 2. If instance exists but is invalid, gracefully cleanup residual state
+    if (this.client) {
+      try {
+        await this.client.logout()
+      } catch {
+        // Ignore cleanup errors
+      }
+      this.client = null
+    }
+
+    // 3. Always create a fresh instance and connect
+    const config = await this.getConfig()
+    this.client = this.createClient(config)
+    await this.client.connect()
+    this.log.info('IMAP server connected')
 
     return this.client
   }
@@ -178,15 +211,14 @@ export class ImapService implements IMailFetcher {
    * - Uses imapflow native fetch async iterator for true streaming
    * - Based on LAST_IMAP_SYNCED_UID for incremental sync
    * - Single email failures are logged and continue
+   * - Connection pooling: healthy connections are reused across syncs
    */
   async *fetchNewEmails(): AsyncGenerator<FetchedEmail, void, unknown> {
-    const client = await this.getClient()
+    // Get an active client (with health check and self-healing)
+    const client = await this.getActiveClient()
     let fetchCount = 0
 
     try {
-      await client.connect()
-      this.log.info('IMAP server connected')
-
       await client.mailboxOpen('INBOX')
 
       // Get last synced UID for incremental sync

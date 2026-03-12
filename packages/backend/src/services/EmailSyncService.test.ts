@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { EmailSyncService, type SyncResult } from './EmailSyncService'
+import { EmailSyncService } from './EmailSyncService'
 import type { DataSource, Repository } from 'typeorm'
 import type { Email } from '../entities/Email.entity'
 import type { SettingsService } from './SettingsService'
@@ -201,48 +201,6 @@ describe('EmailSyncService', () => {
       // One should succeed, one should be blocked
       const blockedCount = result1.error === 'Sync already in progress' || result2.error === 'Sync already in progress' ? 1 : 0
       expect(blockedCount).toBe(1)
-    })
-  })
-
-  describe('syncEmails (legacy)', () => {
-    it('should work with legacy syncEmails method', async () => {
-      async function* mockGenerator(): AsyncGenerator<FetchedEmail, void, unknown> {
-        yield {
-          uid: 1,
-          subject: 'Test Email',
-          from: 'sender@example.com',
-          date: new Date('2024-01-15'),
-          rawContent: 'Raw email content',
-          hasAttachments: false,
-        }
-      }
-
-      vi.mocked(mockFetcher.fetchNewEmails).mockReturnValue(mockGenerator())
-
-      const { MailFetcherFactory } = await import('./MailFetcherFactory')
-      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
-        getFetcher: vi.fn().mockResolvedValue(mockFetcher),
-        reset: vi.fn(),
-      }))
-
-      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
-
-      vi.mocked(mockMailParserService.parse).mockResolvedValue({
-        subject: 'Test Email',
-        from: 'sender@example.com',
-        text: 'Email body',
-        html: null,
-        date: new Date('2024-01-15'),
-        hasAttachments: false,
-      })
-      vi.mocked(mockMailParserService.extractText).mockReturnValue('Email body')
-      vi.mocked(mockMailParserService.createSnippet).mockReturnValue('Email body')
-      vi.mocked(mockRepository.save).mockResolvedValue({ id: 1 } as Email)
-
-      const result = await service.syncEmails()
-
-      expect(result.success).toBe(true)
-      expect(result.emailsSaved).toBe(1)
     })
   })
 

@@ -8,16 +8,6 @@ import { hasUidField } from './types/mail-fetcher.types'
 import type { MailParserService } from './MailParserService'
 
 /**
- * Sync result containing statistics about the sync operation
- */
-export interface SyncResult {
-  success: boolean
-  emailsFetched: number
-  emailsSaved: number
-  errors: string[]
-}
-
-/**
  * EmailSyncService - Email Synchronization Service
  *
  * Refactored to use Factory pattern:
@@ -143,35 +133,6 @@ export class EmailSyncService {
       await this.settingsService.set('LAST_IMAP_SYNCED_UID', String(email.uid))
     }
     // POP3: no need to update cursor, Diff mechanism handles automatically
-  }
-
-  /**
-   * @deprecated Use sync() instead
-   * Performs a one-time sync of unseen emails.
-   */
-  async syncEmails(limit: number = 10): Promise<SyncResult> {
-    const result: SyncResult = {
-      success: true,
-      emailsFetched: 0,
-      emailsSaved: 0,
-      errors: [],
-    }
-
-    try {
-      // Use new sync method
-      const syncResult = await this.sync()
-      result.success = syncResult.error === undefined
-      result.emailsSaved = syncResult.syncedCount
-      result.emailsFetched = syncResult.syncedCount
-      if (syncResult.error) {
-        result.errors.push(syncResult.error)
-      }
-    } catch (error) {
-      result.success = false
-      result.errors.push(error instanceof Error ? error.message : 'Unknown sync error')
-    }
-
-    return result
   }
 
   /**

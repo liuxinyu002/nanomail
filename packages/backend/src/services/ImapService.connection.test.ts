@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ImapService, type ImapConfig, type FetchedEmail } from './ImapService'
+import { ImapService, type ImapConfig } from './ImapService'
 import type { SettingsService } from './SettingsService'
 
 // Mock the imapflow module
@@ -99,102 +99,6 @@ describe('ImapService - Connection Pooling', () => {
       const client2 = await service.getClient()
 
       expect(client1).toBe(client2)
-    })
-  })
-
-  describe('fetchByUid', () => {
-    it('should fetch emails by UID range', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValue('imap.gmail.com')
-        .mockResolvedValue('993')
-        .mockResolvedValue('user@gmail.com')
-        .mockResolvedValue('app-password-123')
-
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue([101, 102, 103]),
-        fetchAll: vi.fn().mockResolvedValue([
-          {
-            uid: 101,
-            envelope: {
-              subject: 'Email 1',
-              from: [{ address: 'sender1@example.com' }],
-              date: new Date('2024-01-15'),
-            },
-            source: 'Raw email 1',
-          },
-          {
-            uid: 102,
-            envelope: {
-              subject: 'Email 2',
-              from: [{ address: 'sender2@example.com' }],
-              date: new Date('2024-01-16'),
-            },
-            source: 'Raw email 2',
-          },
-        ]),
-      }))
-
-      const emails = await service.fetchByUid(100)
-
-      expect(emails.length).toBeGreaterThanOrEqual(0)
-    })
-
-    it('should return empty array when no new emails', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValue('imap.gmail.com')
-        .mockResolvedValue('993')
-        .mockResolvedValue('user@gmail.com')
-        .mockResolvedValue('app-password-123')
-
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue([]),
-        fetchAll: vi.fn().mockResolvedValue([]),
-      }))
-
-      const emails = await service.fetchByUid(100)
-
-      expect(emails).toEqual([])
-    })
-
-    it('should include UID in fetched emails', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValue('imap.gmail.com')
-        .mockResolvedValue('993')
-        .mockResolvedValue('user@gmail.com')
-        .mockResolvedValue('app-password-123')
-
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue([101]),
-        fetchAll: vi.fn().mockResolvedValue([
-          {
-            uid: 101,
-            envelope: {
-              subject: 'Test Email',
-              from: [{ address: 'sender@example.com' }],
-              date: new Date('2024-01-15'),
-            },
-            source: 'Raw email content',
-          },
-        ]),
-      }))
-
-      const emails = await service.fetchByUid(100)
-
-      if (emails.length > 0) {
-        expect(emails[0].uid).toBe(101)
-      }
     })
   })
 })

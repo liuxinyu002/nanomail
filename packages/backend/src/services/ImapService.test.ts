@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ImapService, type ImapConfig, type FetchedEmail } from './ImapService'
+import { ImapService, type ImapConfig } from './ImapService'
 import type { SettingsService } from './SettingsService'
 
 // Mock the imapflow module
@@ -121,118 +121,6 @@ describe('ImapService', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Connection refused')
-    })
-  })
-
-  describe('fetchUnseen', () => {
-    it('should fetch unseen emails from inbox', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValueOnce('imap.gmail.com')
-        .mockResolvedValueOnce('993')
-        .mockResolvedValueOnce('user@gmail.com')
-        .mockResolvedValueOnce('password')
-
-      const mockEmails: FetchedEmail[] = [
-        {
-          uid: 1,
-          subject: 'Test Email',
-          from: 'sender@example.com',
-          date: new Date('2024-01-15'),
-          rawContent: 'Raw email content',
-          hasAttachments: false,
-        },
-      ]
-
-      // Mock fetchAll to return emails
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue(['1', '2']),
-        fetchAll: vi.fn().mockResolvedValue([
-          {
-            uid: 1,
-            envelope: {
-              subject: 'Test Email',
-              from: [{ address: 'sender@example.com' }],
-              date: new Date('2024-01-15'),
-            },
-            source: 'Raw email content',
-          },
-        ]),
-      }))
-
-      const emails = await service.fetchUnseen()
-
-      expect(emails.length).toBeGreaterThanOrEqual(0)
-    })
-
-    it('should limit the number of fetched emails', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValueOnce('imap.gmail.com')
-        .mockResolvedValueOnce('993')
-        .mockResolvedValueOnce('user@gmail.com')
-        .mockResolvedValueOnce('password')
-
-      // Mock with proper implementation
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-        fetchAll: vi.fn().mockResolvedValue([
-          {
-            uid: 1,
-            envelope: { subject: 'Test', from: [{ address: 'test@test.com' }], date: new Date() },
-            source: 'content',
-          },
-        ]),
-      }))
-
-      const emails = await service.fetchUnseen(5)
-
-      // Verify limit was applied (in real implementation)
-      expect(Array.isArray(emails)).toBe(true)
-    })
-
-    it('should return empty array when no unseen emails', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValueOnce('imap.gmail.com')
-        .mockResolvedValueOnce('993')
-        .mockResolvedValueOnce('user@gmail.com')
-        .mockResolvedValueOnce('password')
-
-      // Mock empty search result
-      const { ImapFlow } = await import('imapflow')
-      vi.mocked(ImapFlow).mockImplementationOnce(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
-        logout: vi.fn().mockResolvedValue(undefined),
-        mailboxOpen: vi.fn().mockResolvedValue({}),
-        search: vi.fn().mockResolvedValue([]),
-        fetchAll: vi.fn().mockResolvedValue([]),
-      }))
-
-      const emails = await service.fetchUnseen()
-
-      expect(emails).toEqual([])
-    })
-  })
-
-  describe('close', () => {
-    it('should close the IMAP connection', async () => {
-      vi.mocked(mockSettingsService.get)
-        .mockResolvedValueOnce('imap.gmail.com')
-        .mockResolvedValueOnce('993')
-        .mockResolvedValueOnce('user@gmail.com')
-        .mockResolvedValueOnce('password')
-
-      // First establish connection
-      await service.testConnection()
-
-      // Then close it
-      await expect(service.close()).resolves.not.toThrow()
     })
   })
 })

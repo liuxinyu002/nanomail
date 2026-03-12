@@ -2,31 +2,46 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EmailSyncService, type SyncResult } from './EmailSyncService'
 import type { DataSource, Repository } from 'typeorm'
 import type { Email } from '../entities/Email.entity'
-import type { ImapService } from './ImapService'
+import type { SettingsService } from './SettingsService'
 import type { MailParserService } from './MailParserService'
+import type { IMailFetcher } from './interfaces/IMailFetcher.interface'
+import type { FetchedEmail } from './types/mail-fetcher.types'
 
 // Mock node-cron
 vi.mock('node-cron', () => ({
   default: {
-    schedule: vi.fn(() => 'task-id'),
-    stop: vi.fn(),
+    schedule: vi.fn(() => ({ stop: vi.fn() })),
   },
+}))
+
+// Mock MailFetcherFactory
+vi.mock('./MailFetcherFactory', () => ({
+  MailFetcherFactory: vi.fn().mockImplementation(() => ({
+    getFetcher: vi.fn(),
+    reset: vi.fn(),
+  })),
 }))
 
 describe('EmailSyncService', () => {
   let service: EmailSyncService
   let mockDataSource: DataSource
   let mockRepository: Repository<Email>
-  let mockImapService: ImapService
+  let mockSettingsService: SettingsService
   let mockMailParserService: MailParserService
+  let mockFetcher: IMailFetcher
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create mock repository
     mockRepository = {
       save: vi.fn(),
       find: vi.fn(),
       findOne: vi.fn(),
       create: vi.fn(),
+      createQueryBuilder: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      }),
     } as unknown as Repository<Email>
 
     // Create mock data source
@@ -35,12 +50,12 @@ describe('EmailSyncService', () => {
       isInitialized: true,
     } as unknown as DataSource
 
-    // Create mock IMAP service
-    mockImapService = {
-      fetchUnseen: vi.fn(),
-      testConnection: vi.fn(),
-      close: vi.fn(),
-    } as unknown as ImapService
+    // Create mock settings service
+    mockSettingsService = {
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as SettingsService
 
     // Create mock mail parser service
     mockMailParserService = {
@@ -49,9 +64,21 @@ describe('EmailSyncService', () => {
       createSnippet: vi.fn(),
     } as unknown as MailParserService
 
+    // Create mock fetcher
+    mockFetcher = {
+      protocolType: 'IMAP',
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      testConnection: vi.fn(),
+      fetchNewEmails: vi.fn(),
+      markAsRead: vi.fn(),
+      moveToFolder: vi.fn(),
+      deleteMessage: vi.fn(),
+    } as unknown as IMailFetcher
+
     service = new EmailSyncService(
       mockDataSource,
-      mockImapService,
+      mockSettingsService,
       mockMailParserService
     )
   })
@@ -60,10 +87,10 @@ describe('EmailSyncService', () => {
     vi.clearAllMocks()
   })
 
-  describe('syncEmails', () => {
-    it('should fetch and save unseen emails', async () => {
-      // Mock IMAP fetch
-      vi.mocked(mockImapService.fetchUnseen).mockResolvedValue([
+  describe('sync', () => {
+    it('should fetch and save emails using streaming', async () => {
+      // Mock fetcher to yield emails
+      const mockEmails: FetchedEmail[] = [
         {
           uid: 1,
           subject: 'Test Email',
@@ -72,7 +99,25 @@ describe('EmailSyncService', () => {
           rawContent: 'Raw email content',
           hasAttachments: false,
         },
-      ])
+      ]
+
+      async function* mockGenerator(): AsyncGenerator<FetchedEmail, void, unknown> {
+        for (const email of mockEmails) {
+          yield email
+        }
+      }
+
+      vi.mocked(mockFetcher.fetchNewEmails).mockReturnValue(mockGenerator())
+
+      // Mock factory to return mock fetcher
+      const { MailFetcherFactory } = await import('./MailFetcherFactory')
+      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
+        getFetcher: vi.fn().mockResolvedValue(mockFetcher),
+        reset: vi.fn(),
+      }))
+
+      // Recreate service with mocked factory
+      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
 
       // Mock mail parser
       vi.mocked(mockMailParserService.parse).mockResolvedValue({
@@ -89,85 +134,115 @@ describe('EmailSyncService', () => {
       // Mock repository
       vi.mocked(mockRepository.save).mockResolvedValue({ id: 1 } as Email)
 
-      const result = await service.syncEmails()
+      const result = await service.sync()
 
-      expect(result.success).toBe(true)
-      expect(result.emailsFetched).toBe(1)
-      expect(result.emailsSaved).toBe(1)
+      expect(result.syncedCount).toBe(1)
+      expect(result.error).toBeUndefined()
       expect(mockRepository.save).toHaveBeenCalled()
     })
 
     it('should handle empty inbox', async () => {
-      vi.mocked(mockImapService.fetchUnseen).mockResolvedValue([])
+      async function* emptyGenerator(): AsyncGenerator<FetchedEmail, void, unknown> {
+        // No emails to yield
+      }
 
-      const result = await service.syncEmails()
+      vi.mocked(mockFetcher.fetchNewEmails).mockReturnValue(emptyGenerator())
 
-      expect(result.success).toBe(true)
-      expect(result.emailsFetched).toBe(0)
-      expect(result.emailsSaved).toBe(0)
+      const { MailFetcherFactory } = await import('./MailFetcherFactory')
+      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
+        getFetcher: vi.fn().mockResolvedValue(mockFetcher),
+        reset: vi.fn(),
+      }))
+
+      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
+
+      const result = await service.sync()
+
+      expect(result.syncedCount).toBe(0)
+      expect(result.error).toBeUndefined()
     })
 
-    it('should handle IMAP connection errors', async () => {
-      vi.mocked(mockImapService.fetchUnseen).mockRejectedValue(
-        new Error('Connection failed')
-      )
+    it('should handle connection errors', async () => {
+      const { MailFetcherFactory } = await import('./MailFetcherFactory')
+      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
+        getFetcher: vi.fn().mockRejectedValue(new Error('Connection failed')),
+        reset: vi.fn(),
+      }))
 
-      const result = await service.syncEmails()
+      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
 
-      expect(result.success).toBe(false)
-      expect(result.errors).toContain('Connection failed')
+      const result = await service.sync()
+
+      expect(result.syncedCount).toBe(0)
+      expect(result.error).toBe('Connection failed')
     })
 
-    it('should handle parsing errors for individual emails', async () => {
-      vi.mocked(mockImapService.fetchUnseen).mockResolvedValue([
-        {
+    it('should prevent concurrent syncs', async () => {
+      async function* slowGenerator(): AsyncGenerator<FetchedEmail, void, unknown> {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      vi.mocked(mockFetcher.fetchNewEmails).mockReturnValue(slowGenerator())
+
+      const { MailFetcherFactory } = await import('./MailFetcherFactory')
+      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
+        getFetcher: vi.fn().mockResolvedValue(mockFetcher),
+        reset: vi.fn(),
+      }))
+
+      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
+
+      // Start two syncs concurrently
+      const sync1 = service.sync()
+      const sync2 = service.sync()
+
+      const [result1, result2] = await Promise.all([sync1, sync2])
+
+      // One should succeed, one should be blocked
+      const blockedCount = result1.error === 'Sync already in progress' || result2.error === 'Sync already in progress' ? 1 : 0
+      expect(blockedCount).toBe(1)
+    })
+  })
+
+  describe('syncEmails (legacy)', () => {
+    it('should work with legacy syncEmails method', async () => {
+      async function* mockGenerator(): AsyncGenerator<FetchedEmail, void, unknown> {
+        yield {
           uid: 1,
-          subject: 'Bad Email',
+          subject: 'Test Email',
           from: 'sender@example.com',
-          date: new Date(),
-          rawContent: 'Invalid content',
+          date: new Date('2024-01-15'),
+          rawContent: 'Raw email content',
           hasAttachments: false,
-        },
-        {
-          uid: 2,
-          subject: 'Good Email',
-          from: 'sender2@example.com',
-          date: new Date(),
-          rawContent: 'Valid content',
-          hasAttachments: false,
-        },
-      ])
+        }
+      }
 
-      // First parse fails, second succeeds
-      vi.mocked(mockMailParserService.parse)
-        .mockRejectedValueOnce(new Error('Parse error'))
-        .mockResolvedValueOnce({
-          subject: 'Good Email',
-          from: 'sender2@example.com',
-          text: 'Valid body',
-          html: null,
-          date: new Date(),
-          hasAttachments: false,
-        })
+      vi.mocked(mockFetcher.fetchNewEmails).mockReturnValue(mockGenerator())
 
-      vi.mocked(mockMailParserService.extractText).mockReturnValue('Valid body')
-      vi.mocked(mockMailParserService.createSnippet).mockReturnValue('Valid body')
-      vi.mocked(mockRepository.save).mockResolvedValue({ id: 2 } as Email)
+      const { MailFetcherFactory } = await import('./MailFetcherFactory')
+      vi.mocked(MailFetcherFactory).mockImplementation(() => ({
+        getFetcher: vi.fn().mockResolvedValue(mockFetcher),
+        reset: vi.fn(),
+      }))
+
+      service = new EmailSyncService(mockDataSource, mockSettingsService, mockMailParserService)
+
+      vi.mocked(mockMailParserService.parse).mockResolvedValue({
+        subject: 'Test Email',
+        from: 'sender@example.com',
+        text: 'Email body',
+        html: null,
+        date: new Date('2024-01-15'),
+        hasAttachments: false,
+      })
+      vi.mocked(mockMailParserService.extractText).mockReturnValue('Email body')
+      vi.mocked(mockMailParserService.createSnippet).mockReturnValue('Email body')
+      vi.mocked(mockRepository.save).mockResolvedValue({ id: 1 } as Email)
 
       const result = await service.syncEmails()
 
       expect(result.success).toBe(true)
-      expect(result.emailsFetched).toBe(2)
       expect(result.emailsSaved).toBe(1)
-      expect(result.errors.length).toBe(1)
-    })
-
-    it('should respect the limit parameter', async () => {
-      vi.mocked(mockImapService.fetchUnseen).mockResolvedValue([])
-
-      await service.syncEmails(5)
-
-      expect(mockImapService.fetchUnseen).toHaveBeenCalledWith(5)
     })
   })
 
@@ -208,7 +283,7 @@ describe('EmailSyncService', () => {
     it('should stop the cron job', async () => {
       const cron = await import('node-cron')
       const mockTask = { stop: vi.fn() }
-      vi.mocked(cron.default.schedule).mockReturnValue(mockTask as unknown as string)
+      vi.mocked(cron.default.schedule).mockReturnValue(mockTask as unknown as ReturnType<typeof cron.default.schedule>)
 
       service.startPolling()
       service.stopPolling()

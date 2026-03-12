@@ -20,6 +20,7 @@ export type ProcessStatus = 'PENDING' | 'QUEUED' | 'PROCESSING' | 'PROCESSED' | 
 @Index(['sender'])
 @Index(['message_id'])
 @Index(['uid'])
+@Index(['uidl'])
 @Index(['process_status'])
 export class Email {
   @PrimaryGeneratedColumn('increment')
@@ -65,6 +66,11 @@ export class Email {
   // IMAP UID for sync tracking
   @Column({ type: 'integer', nullable: true })
   uid!: number | null
+
+  // POP3 UIDL for sync tracking
+  // Stores the unique identifier string returned by POP3 server
+  @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
+  uidl!: string | null
 
   // Process status for AI pipeline workflow
   @Column({

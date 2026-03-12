@@ -85,6 +85,64 @@ describe('Email Entity - Thread Context Fields', () => {
     })
   })
 
+  describe('uidl field', () => {
+    it('should have uidl field for POP3 sync tracking', () => {
+      const email = new Email()
+      email.uidl = 'unique-idl-string-12345'
+      expect(email.uidl).toBe('unique-idl-string-12345')
+    })
+
+    it('should allow null uidl', () => {
+      const email = new Email()
+      email.uidl = null
+      expect(email.uidl).toBeNull()
+    })
+
+    it('should be optional (undefined)', () => {
+      const email = new Email()
+      expect(email.uidl).toBeUndefined()
+    })
+
+    it('should accept typical UIDL format from POP3 servers', () => {
+      const email = new Email()
+      // Gmail POP3 UIDL format
+      email.uidl = 'GmailId1234567890abcdef'
+      expect(email.uidl).toBe('GmailId1234567890abcdef')
+    })
+
+    it('should accept UIDL with special characters', () => {
+      const email = new Email()
+      email.uidl = 'msg-2024-01-15_10-30-00-abc123'
+      expect(email.uidl).toBe('msg-2024-01-15_10-30-00-abc123')
+    })
+
+    it('should allow uidl up to 255 characters', () => {
+      const email = new Email()
+      const longUidl = 'a'.repeat(255)
+      email.uidl = longUidl
+      expect(email.uidl).toBe(longUidl)
+      expect(email.uidl!.length).toBe(255)
+    })
+
+    it('should be independent from uid field (POP3 uses uidl, IMAP uses uid)', () => {
+      const email = new Email()
+      // POP3 email should have uidl, not uid
+      email.uidl = 'pop3-unique-id'
+      email.uid = null
+      expect(email.uidl).toBe('pop3-unique-id')
+      expect(email.uid).toBeNull()
+    })
+
+    it('should allow IMAP email with uid but no uidl', () => {
+      const email = new Email()
+      // IMAP email should have uid, not uidl
+      email.uid = 12345
+      email.uidl = null
+      expect(email.uid).toBe(12345)
+      expect(email.uidl).toBeNull()
+    })
+  })
+
   describe('process_status field', () => {
     it('should have process_status field', () => {
       const email = new Email()

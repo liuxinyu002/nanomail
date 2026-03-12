@@ -41,6 +41,9 @@ importers:
       node-cron:
         specifier: ^4.2.1
         version: 4.2.1
+      node-pop3:
+        specifier: ^0.11.0
+        version: 0.11.0
       nodemailer:
         specifier: ^8.0.2
         version: 8.0.2
@@ -3018,6 +3021,11 @@ packages:
   node-gyp@8.4.1:
     resolution: {integrity: sha512-olTJRgUtAb/hOXG0E93wZDs5YiJlgbXxTwQAFHyNlRsXQnYzUaF2aGgujZbw+hR8aF4ZG/rST57bWMWD16jr9w==}
     engines: {node: '>= 10.12.0'}
+    hasBin: true
+
+  node-pop3@0.11.0:
+    resolution: {integrity: sha512-M5qRCamSTxu5lIVBW9q6XyC6nH30fZxTdTQDzfHRSaLl8CCiZMSh80rDnIysB6ECvh9j8sf8+KveEQpLDRmMYg==}
+    engines: {node: ^20.11.0 || >= 22.0.0}
     hasBin: true
 
   node-releases@2.0.36:
@@ -6908,6 +6916,8 @@ snapshots:
       - bluebird
       - supports-color
     optional: true
+
+  node-pop3@0.11.0: {}
 
   node-releases@2.0.36: {}
 

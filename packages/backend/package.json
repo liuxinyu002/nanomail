@@ -18,10 +18,12 @@
   "dependencies": {
     "@nanomail/shared": "workspace:*",
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "express": "^4.18.3",
     "imapflow": "^1.2.13",
     "mailparser": "^3.9.4",
     "node-cron": "^4.2.1",
+    "node-pop3": "^0.11.0",
     "nodemailer": "^8.0.2",
     "openai": "^6.27.0",
     "reflect-metadata": "^0.2.1",

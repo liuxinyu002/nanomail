@@ -1,5 +1,9 @@
 import { ImapFlow, type ImapFlowOptions } from 'imapflow'
 import type { SettingsService } from './SettingsService'
+import type { IMailFetcher, ConnectionTestResult } from './interfaces/IMailFetcher.interface'
+import type { FetchedEmail, EmailIdentifier } from './types/mail-fetcher.types'
+import { hasUid } from './types/mail-fetcher.types'
+import { MailParserService } from './MailParserService'
 
 /**
  * IMAP configuration retrieved from SettingsService
@@ -13,26 +17,6 @@ export interface ImapConfig {
 }
 
 /**
- * Result of IMAP connection test
- */
-export interface ImapConnectionResult {
-  success: boolean
-  error?: string
-}
-
-/**
- * Fetched email data from IMAP
- */
-export interface FetchedEmail {
-  uid: number
-  subject: string | null
-  from: string | null
-  date: Date
-  rawContent: string
-  hasAttachments: boolean
-}
-
-/**
  * Setting keys required for IMAP configuration
  */
 const IMAP_SETTINGS = {
@@ -40,14 +24,15 @@ const IMAP_SETTINGS = {
   PORT: 'IMAP_PORT',
   USER: 'IMAP_USER',
   PASSWORD: 'IMAP_PASSWORD',
+  LAST_SYNCED_UID: 'LAST_IMAP_SYNCED_UID',
 } as const
 
 /**
- * ImapService provides email fetching capabilities using imapflow.
+ * ImapService - IMAP Adapter implementing IMailFetcher
  *
  * Responsibilities:
  * - Connect to IMAP server using encrypted credentials from SettingsService
- * - Fetch unseen emails
+ * - Fetch emails using streaming AsyncGenerator
  * - Provide raw email content for parsing
  *
  * Connection Pooling:
@@ -55,21 +40,20 @@ const IMAP_SETTINGS = {
  * - Credentials are decrypted only once
  * - Client is reused across requests
  */
-export class ImapService {
+export class ImapService implements IMailFetcher {
+  readonly protocolType = 'IMAP' as const
+
   private client: ImapFlow | null = null
   private configCache: ImapConfig | null = null
+  private readonly mailParser = new MailParserService()
 
   constructor(private readonly settingsService: SettingsService) {}
 
   /**
    * Retrieves IMAP configuration from settings.
    * Cached after first retrieval to avoid repeated decryption.
-   *
-   * @returns ImapConfig object with decrypted credentials
-   * @throws Error if any required setting is missing
    */
   async getConfig(): Promise<ImapConfig> {
-    // Return cached config if available
     if (this.configCache) {
       return this.configCache
     }
@@ -104,9 +88,6 @@ export class ImapService {
 
   /**
    * Gets or creates a cached IMAP client instance (singleton pattern).
-   * Credentials are decrypted only on first call.
-   *
-   * @returns ImapFlow client instance
    */
   async getClient(): Promise<ImapFlow> {
     if (this.client) {
@@ -146,11 +127,32 @@ export class ImapService {
   }
 
   /**
-   * Tests connection to IMAP server.
-   *
-   * @returns ImapConnectionResult indicating success or failure
+   * Establish connection to the IMAP server.
    */
-  async testConnection(): Promise<ImapConnectionResult> {
+  async connect(): Promise<void> {
+    const client = await this.getClient()
+    await client.connect()
+  }
+
+  /**
+   * Disconnect from the IMAP server.
+   */
+  async disconnect(): Promise<void> {
+    if (this.client) {
+      try {
+        await this.client.logout()
+      } catch {
+        // Ignore logout errors
+      } finally {
+        this.client = null
+      }
+    }
+  }
+
+  /**
+   * Tests connection to IMAP server.
+   */
+  async testConnection(): Promise<ConnectionTestResult> {
     try {
       const config = await this.getConfig()
       const client = this.createClient(config)
@@ -168,123 +170,108 @@ export class ImapService {
   }
 
   /**
-   * Fetches emails by UID range (UID-based incremental sync).
-   * Use this instead of fetchUnseen for reliable sync tracking.
+   * Fetch new emails (streaming with AsyncGenerator)
    *
-   * @param startUid - The UID to start from (exclusive, will fetch UIDs > startUid)
-   * @param limit - Maximum number of emails to fetch (default: 50)
-   * @returns Array of FetchedEmail objects
+   * Design points:
+   * - Uses imapflow native fetch async iterator for true streaming
+   * - Based on LAST_IMAP_SYNCED_UID for incremental sync
+   * - Single email failures are logged and continue
    */
-  async fetchByUid(startUid: number, limit: number = 50): Promise<FetchedEmail[]> {
+  async *fetchNewEmails(): AsyncGenerator<FetchedEmail, void, unknown> {
     const client = await this.getClient()
 
     try {
       await client.connect()
-
-      // Select inbox
       await client.mailboxOpen('INBOX')
 
-      // Search for messages with UID > startUid
-      // UID SEARCH UID <startUid+1>:*
-      const uids = await client.search({ uid: { $gt: startUid } })
+      // Get last synced UID for incremental sync
+      const lastUidStr = await this.settingsService.get(IMAP_SETTINGS.LAST_SYNCED_UID)
+      const startUid = lastUidStr ? parseInt(lastUidStr, 10) + 1 : 1
 
-      if (!uids || !Array.isArray(uids) || uids.length === 0) {
-        return []
-      }
+      // Build UID range query
+      const fetchRange = `${startUid}:*`
 
-      // Sort UIDs ascending and limit
-      const sortedUids = uids.sort((a, b) => Number(a) - Number(b)).slice(0, limit)
-
-      // Fetch messages
-      const messages = await client.fetchAll(sortedUids, {
+      // Use imapflow native fetch async iterator (true streaming)
+      const fetchStream = client.fetch(fetchRange, {
         uid: true,
-        envelope: true,
         source: true,
+        envelope: true,
         bodyStructure: true,
       })
 
-      const emails: FetchedEmail[] = []
+      // Stream consumption
+      for await (const message of fetchStream) {
+        try {
+          if (!message.uid || !message.source) {
+            continue
+          }
 
-      for (const msg of messages) {
-        if (!msg.uid || !msg.source) continue
+          // Parse MIME content
+          const parsed = await this.mailParser.parse(message.source)
 
-        // Check for attachments in body structure
-        const hasAttachments = this.checkForAttachments(msg.bodyStructure)
+          // Assemble and yield (union type: IMAP must have uid)
+          const email: FetchedEmail = {
+            uid: message.uid,
+            subject: parsed.subject ?? message.envelope?.subject ?? null,
+            from: parsed.from ?? message.envelope?.from?.[0]?.address ?? null,
+            date: parsed.date ?? message.envelope?.date ?? new Date(),
+            rawContent: message.source.toString(),
+            hasAttachments: parsed.hasAttachments || this.checkForAttachments(message.bodyStructure),
+            messageId: parsed.messageId,
+            inReplyTo: parsed.inReplyTo,
+            references: parsed.references,
+          }
 
-        emails.push({
-          uid: msg.uid,
-          subject: msg.envelope?.subject ?? null,
-          from: msg.envelope?.from?.[0]?.address ?? null,
-          date: msg.envelope?.date ?? new Date(),
-          rawContent: msg.source.toString(),
-          hasAttachments,
-        })
+          yield email
+
+        } catch (error) {
+          // Single email error: log and continue
+          console.error(`[IMAP] Failed to process email uid=${message.uid}:`, error)
+          continue
+        }
       }
 
-      return emails
     } finally {
-      // Don't close the connection - keep it pooled
-      // Connection will be reused via getClient()
+      // Connection pooling: keep the IMAP client alive for reuse
+      // The sync engine or caller is responsible for calling disconnect() when done
     }
   }
 
   /**
-   * Fetches unseen emails from the inbox.
-   *
-   * @param limit - Maximum number of emails to fetch (default: 10)
-   * @returns Array of FetchedEmail objects
-   * @deprecated Use fetchByUid for reliable UID-based sync
+   * Mark email as read (IMAP supported)
    */
-  async fetchUnseen(limit: number = 10): Promise<FetchedEmail[]> {
-    const config = await this.getConfig()
-    this.client = this.createClient(config)
-
-    try {
-      await this.client.connect()
-
-      // Select inbox
-      await this.client.mailboxOpen('INBOX')
-
-      // Search for unseen messages
-      const uids = await this.client.search({ seen: false })
-
-      if (!uids || !Array.isArray(uids) || uids.length === 0) {
-        return []
-      }
-
-      // Limit the number of emails to fetch
-      const limitedUids = uids.slice(0, limit)
-
-      // Fetch messages
-      const messages = await this.client.fetchAll(limitedUids, {
-        uid: true,
-        envelope: true,
-        source: true,
-        bodyStructure: true,
-      })
-
-      const emails: FetchedEmail[] = []
-
-      for (const msg of messages) {
-        if (!msg.uid || !msg.source) continue
-
-        // Check for attachments in body structure
-        const hasAttachments = this.checkForAttachments(msg.bodyStructure)
-
-        emails.push({
-          uid: msg.uid,
-          subject: msg.envelope?.subject ?? null,
-          from: msg.envelope?.from?.[0]?.address ?? null,
-          date: msg.envelope?.date ?? new Date(),
-          rawContent: msg.source.toString(),
-          hasAttachments,
-        })
-      }
-
-      return emails
-    } finally {
-      await this.close()
+  async markAsRead(identifier: EmailIdentifier): Promise<void> {
+    if (!hasUid(identifier)) {
+      throw new Error('IMAP requires uid for markAsRead')
     }
+
+    const client = await this.getClient()
+    await client.messageFlagsAdd({ uid: identifier.uid }, ['\\Seen'])
+  }
+
+  /**
+   * Move email to specified folder (IMAP supported)
+   */
+  async moveToFolder(identifier: EmailIdentifier, folder: string): Promise<void> {
+    if (!hasUid(identifier)) {
+      throw new Error('IMAP requires uid for moveToFolder')
+    }
+
+    const client = await this.getClient()
+    await client.messageMove({ uid: identifier.uid }, folder)
+  }
+
+  /**
+   * Delete email (IMAP supported)
+   */
+  async deleteMessage(identifier: EmailIdentifier): Promise<void> {
+    if (!hasUid(identifier)) {
+      throw new Error('IMAP requires uid for deleteMessage')
+    }
+
+    const client = await this.getClient()
+    await client.messageFlagsAdd({ uid: identifier.uid }, ['\\Deleted'])
+    await client.expunge()
   }
 
   /**
@@ -297,12 +284,10 @@ export class ImapService {
 
     const structure = bodyStructure as Record<string, unknown>
 
-    // Check if this node is an attachment
     if (structure.disposition === 'attachment') {
       return true
     }
 
-    // Check child nodes recursively
     if (Array.isArray(structure.childNodes)) {
       return structure.childNodes.some((child) => this.checkForAttachments(child))
     }
@@ -311,17 +296,115 @@ export class ImapService {
   }
 
   /**
+   * @deprecated Use fetchNewEmails() for streaming fetch
+   * Fetches emails by UID range (UID-based incremental sync).
+   */
+  async fetchByUid(startUid: number, limit: number = 50): Promise<FetchedEmail[]> {
+    const client = await this.getClient()
+
+    try {
+      await client.connect()
+      await client.mailboxOpen('INBOX')
+
+      const uids = await client.search({ uid: { $gt: startUid } })
+
+      if (!uids || !Array.isArray(uids) || uids.length === 0) {
+        return []
+      }
+
+      const sortedUids = uids.sort((a, b) => Number(a) - Number(b)).slice(0, limit)
+
+      const messages = await client.fetchAll(sortedUids, {
+        uid: true,
+        envelope: true,
+        source: true,
+        bodyStructure: true,
+      })
+
+      const emails: FetchedEmail[] = []
+
+      for (const msg of messages) {
+        if (!msg.uid || !msg.source) continue
+
+        const parsed = await this.mailParser.parse(msg.source)
+
+        emails.push({
+          uid: msg.uid,
+          subject: parsed.subject ?? msg.envelope?.subject ?? null,
+          from: parsed.from ?? msg.envelope?.from?.[0]?.address ?? null,
+          date: parsed.date ?? msg.envelope?.date ?? new Date(),
+          rawContent: msg.source.toString(),
+          hasAttachments: parsed.hasAttachments || this.checkForAttachments(msg.bodyStructure),
+          messageId: parsed.messageId,
+          inReplyTo: parsed.inReplyTo,
+          references: parsed.references,
+        })
+      }
+
+      return emails
+    } finally {
+      // Keep connection pooled
+    }
+  }
+
+  /**
+   * @deprecated Use fetchNewEmails() for streaming fetch
+   * Fetches unseen emails from the inbox.
+   */
+  async fetchUnseen(limit: number = 10): Promise<FetchedEmail[]> {
+    const config = await this.getConfig()
+    this.client = this.createClient(config)
+
+    try {
+      await this.client.connect()
+      await this.client.mailboxOpen('INBOX')
+
+      const uids = await this.client.search({ seen: false })
+
+      if (!uids || !Array.isArray(uids) || uids.length === 0) {
+        return []
+      }
+
+      const limitedUids = uids.slice(0, limit)
+
+      const messages = await this.client.fetchAll(limitedUids, {
+        uid: true,
+        envelope: true,
+        source: true,
+        bodyStructure: true,
+      })
+
+      const emails: FetchedEmail[] = []
+
+      for (const msg of messages) {
+        if (!msg.uid || !msg.source) continue
+
+        const parsed = await this.mailParser.parse(msg.source)
+
+        emails.push({
+          uid: msg.uid,
+          subject: parsed.subject ?? msg.envelope?.subject ?? null,
+          from: parsed.from ?? msg.envelope?.from?.[0]?.address ?? null,
+          date: parsed.date ?? msg.envelope?.date ?? new Date(),
+          rawContent: msg.source.toString(),
+          hasAttachments: parsed.hasAttachments || this.checkForAttachments(msg.bodyStructure),
+          messageId: parsed.messageId,
+          inReplyTo: parsed.inReplyTo,
+          references: parsed.references,
+        })
+      }
+
+      return emails
+    } finally {
+      await this.disconnect()
+    }
+  }
+
+  /**
+   * @deprecated Use disconnect() instead
    * Closes the IMAP connection.
    */
   async close(): Promise<void> {
-    if (this.client) {
-      try {
-        await this.client.logout()
-      } catch {
-        // Ignore logout errors
-      } finally {
-        this.client = null
-      }
-    }
+    await this.disconnect()
   }
 }

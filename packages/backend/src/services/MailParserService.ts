@@ -10,6 +10,9 @@ export interface ParsedEmail {
   html: string | null
   date: Date | null
   hasAttachments: boolean
+  messageId: string | null
+  inReplyTo: string | null
+  references: string[] | null
 }
 
 /**
@@ -19,6 +22,7 @@ export interface ParsedEmail {
  * - Parse raw email source using mailparser
  * - Extract plain text body (preferred over HTML)
  * - Detect attachments (flag only, no storage for MVP)
+ * - Extract thread context headers (Message-ID, In-Reply-To, References)
  */
 export class MailParserService {
   /**
@@ -37,6 +41,9 @@ export class MailParserService {
       html: parsed.html || null,
       date: parsed.date ?? null,
       hasAttachments: this.hasAttachments(parsed),
+      messageId: parsed.messageId ?? null,
+      inReplyTo: parsed.inReplyTo ?? null,
+      references: parsed.references ?? null,
     }
   }
 

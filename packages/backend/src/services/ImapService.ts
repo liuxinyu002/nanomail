@@ -49,19 +49,31 @@ const IMAP_SETTINGS = {
  * - Connect to IMAP server using encrypted credentials from SettingsService
  * - Fetch unseen emails
  * - Provide raw email content for parsing
+ *
+ * Connection Pooling:
+ * - Uses singleton pattern for client instance
+ * - Credentials are decrypted only once
+ * - Client is reused across requests
  */
 export class ImapService {
   private client: ImapFlow | null = null
+  private configCache: ImapConfig | null = null
 
   constructor(private readonly settingsService: SettingsService) {}
 
   /**
    * Retrieves IMAP configuration from settings.
+   * Cached after first retrieval to avoid repeated decryption.
    *
    * @returns ImapConfig object with decrypted credentials
    * @throws Error if any required setting is missing
    */
   async getConfig(): Promise<ImapConfig> {
+    // Return cached config if available
+    if (this.configCache) {
+      return this.configCache
+    }
+
     const host = await this.settingsService.get(IMAP_SETTINGS.HOST)
     const portStr = await this.settingsService.get(IMAP_SETTINGS.PORT)
     const user = await this.settingsService.get(IMAP_SETTINGS.USER)
@@ -79,13 +91,40 @@ export class ImapService {
       throw new Error('IMAP_PASSWORD is not configured')
     }
 
-    return {
+    this.configCache = {
       host,
       port: portStr ? parseInt(portStr, 10) : 993,
       user,
       password,
       tls: true,
     }
+
+    return this.configCache
+  }
+
+  /**
+   * Gets or creates a cached IMAP client instance (singleton pattern).
+   * Credentials are decrypted only on first call.
+   *
+   * @returns ImapFlow client instance
+   */
+  async getClient(): Promise<ImapFlow> {
+    if (this.client) {
+      return this.client
+    }
+
+    const config = await this.getConfig()
+    this.client = this.createClient(config)
+
+    return this.client
+  }
+
+  /**
+   * Resets the singleton instance (useful for testing or credential changes).
+   */
+  resetInstance(): void {
+    this.client = null
+    this.configCache = null
   }
 
   /**
@@ -129,10 +168,72 @@ export class ImapService {
   }
 
   /**
+   * Fetches emails by UID range (UID-based incremental sync).
+   * Use this instead of fetchUnseen for reliable sync tracking.
+   *
+   * @param startUid - The UID to start from (exclusive, will fetch UIDs > startUid)
+   * @param limit - Maximum number of emails to fetch (default: 50)
+   * @returns Array of FetchedEmail objects
+   */
+  async fetchByUid(startUid: number, limit: number = 50): Promise<FetchedEmail[]> {
+    const client = await this.getClient()
+
+    try {
+      await client.connect()
+
+      // Select inbox
+      await client.mailboxOpen('INBOX')
+
+      // Search for messages with UID > startUid
+      // UID SEARCH UID <startUid+1>:*
+      const uids = await client.search({ uid: { $gt: startUid } })
+
+      if (!uids || !Array.isArray(uids) || uids.length === 0) {
+        return []
+      }
+
+      // Sort UIDs ascending and limit
+      const sortedUids = uids.sort((a, b) => Number(a) - Number(b)).slice(0, limit)
+
+      // Fetch messages
+      const messages = await client.fetchAll(sortedUids, {
+        uid: true,
+        envelope: true,
+        source: true,
+        bodyStructure: true,
+      })
+
+      const emails: FetchedEmail[] = []
+
+      for (const msg of messages) {
+        if (!msg.uid || !msg.source) continue
+
+        // Check for attachments in body structure
+        const hasAttachments = this.checkForAttachments(msg.bodyStructure)
+
+        emails.push({
+          uid: msg.uid,
+          subject: msg.envelope?.subject ?? null,
+          from: msg.envelope?.from?.[0]?.address ?? null,
+          date: msg.envelope?.date ?? new Date(),
+          rawContent: msg.source.toString(),
+          hasAttachments,
+        })
+      }
+
+      return emails
+    } finally {
+      // Don't close the connection - keep it pooled
+      // Connection will be reused via getClient()
+    }
+  }
+
+  /**
    * Fetches unseen emails from the inbox.
    *
    * @param limit - Maximum number of emails to fetch (default: 10)
    * @returns Array of FetchedEmail objects
+   * @deprecated Use fetchByUid for reliable UID-based sync
    */
   async fetchUnseen(limit: number = 10): Promise<FetchedEmail[]> {
     const config = await this.getConfig()

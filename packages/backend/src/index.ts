@@ -8,6 +8,7 @@ import 'reflect-metadata'
 import express from 'express'
 import cors from 'cors'
 import { initializeDatabase, closeDatabase, AppDataSource } from './config/database.js'
+import { logger } from './config/logger.js'
 import { EncryptionService } from './services/EncryptionService.js'
 import { SettingsService } from './services/SettingsService.js'
 import { ImapService } from './services/ImapService.js'
@@ -97,7 +98,7 @@ export async function createApp(): Promise<{
       res: express.Response,
       _next: express.NextFunction
     ) => {
-      console.error('Error:', err.message)
+      logger.error({ err }, 'Unhandled error')
       res.status(500).json({
         error: 'Internal server error',
         message: process.env.NODE_ENV !== 'production' ? err.message : undefined,
@@ -118,13 +119,13 @@ export async function startServer(port: number = 3000): Promise<void> {
   services.emailSyncService.startPolling(5)
 
   const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`)
-    console.log(`Health check: http://localhost:${port}/health`)
+    logger.info({ port }, 'Server started')
+    logger.info({ url: `http://localhost:${port}/health` }, 'Health check available')
   })
 
   // Graceful shutdown
   process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down...')
+    logger.info('SIGTERM received, shutting down...')
     services.emailSyncService.stopPolling()
     server.close()
     await closeDatabase()
@@ -132,7 +133,7 @@ export async function startServer(port: number = 3000): Promise<void> {
   })
 
   process.on('SIGINT', async () => {
-    console.log('SIGINT received, shutting down...')
+    logger.info('SIGINT received, shutting down...')
     services.emailSyncService.stopPolling()
     server.close()
     await closeDatabase()
@@ -143,7 +144,7 @@ export async function startServer(port: number = 3000): Promise<void> {
 // Start server if run directly
 if (require.main === module) {
   startServer(parseInt(process.env.PORT || '3000', 10)).catch((error) => {
-    console.error('Failed to start server:', error)
+    logger.error({ err: error }, 'Failed to start server')
     process.exit(1)
   })
 }

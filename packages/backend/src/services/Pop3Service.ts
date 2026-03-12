@@ -6,6 +6,7 @@ import type { FetchedEmail, EmailIdentifier } from './types/mail-fetcher.types'
 import { hasUidl } from './types/mail-fetcher.types'
 import { MailParserService } from './MailParserService'
 import { Email } from '../entities/Email.entity'
+import { createLogger, type Logger } from '../config/logger.js'
 
 /**
  * POP3 configuration
@@ -42,6 +43,7 @@ interface UidlItem {
 export class Pop3Service implements IMailFetcher {
   readonly protocolType = 'POP3' as const
 
+  private readonly log: Logger = createLogger('Pop3Service')
   private pop3: POP3 | null = null
   private configCache: Pop3Config | null = null
   private readonly mailParser = new MailParserService()
@@ -257,7 +259,7 @@ export class Pop3Service implements IMailFetcher {
 
         } catch (error) {
           // Single email error: log and continue
-          console.error(`[POP3] Failed to fetch email uidl=${item.uidl}:`, error)
+          this.log.error({ err: error, uidl: item.uidl }, 'Failed to fetch email')
           continue
         }
       }

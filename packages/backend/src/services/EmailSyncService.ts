@@ -6,6 +6,7 @@ import { MailFetcherFactory } from './MailFetcherFactory'
 import type { FetchedEmail } from './types/mail-fetcher.types'
 import { hasUidField } from './types/mail-fetcher.types'
 import type { MailParserService } from './MailParserService'
+import { createLogger, type Logger } from '../config/logger.js'
 
 /**
  * EmailSyncService - Email Synchronization Service
@@ -17,6 +18,7 @@ import type { MailParserService } from './MailParserService'
  * 4. Resume from breakpoint (single email failure doesn't affect overall)
  */
 export class EmailSyncService {
+  private readonly log: Logger
   private emailRepository: Repository<Email>
   private cronTask: ReturnType<typeof cron.schedule> | null = null
   private pollingActive = false
@@ -31,6 +33,7 @@ export class EmailSyncService {
     this.emailRepository = dataSource.getRepository(Email)
     // Factory injects Repository for Pop3Service use
     this.factory = new MailFetcherFactory(settingsService, this.emailRepository)
+    this.log = createLogger('EmailSyncService')
   }
 
   /**
@@ -67,7 +70,7 @@ export class EmailSyncService {
 
         } catch (dbError) {
           // Database exception: interrupt sync, preserve state
-          console.error('[SyncEngine] Database error, stopping sync:', dbError)
+          this.log.error({ err: dbError }, 'Database error, stopping sync')
           throw dbError
         }
       }
@@ -83,7 +86,7 @@ export class EmailSyncService {
       return { syncedCount }
 
     } catch (error) {
-      console.error('[SyncEngine] Sync failed:', error)
+      this.log.error({ err: error }, 'Sync failed')
       return {
         syncedCount,
         error: error instanceof Error ? error.message : 'Unknown error'

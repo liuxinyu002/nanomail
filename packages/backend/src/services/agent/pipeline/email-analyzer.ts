@@ -8,6 +8,7 @@ import type { LLMProvider, ChatParams } from '../../llm/types'
 import { EmailAnalysisSchema, type EmailAnalysis } from './schemas'
 import { Email } from '../../../entities/Email.entity'
 import { Todo } from '../../../entities/Todo.entity'
+import { createLogger, type Logger } from '../../../config/logger.js'
 
 /**
  * Email data for analysis
@@ -35,6 +36,7 @@ const DEFAULT_ANALYSIS: EmailAnalysis = {
  * Email analyzer that uses LLM for intelligent email processing
  */
 export class EmailAnalyzer {
+  private readonly log: Logger = createLogger('EmailAnalyzer')
   private llmProvider: LLMProvider
   private dataSource: DataSource
 
@@ -58,7 +60,7 @@ export class EmailAnalyzer {
 
       if (!response.content) {
         // Log for observability
-        console.warn('Email analysis: LLM returned empty content', { emailId: email.id })
+        this.log.warn({ emailId: email.id }, 'LLM returned empty content')
         return DEFAULT_ANALYSIS
       }
 
@@ -70,20 +72,20 @@ export class EmailAnalyzer {
 
       if (!validationResult.success) {
         // Log validation errors for debugging
-        console.warn('Email analysis: Zod validation failed', {
+        this.log.warn({
           emailId: email.id,
           errors: validationResult.error.errors
-        })
+        }, 'Zod validation failed')
         return DEFAULT_ANALYSIS
       }
 
       return validationResult.data
     } catch (error) {
       // Log for observability but still return safe fallback
-      console.error('Email analysis failed:', {
-        emailId: email.id,
-        error: error instanceof Error ? error.message : String(error)
-      })
+      this.log.error({
+        err: error,
+        emailId: email.id
+      }, 'Email analysis failed')
       return DEFAULT_ANALYSIS
     }
   }

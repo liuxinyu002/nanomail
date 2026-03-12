@@ -4,6 +4,7 @@ import type { IMailFetcher, ConnectionTestResult } from './interfaces/IMailFetch
 import type { FetchedEmail, EmailIdentifier } from './types/mail-fetcher.types'
 import { hasUid } from './types/mail-fetcher.types'
 import { MailParserService } from './MailParserService'
+import { createLogger, type Logger } from '../config/logger.js'
 
 /**
  * IMAP configuration retrieved from SettingsService
@@ -43,6 +44,7 @@ const IMAP_SETTINGS = {
 export class ImapService implements IMailFetcher {
   readonly protocolType = 'IMAP' as const
 
+  private readonly log: Logger = createLogger('ImapService')
   private client: ImapFlow | null = null
   private configCache: ImapConfig | null = null
   private readonly mailParser = new MailParserService()
@@ -226,7 +228,7 @@ export class ImapService implements IMailFetcher {
 
         } catch (error) {
           // Single email error: log and continue
-          console.error(`[IMAP] Failed to process email uid=${message.uid}:`, error)
+          this.log.error({ err: error, uid: message.uid }, 'Failed to process email')
           continue
         }
       }

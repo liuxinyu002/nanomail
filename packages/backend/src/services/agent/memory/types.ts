@@ -7,6 +7,7 @@
 
 import { promises as fs } from 'fs'
 import path from 'path'
+import { createLogger, type Logger } from '../../../config/logger.js'
 
 /**
  * Tool call record for history
@@ -67,6 +68,7 @@ class AsyncMutex {
  * Reference: nanobot/agent/memory.py - Memory class
  */
 export class MemoryStore {
+  private readonly log: Logger = createLogger('MemoryStore')
   private memoryPath: string
   private historyPath: string
   private memoryMutex: AsyncMutex
@@ -117,7 +119,7 @@ export class MemoryStore {
           entries.push(JSON.parse(lines[i]))
         } catch {
           // Log malformed line but continue parsing
-          console.warn(`MemoryStore: Skipping malformed JSON on line ${i + 1}`)
+          this.log.warn({ line: i + 1 }, 'Skipping malformed JSON')
         }
       }
 

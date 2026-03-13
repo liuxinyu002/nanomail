@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
-import { CheckCircle, Inbox } from 'lucide-react'
+import { CheckCircle, Inbox, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
 import { ClassificationTag } from '@/components/ClassificationTag'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 export interface EmailCardProps {
   email: {
@@ -13,6 +15,7 @@ export interface EmailCardProps {
     date: Date
     isProcessed: boolean
     classification: EmailClassification
+    summary: string | null
   }
   selected: boolean
   onSelect: (id: number) => void
@@ -57,33 +60,44 @@ export function EmailCard({
   onSelect,
   selectionDisabled = false,
 }: EmailCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
   const isDisabled = selectionDisabled && !selected
   // Compute isSpam from classification
   const isSpam = email.classification === 'SPAM'
+  // Computed properties for summary expansion
+  const canExpand = email.isProcessed && email.summary !== null
+  const showSparkles = !email.isProcessed
 
-  const handleClick = () => {
-    if (!isDisabled) {
-      onSelect(email.id)
+  const handleCardBodyClick = () => {
+    if (canExpand) {
+      setIsExpanded(!isExpanded)
     }
   }
 
   return (
-    <div
+    <Collapsible
+      open={isExpanded}
+      onOpenChange={setIsExpanded}
       className={cn(
-        'p-4 rounded-lg transition-colors cursor-pointer',
-        selected ? 'bg-primary/10 border border-primary' : 'hover:bg-muted',
+        'p-4 rounded-lg transition-colors',
+        canExpand && 'cursor-pointer hover:bg-muted',
+        selected && 'bg-primary/10 border border-primary',
         isSpam && 'opacity-60'
       )}
-      onClick={handleClick}
       data-testid="email-card"
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3" onClick={handleCardBodyClick}>
         <Checkbox
           checked={selected}
-          onCheckedChange={handleClick}
+          onCheckedChange={() => {
+            if (!isDisabled) {
+              onSelect(email.id)
+            }
+          }}
           disabled={isDisabled}
           data-testid="email-checkbox"
           onClick={(e) => e.stopPropagation()}
+          className="shrink-0"
         />
 
         <div className="flex-1 min-w-0">
@@ -94,9 +108,17 @@ export function EmailCard({
               </span>
               <ClassificationTag classification={email.classification} />
             </div>
-            <span className="text-xs text-muted-foreground shrink-0">
-              {formatRelativeDate(email.date)}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {showSparkles && (
+                <Sparkles
+                  className="h-4 w-4 text-muted-foreground opacity-50"
+                  data-testid="sparkles-indicator"
+                />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeDate(email.date)}
+              </span>
+            </div>
           </div>
 
           <p className="text-sm font-medium truncate">
@@ -108,14 +130,36 @@ export function EmailCard({
           </p>
         </div>
 
-        {email.isProcessed && (
-          <CheckCircle
-            className="h-5 w-5 text-green-500 shrink-0"
-            data-testid="processed-indicator"
-          />
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {email.isProcessed && !canExpand && (
+            <CheckCircle
+              className="h-5 w-5 text-green-500"
+              data-testid="processed-indicator"
+            />
+          )}
+          {canExpand && (
+            <CollapsibleTrigger asChild>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                data-testid="expand-trigger"
+              >
+                {isExpanded ? (
+                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+            </CollapsibleTrigger>
+          )}
+        </div>
       </div>
-    </div>
+
+      <CollapsibleContent>
+        <div className="mt-3 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground leading-relaxed">
+          {email.summary}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 

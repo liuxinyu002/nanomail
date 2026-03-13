@@ -11,6 +11,7 @@ describe('EmailCard', () => {
     date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     isProcessed: false,
     classification: 'IMPORTANT',
+    summary: null,
   }
 
   const mockOnSelect = vi.fn()
@@ -54,11 +55,11 @@ describe('EmailCard', () => {
       expect(checkbox).toBeInTheDocument()
     })
 
-    it('should show processed indicator for processed emails', () => {
-      const processedEmail = { ...mockEmail, isProcessed: true }
+    it('should show processed indicator for processed emails without summary', () => {
+      const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
       render(<EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />)
 
-      // Processed emails should have visual indicator
+      // Processed emails without summary should have visual indicator
       expect(screen.getByTestId('processed-indicator')).toBeInTheDocument()
     })
 
@@ -86,14 +87,6 @@ describe('EmailCard', () => {
       expect(checkbox).not.toBeChecked()
     })
 
-    it('should call onSelect when card is clicked', () => {
-      render(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />)
-
-      fireEvent.click(screen.getByText('Test Subject'))
-
-      expect(mockOnSelect).toHaveBeenCalledWith(1)
-    })
-
     it('should call onSelect when checkbox is clicked', () => {
       render(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />)
 
@@ -111,14 +104,6 @@ describe('EmailCard', () => {
       expect(checkbox).toBeDisabled()
     })
 
-    it('should not call onSelect when clicking disabled card', () => {
-      render(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} selectionDisabled={true} />)
-
-      fireEvent.click(screen.getByText('Test Subject'))
-
-      expect(mockOnSelect).not.toHaveBeenCalled()
-    })
-
     it('should allow interaction when selectionDisabled but already selected', () => {
       render(<EmailCard email={mockEmail} selected={true} onSelect={mockOnSelect} selectionDisabled={true} />)
 
@@ -127,6 +112,93 @@ describe('EmailCard', () => {
 
       fireEvent.click(checkbox)
       expect(mockOnSelect).toHaveBeenCalledWith(1)
+    })
+  })
+
+  describe('Summary Folding', () => {
+    describe('Sparkles Indicator', () => {
+      it('should show Sparkles indicator for unprocessed emails', () => {
+        render(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />)
+
+        expect(screen.getByTestId('sparkles-indicator')).toBeInTheDocument()
+      })
+
+      it('should not show Sparkles indicator for processed emails', () => {
+        const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
+        render(<EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />)
+
+        expect(screen.queryByTestId('sparkles-indicator')).not.toBeInTheDocument()
+      })
+    })
+
+    describe('Expand/Collapse Behavior', () => {
+      it('should show expand icon for processed emails with summary', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        expect(screen.getByTestId('expand-trigger')).toBeInTheDocument()
+      })
+
+      it('should not show expand icon for emails without summary', () => {
+        const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
+        render(<EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />)
+
+        expect(screen.queryByTestId('expand-trigger')).not.toBeInTheDocument()
+      })
+
+      it('should expand and show summary when clicking card body', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary content' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        // Summary should not be visible initially
+        expect(screen.queryByText('Test summary content')).not.toBeInTheDocument()
+
+        // Click on the card body (the content div)
+        fireEvent.click(screen.getByText('Test Subject'))
+
+        // Summary should now be visible
+        expect(screen.getByText('Test summary content')).toBeInTheDocument()
+      })
+
+      it('should collapse when clicking card body again', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary content' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        // Expand
+        fireEvent.click(screen.getByText('Test Subject'))
+        expect(screen.getByText('Test summary content')).toBeInTheDocument()
+
+        // Collapse
+        fireEvent.click(screen.getByText('Test Subject'))
+        expect(screen.queryByText('Test summary content')).not.toBeInTheDocument()
+      })
+
+      it('should not trigger selection when clicking card body', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        fireEvent.click(screen.getByText('Test Subject'))
+
+        expect(mockOnSelect).not.toHaveBeenCalled()
+      })
+
+      it('should trigger selection when clicking checkbox', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        fireEvent.click(screen.getByRole('checkbox'))
+
+        expect(mockOnSelect).toHaveBeenCalledWith(1)
+      })
+    })
+
+    describe('Default State', () => {
+      it('should be collapsed by default', () => {
+        const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+        render(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+        expect(screen.queryByText('Test summary')).not.toBeInTheDocument()
+      })
     })
   })
 })

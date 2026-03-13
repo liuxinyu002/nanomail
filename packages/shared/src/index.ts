@@ -5,3 +5,5 @@ export { defaultSettings, SettingKeySchema } from './schemas/settings'
 // Explicitly re-export SyncJob types for Node.js compatibility
 export type { SyncJob, SyncJobStatus, CreateSyncJob, SyncJobResponse } from './schemas/email'
 export { SyncJobSchema, SyncJobStatusSchema, CreateSyncJobSchema, SyncJobResponseSchema } from './schemas/email'
+// Explicitly re-export Todo schemas for Node.js compatibility
+export { UpdateTodoSchema, TodoDateRangeQuerySchema } from './schemas/todo'

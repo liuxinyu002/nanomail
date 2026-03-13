@@ -110,10 +110,19 @@ describe('Logger Configuration', () => {
 
     it('should work in production mode', async () => {
       process.env.NODE_ENV = 'production'
+      delete process.env.LOG_LEVEL
+
+      // Mock dotenv to prevent loading .env file
+      vi.mock('dotenv', () => ({
+        config: vi.fn()
+      }))
+
       vi.resetModules()
       const { logger } = await import('./logger')
       expect(logger).toBeDefined()
       expect(logger.level).toBe('info')
+
+      vi.doUnmock('dotenv')
     })
   })
 })

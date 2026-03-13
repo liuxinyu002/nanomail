@@ -1,3 +1,6 @@
+// Import bootstrap first to load .env before reading process.env
+import '../bootstrap.js'
+
 import pino from 'pino'
 
 /**

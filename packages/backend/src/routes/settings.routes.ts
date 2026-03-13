@@ -4,10 +4,24 @@ import { createLogger } from '../config/logger.js'
 
 const log = createLogger('SettingsRoutes')
 
+/** LLM-related settings keys that should trigger config cache invalidation */
+const LLM_SETTINGS_KEYS = ['LLM_API_KEY', 'LLM_BASE_URL', 'LLM_MODEL']
+
+/**
+ * Options for settings routes
+ */
+export interface SettingsRoutesOptions {
+  /** Callback invoked when LLM-related settings are saved */
+  onLLMConfigChanged?: () => void
+}
+
 /**
  * Creates settings routes with dependency injection
  */
-export function createSettingsRoutes(settingsService: SettingsService): Router {
+export function createSettingsRoutes(
+  settingsService: SettingsService,
+  options?: SettingsRoutesOptions
+): Router {
   const router = Router()
 
   /**
@@ -43,7 +57,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
 
       res.json({ key, value })
     } catch (error) {
-      log.error({ err: error, key }, 'Error fetching setting')
+      log.error({ err: error, key: req.params.key }, 'Error fetching setting')
       res.status(500).json({ error: 'Failed to fetch setting' })
     }
   })
@@ -60,11 +74,22 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
         return res.status(400).json({ error: 'Invalid settings object' })
       }
 
+      // Track if any LLM settings were changed
+      let llmConfigChanged = false
+
       // Save each setting
       for (const [key, value] of Object.entries(settings)) {
         if (typeof value === 'string') {
           await settingsService.set(key, value)
+          if (LLM_SETTINGS_KEYS.includes(key)) {
+            llmConfigChanged = true
+          }
         }
+      }
+
+      // Invalidate LLM config cache if relevant settings changed
+      if (llmConfigChanged && options?.onLLMConfigChanged) {
+        options.onLLMConfigChanged()
       }
 
       res.json({ success: true })
@@ -91,9 +116,15 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
       }
 
       await settingsService.set(key, value)
+
+      // Invalidate LLM config cache if relevant setting changed
+      if (LLM_SETTINGS_KEYS.includes(key) && options?.onLLMConfigChanged) {
+        options.onLLMConfigChanged()
+      }
+
       res.json({ success: true })
     } catch (error) {
-      log.error({ err: error, key }, 'Error saving setting')
+      log.error({ err: error, key: req.params.key }, 'Error saving setting')
       res.status(500).json({ error: 'Failed to save setting' })
     }
   })
@@ -111,7 +142,7 @@ export function createSettingsRoutes(settingsService: SettingsService): Router {
       await settingsService.delete(key)
       res.json({ success: true })
     } catch (error) {
-      log.error({ err: error, key }, 'Error deleting setting')
+      log.error({ err: error, key: req.params.key }, 'Error deleting setting')
       res.status(500).json({ error: 'Failed to delete setting' })
     }
   })

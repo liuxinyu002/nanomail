@@ -225,11 +225,11 @@ export class Pop3Service implements IMailFetcher {
       // Expected format: [["1", "uidl-1"], ["2", "uidl-2"]]
       uidlEntries = uidlArray.map((item) => {
         if (Array.isArray(item)) {
-          return [item[0], item[1]]
+          return [String(item[0] ?? ''), String(item[1] ?? '')]
         }
         // Fallback for unexpected format
         return ['', '']
-      })
+      }) as [string, string][]
     } else if (typeof uidlArray === 'object' && uidlArray !== null) {
       // Fallback: object format { "1": "uidl-1", "2": "uidl-2" }
       uidlEntries = Object.entries(uidlArray)

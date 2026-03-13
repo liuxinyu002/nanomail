@@ -23,6 +23,7 @@ describe('TodoColumn', () => {
       description: 'High priority task',
       urgency: 'high',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T10:00:00.000Z',
     },
     {
@@ -31,6 +32,7 @@ describe('TodoColumn', () => {
       description: 'Another high priority task',
       urgency: 'high',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T11:00:00.000Z',
     },
   ]

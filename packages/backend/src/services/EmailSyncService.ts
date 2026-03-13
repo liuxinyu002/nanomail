@@ -140,7 +140,7 @@ export class EmailSyncService {
         // PostgreSQL: code '23505' = unique_violation
         if (
           driverError.code === 'SQLITE_CONSTRAINT' ||
-          driverError.code === 19 ||
+          driverError.code === '19' ||
           driverError.code === '23505' ||
           driverError.message?.includes('UNIQUE constraint failed')
         ) {

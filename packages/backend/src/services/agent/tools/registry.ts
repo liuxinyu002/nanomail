@@ -3,7 +3,9 @@
  * Reference: nanobot/agent/tools/registry.py
  */
 
+import type { Logger } from '../../../config/logger'
 import type { Tool } from './types'
+import { createLogger } from '../../../config/logger'
 
 const ERROR_HINT = '\n\n[Analyze the error above and try a different approach.]'
 
@@ -13,12 +15,14 @@ const ERROR_HINT = '\n\n[Analyze the error above and try a different approach.]'
  */
 export class ToolRegistry {
   private tools: Map<string, Tool> = new Map()
+  private readonly log: Logger = createLogger('ToolRegistry')
 
   /**
    * Register a tool
    */
   register(tool: Tool): void {
     this.tools.set(tool.name, tool)
+    this.log.debug(`Registered tool: ${tool.name}`)
   }
 
   /**
@@ -26,6 +30,7 @@ export class ToolRegistry {
    */
   registerWithName(name: string, tool: Tool): void {
     this.tools.set(name, tool)
+    this.log.debug(`Registered tool: ${name}`)
   }
 
   /**
@@ -59,12 +64,17 @@ export class ToolRegistry {
   /**
    * Execute a tool by name with given parameters
    * Uses Zod for validation
+   *
+   * Note: Normal execution logs are handled by AgentLoop to avoid redundancy.
+   * This method only logs errors and validation failures.
    */
   async execute(name: string, params: Record<string, unknown>): Promise<string> {
     const tool = this.tools.get(name)
 
     if (!tool) {
+      // ERROR: Tool not found
       const available = Array.from(this.tools.keys()).join(', ') || 'none'
+      this.log.error(`Tool not found: ${name}. Available: ${available}`)
       return `Error: Tool '${name}' not found. Available tools: ${available}.${ERROR_HINT}`
     }
 
@@ -73,13 +83,15 @@ export class ToolRegistry {
       const result = tool.safeParseParams(params)
 
       if (!result.success) {
+        // WARN: Validation failed
         const errors = result.error.errors
           .map(e => `${e.path.join('.')}: ${e.message}`)
           .join('; ')
+        this.log.warn({ toolName: name, errors: result.error.errors }, `Validation failed for ${name}`)
         return `Error: ${errors}${ERROR_HINT}`
       }
 
-      // Execute with validated params
+      // Execute with validated params (no INFO log - handled by AgentLoop)
       const output = await tool.execute(result.data)
 
       // Handle tool-returned errors
@@ -89,6 +101,8 @@ export class ToolRegistry {
 
       return output
     } catch (error) {
+      // ERROR: Execution failed
+      this.log.error({ err: error, toolName: name }, `Tool ${name} failed`)
       return `Error executing ${name}: ${error instanceof Error ? error.message : String(error)}${ERROR_HINT}`
     }
   }

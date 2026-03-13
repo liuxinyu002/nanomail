@@ -120,32 +120,40 @@ describe('LiteLLMProvider', () => {
   describe('applyModelPrefix', () => {
     const provider = new LiteLLMProvider()
 
-    it('should add deepseek prefix to deepseek models', () => {
-      expect(provider.applyModelPrefix('deepseek-chat')).toBe('deepseek/deepseek-chat')
+    it('should return model name unchanged (Zero Magic strategy)', () => {
+      // Zero Magic: user has full control over model name
+      // Direct API: model = "deepseek-chat"
+      // LiteLLM proxy: model = "deepseek/deepseek-chat"
+      expect(provider.applyModelPrefix('deepseek-chat')).toBe('deepseek-chat')
     })
 
-    it('should not add prefix to models that already have it', () => {
+    it('should not modify models with existing prefixes', () => {
+      // If user explicitly provides prefix, keep it
       expect(provider.applyModelPrefix('deepseek/deepseek-chat')).toBe('deepseek/deepseek-chat')
+      expect(provider.applyModelPrefix('ollama/llama3.1')).toBe('ollama/llama3.1')
     })
 
-    it('should not add prefix to OpenAI models', () => {
+    it('should not modify OpenAI models', () => {
       expect(provider.applyModelPrefix('gpt-4o')).toBe('gpt-4o')
+      expect(provider.applyModelPrefix('gpt-4o-mini')).toBe('gpt-4o-mini')
     })
 
-    it('should add ollama prefix to llama models', () => {
-      expect(provider.applyModelPrefix('llama3.1')).toBe('ollama/llama3.1')
+    it('should not add prefix to ollama-style models', () => {
+      // Zero Magic: let user control the prefix
+      expect(provider.applyModelPrefix('llama3.1')).toBe('llama3.1')
+      expect(provider.applyModelPrefix('mistral-7b')).toBe('mistral-7b')
+      expect(provider.applyModelPrefix('qwen2.5')).toBe('qwen2.5')
     })
 
-    it('should add gemini prefix to gemini models', () => {
-      expect(provider.applyModelPrefix('gemini-pro')).toBe('gemini/gemini-pro')
+    it('should not add prefix to gemini models', () => {
+      // Zero Magic: user specifies full model name
+      expect(provider.applyModelPrefix('gemini-pro')).toBe('gemini-pro')
     })
 
-    it('should add ollama prefix to mistral models', () => {
-      expect(provider.applyModelPrefix('mistral-7b')).toBe('ollama/mistral-7b')
-    })
-
-    it('should add ollama prefix to qwen models', () => {
-      expect(provider.applyModelPrefix('qwen2.5')).toBe('ollama/qwen2.5')
+    it('should return any model name unchanged', () => {
+      // Zero Magic design: no automatic transformations
+      expect(provider.applyModelPrefix('claude-3-opus')).toBe('claude-3-opus')
+      expect(provider.applyModelPrefix('custom-model')).toBe('custom-model')
     })
   })
 

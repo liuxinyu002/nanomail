@@ -83,10 +83,27 @@ export interface ChatParams {
 }
 
 /**
+ * Dynamic configuration for LLM Provider
+ */
+export interface LLMConfig {
+  apiKey: string | null
+  apiBase: string | null
+  model: string | null
+}
+
+/**
+ * Function to dynamically fetch LLM configuration
+ * Allows decoupling provider from settings service
+ */
+export type GetConfigFn = () => Promise<LLMConfig>
+
+/**
  * Configuration for LLM Provider
  */
 export interface LLMProviderConfig {
   apiKey?: string
   apiBase?: string
   defaultModel?: string
+  /** Dynamic config getter - takes precedence over static config */
+  getConfig?: GetConfigFn
 }

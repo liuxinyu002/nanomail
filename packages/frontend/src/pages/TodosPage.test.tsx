@@ -58,6 +58,7 @@ describe('TodosPage', () => {
       description: 'High priority task 1',
       urgency: 'high',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T10:00:00.000Z',
     },
     {
@@ -66,6 +67,7 @@ describe('TodosPage', () => {
       description: 'High priority task 2',
       urgency: 'high',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T11:00:00.000Z',
     },
     {
@@ -74,6 +76,7 @@ describe('TodosPage', () => {
       description: 'Medium priority task',
       urgency: 'medium',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T12:00:00.000Z',
     },
     {
@@ -82,6 +85,7 @@ describe('TodosPage', () => {
       description: 'Low priority task',
       urgency: 'low',
       status: 'pending',
+      deadline: null,
       createdAt: '2024-01-15T13:00:00.000Z',
     },
     {
@@ -90,6 +94,7 @@ describe('TodosPage', () => {
       description: 'Completed task 1',
       urgency: 'high',
       status: 'completed',
+      deadline: null,
       createdAt: '2024-01-14T10:00:00.000Z',
     },
     {
@@ -98,6 +103,7 @@ describe('TodosPage', () => {
       description: 'Completed task 2',
       urgency: 'medium',
       status: 'completed',
+      deadline: null,
       createdAt: '2024-01-14T11:00:00.000Z',
     },
   ]
@@ -257,6 +263,7 @@ describe('TodosPage', () => {
         description: `Completed task ${i + 1}`,
         urgency: 'high' as const,
         status: 'completed' as const,
+        deadline: null,
         createdAt: `2024-01-${10 + i}T10:00:00.000Z`,
       }))
 
@@ -282,6 +289,7 @@ describe('TodosPage', () => {
         description: `Completed task ${i + 1}`,
         urgency: 'high' as const,
         status: 'completed' as const,
+        deadline: null,
         createdAt: `2024-01-${10 + i}T10:00:00.000Z`,
       }))
 
@@ -301,6 +309,7 @@ describe('TodosPage', () => {
         description: `Completed task ${i + 1}`,
         urgency: 'high' as const,
         status: 'completed' as const,
+        deadline: null,
         createdAt: `2024-01-${10 + i}T10:00:00.000Z`,
       }))
 
@@ -327,6 +336,7 @@ describe('TodosPage', () => {
         description: `Completed task ${i + 1}`,
         urgency: 'high' as const,
         status: 'completed' as const,
+        deadline: null,
         createdAt: `2024-01-${10 + i}T10:00:00.000Z`,
       }))
 

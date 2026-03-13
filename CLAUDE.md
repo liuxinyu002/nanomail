@@ -138,6 +138,49 @@ pnpm --filter @nanomail/shared dev
 
 ---
 
+## 后端日志规范
+
+后端应用已集成 **pino** 日志组件（`packages/backend/src/config/logger.ts`）。
+
+### 强制规则
+
+1. **禁止使用 console.log**：后端代码中不得使用 `console.log`、`console.error` 等控制台输出
+2. **使用子模块日志**：每个模块使用 `createLogger(moduleName)` 创建独立的日志实例
+
+### 使用示例
+
+```typescript
+import { createLogger } from '../config/logger'
+
+// 创建模块级日志实例
+const log = createLogger('EmailSyncService')
+
+// 各级别日志输出
+log.info('Email sync started')
+log.debug({ emailCount: 10 }, 'Fetching emails')
+log.warn({ retryCount: 3 }, 'Connection unstable, retrying...')
+log.error({ err: error }, 'Failed to connect to IMAP server')
+```
+
+### 日志级别
+
+| 级别 | 用途 |
+|------|------|
+| `trace` | 详细调试信息 |
+| `debug` | 开发调试信息 |
+| `info` | 正常业务流程 |
+| `warn` | 警告但不影响运行 |
+| `error` | 错误需要关注 |
+| `fatal` | 严重错误导致服务不可用 |
+
+### 环境配置
+
+- 开发环境：自动启用 `pino-pretty` 格式化输出
+- 生产环境：JSON 格式输出
+- 日志级别通过 `LOG_LEVEL` 环境变量控制，默认 `info`
+
+---
+
 ## Git 工作流
 
 - 提交格式：`<type>: <description>`

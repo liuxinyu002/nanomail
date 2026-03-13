@@ -6,7 +6,10 @@
 import OpenAI from 'openai'
 import { LLMProvider } from './base-provider'
 import { ProviderRegistry } from './provider-registry'
-import type { LLMResponse, ChatParams, ChatMessage, ProviderSpec, LLMProviderConfig, ToolCallRequest } from './types'
+import type { LLMResponse, ChatParams, ChatMessage, ProviderSpec, LLMProviderConfig, LLMConfig, GetConfigFn, ToolCallRequest } from './types'
+import { createLogger } from '../../config/logger.js'
+
+const log = createLogger('LiteLLMProvider')
 
 // Standard chat-completion message keys
 const ALLOWED_MSG_KEYS = new Set([
@@ -58,24 +61,60 @@ function normalizeToolCallId(id: string): string {
  * Supports multiple providers through a unified interface
  */
 export class LiteLLMProvider extends LLMProvider {
-  private client: OpenAI
+  private client: OpenAI | null = null
   private defaultModel: string
   private providerRegistry: ProviderRegistry
+  private readonly getConfig: GetConfigFn | null
+  // Cached static config (fallback when no dynamic getter)
+  private readonly staticApiKey: string
+  private readonly staticApiBase: string | undefined
 
-  constructor(config: LLMProviderConfig & { defaultModel?: string } = {}) {
+  constructor(config: LLMProviderConfig = {}) {
     super(config)
 
     this.providerRegistry = new ProviderRegistry()
     this.defaultModel = config.defaultModel ?? 'gpt-4o-mini'
+    this.getConfig = config.getConfig ?? null
+    this.staticApiKey = config.apiKey ?? 'ollama'
+    this.staticApiBase = config.apiBase
 
-    // Initialize OpenAI client
-    // Ollama doesn't need a real API key
-    const apiKey = config.apiKey ?? 'ollama'
+    // Initialize OpenAI client with static config (for backward compatibility)
+    if (!this.getConfig) {
+      this.client = new OpenAI({
+        apiKey: this.staticApiKey,
+        baseURL: this.staticApiBase
+      })
+    }
+  }
 
-    this.client = new OpenAI({
-      apiKey,
-      baseURL: config.apiBase
-    })
+  /**
+   * Get OpenAI client, refreshing with dynamic config if available
+   */
+  private async getClient(): Promise<OpenAI> {
+    if (this.getConfig) {
+      const dynamicConfig = await this.getConfig()
+      return new OpenAI({
+        apiKey: dynamicConfig.apiKey ?? this.staticApiKey,
+        baseURL: dynamicConfig.apiBase ?? this.staticApiBase
+      })
+    }
+    return this.client!
+  }
+
+  /**
+   * Get the model to use, preferring dynamic config
+   */
+  private async getModel(requestedModel?: string): Promise<string> {
+    if (requestedModel) {
+      return requestedModel
+    }
+    if (this.getConfig) {
+      const dynamicConfig = await this.getConfig()
+      if (dynamicConfig.model) {
+        return dynamicConfig.model
+      }
+    }
+    return this.defaultModel
   }
 
   /**
@@ -93,22 +132,13 @@ export class LiteLLMProvider extends LLMProvider {
   }
 
   /**
-   * Apply provider-specific model prefix
-   * Reference: nanobot/providers/litellm_provider.py - _apply_prefix()
+   * No-op: return model name unchanged
+   * Zero Magic strategy - user has full control over model name
+   * - Direct API: model = "deepseek-chat"
+   * - LiteLLM proxy: model = "deepseek/deepseek-chat"
    */
   applyModelPrefix(model: string): string {
-    const spec = this.detectProvider(model)
-
-    if (!spec || !spec.litellmPrefix) {
-      return model
-    }
-
-    // Check if already has the prefix
-    if (model.startsWith(`${spec.litellmPrefix}/`)) {
-      return model
-    }
-
-    return `${spec.litellmPrefix}/${model}`
+    return model
   }
 
   /**
@@ -263,8 +293,20 @@ export class LiteLLMProvider extends LLMProvider {
    * Reference: nanobot/providers/litellm_provider.py - chat()
    */
   async chat(params: ChatParams): Promise<LLMResponse> {
-    const model = params.model ?? this.getDefaultModel()
+    const model = await this.getModel(params.model)
     const resolvedModel = this.applyModelPrefix(model)
+
+    // Get client with dynamic config
+    const client = await this.getClient()
+
+    // Debug: log actual LLM config being used
+    const apiKey = client.apiKey
+    const baseURL = client.baseURL
+    log.debug({
+      model: resolvedModel,
+      baseURL,
+      apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : '(none)'
+    }, 'LLM request config')
 
     // Sanitize messages
     const sanitizedMessages = this.sanitizeMessages(params.messages)
@@ -274,7 +316,7 @@ export class LiteLLMProvider extends LLMProvider {
     const maxTokens = Math.max(1, params.maxTokens ?? 4096)
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await client.chat.completions.create({
         model: resolvedModel,
         messages: openaiMessages,
         max_tokens: maxTokens,

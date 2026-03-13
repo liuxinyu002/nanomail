@@ -3,10 +3,10 @@
  * Handles API calls for todo operations
  */
 
-import type { TodoStatus, Urgency } from '@nanomail/shared'
+import type { TodoStatus, Urgency, TodoDateRangeQuery, UpdateTodo } from '@nanomail/shared'
 
 // Re-export types for convenience
-export type { TodoStatus, Urgency } from '@nanomail/shared'
+export type { TodoStatus, Urgency, TodoDateRangeQuery, UpdateTodo } from '@nanomail/shared'
 
 export interface TodoItem {
   id: number
@@ -77,5 +77,52 @@ export const TodoService = {
     }
 
     return response.json()
+  },
+
+  /**
+   * Fetch todos by date range
+   */
+  async getTodosByDateRange(query: TodoDateRangeQuery): Promise<TodosResponse> {
+    const params = new URLSearchParams()
+    params.set('startDate', query.startDate)
+    params.set('endDate', query.endDate)
+
+    const response = await fetch(`/api/todos?${params.toString()}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch todos by date range')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Update a todo item
+   */
+  async updateTodo(id: number, data: UpdateTodo): Promise<TodoItem> {
+    const response = await fetch(`/api/todos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update todo')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Delete a todo item
+   */
+  async deleteTodo(id: number): Promise<void> {
+    const response = await fetch(`/api/todos/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete todo')
+    }
   },
 }

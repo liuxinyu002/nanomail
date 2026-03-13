@@ -33,11 +33,28 @@ export const CreateTodoSchema = TodoSchema.omit({
 
 /**
  * Schema for updating a Todo
+ * Note: emailId is not updatable - a todo cannot be moved to a different email
+ * Uses .strict() to reject any unknown fields like id, emailId, createdAt
  */
-export const UpdateTodoSchema = CreateTodoSchema.partial()
+export const UpdateTodoSchema = z.object({
+  description: z.string().min(1).max(2000).optional(),
+  urgency: UrgencySchema.optional(),
+  deadline: z.string().datetime().nullable().optional(),
+  status: TodoStatusSchema.optional()
+}).strict()
+
+/**
+ * Schema for date range query in Todo calendar view
+ * Used to fetch todos within a specific date range
+ */
+export const TodoDateRangeQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+})
 
 export type Urgency = z.infer<typeof UrgencySchema>
 export type TodoStatus = z.infer<typeof TodoStatusSchema>
 export type Todo = z.infer<typeof TodoSchema>
 export type CreateTodo = z.infer<typeof CreateTodoSchema>
 export type UpdateTodo = z.infer<typeof UpdateTodoSchema>
+export type TodoDateRangeQuery = z.infer<typeof TodoDateRangeQuerySchema>

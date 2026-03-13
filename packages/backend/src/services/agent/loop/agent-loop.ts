@@ -5,12 +5,13 @@
  * Core pattern: Thought -> Action -> Observation -> Thought...
  *
  * Uses AsyncGenerator for streaming support.
+ * Supports role-based context building via ContextBuilder.
  */
 
 import type { LLMResponse } from '../../llm/types'
 import type { LLMProvider } from '../../llm/base-provider'
 import type { ToolRegistry } from '../tools/registry'
-import type { ContextBuilder } from '../context/types'
+import type { ContextBuilder, AgentRole } from '../context/types'
 import type { MemoryStore } from '../memory/types'
 import type { TokenTruncator } from '../utils/token-truncator'
 import type { Email } from '../../../entities/Email.entity'
@@ -20,11 +21,20 @@ import type {
   AgentState,
   ProgressEvent
 } from './types'
+import type { Logger } from '../../../config/logger'
 import {
   AGENT_PRESETS,
   AgentPreset,
   DEFAULT_AGENT_CONFIG
 } from './types'
+import { createLogger } from '../../../config/logger'
+import {
+  agentPrefix,
+  truncate,
+  formatToolArgs,
+  formatToolResult,
+  TRUNCATE_PRESETS
+} from '../utils/logger-utils'
 
 /**
  * ReAct Agent Loop
@@ -44,6 +54,8 @@ export class AgentLoop {
   private _memoryStore: MemoryStore // Prefix with underscore to indicate intentionally unused
   private tokenTruncator: TokenTruncator
   private config: AgentConfig
+  private agentRole: AgentRole
+  private readonly log: Logger = createLogger('AgentLoop')
 
   constructor(params: {
     provider: LLMProvider
@@ -52,6 +64,7 @@ export class AgentLoop {
     memoryStore: MemoryStore
     tokenTruncator: TokenTruncator
     config?: Partial<AgentConfig> & { preset?: AgentPreset }
+    agentRole?: AgentRole // Default: 'draft-agent'
   }) {
     // Apply preset defaults if specified
     const presetConfig = params.config?.preset
@@ -72,6 +85,7 @@ export class AgentLoop {
     this.contextBuilder = params.contextBuilder
     this._memoryStore = params.memoryStore
     this.tokenTruncator = params.tokenTruncator
+    this.agentRole = params.agentRole ?? 'draft-agent'
   }
 
   /**
@@ -79,6 +93,13 @@ export class AgentLoop {
    */
   getConfig(): AgentConfig {
     return { ...this.config }
+  }
+
+  /**
+   * Get current agent role
+   */
+  getAgentRole(): AgentRole {
+    return this.agentRole
   }
 
   /**
@@ -95,6 +116,7 @@ export class AgentLoop {
     const state: AgentState = {
       iteration: 0,
       messages: await this.contextBuilder.buildMessages({
+        agentRole: this.agentRole,
         history: history ?? [],
         currentMessage: this.buildUserMessage(instruction, email),
         runtimeContext: {
@@ -106,10 +128,26 @@ export class AgentLoop {
       finishReason: 'completed'
     }
 
+    // INFO: Starting agent run
+    this.log.info(
+      { maxIterations: this.config.maxIterations },
+      `${agentPrefix('Loop')} Starting agent run`
+    )
+
     while (state.iteration < this.config.maxIterations) {
       state.iteration++
+      const stepPrefix = agentPrefix('Loop', state.iteration)
+
+      // DEBUG: Iteration start
+      this.log.debug(
+        { iteration: state.iteration, messageCount: state.messages.length },
+        `${stepPrefix} Starting iteration`
+      )
 
       try {
+        // DEBUG: LLM call
+        this.log.debug(`${stepPrefix} Calling LLM`)
+
         // Call LLM with tools
         const response = await this.provider.chat({
           messages: state.messages,
@@ -120,9 +158,18 @@ export class AgentLoop {
           reasoningEffort: this.config.reasoningEffort
         })
 
+        // DEBUG: LLM response
+        if (response.content) {
+          this.log.debug(
+            { finishReason: response.finishReason },
+            `${stepPrefix} LLM response: ${truncate(response.content, TRUNCATE_PRESETS.LLM_RESPONSE)}`
+          )
+        }
+
         // Handle error response
         if (response.finishReason === 'error') {
           state.finishReason = 'error'
+          this.log.error(`${stepPrefix} LLM returned error`)
           yield {
             type: 'error',
             content: response.content ?? 'LLM returned an error'
@@ -130,10 +177,11 @@ export class AgentLoop {
           return
         }
 
-        // Yield thought (strip <think> tags if present)
+        // INFO: Thought (strip <think> tags if present)
         if (response.content) {
           const thought = this.stripThinkTags(response.content)
           if (thought) {
+            this.log.info(`${stepPrefix} Thought: ${truncate(thought, TRUNCATE_PRESETS.THOUGHT)}`)
             yield { type: 'thought', content: thought, iteration: state.iteration }
           }
         }
@@ -145,6 +193,11 @@ export class AgentLoop {
 
           // Execute each tool
           for (const toolCall of response.toolCalls) {
+            // INFO: Action
+            this.log.info(
+              `${stepPrefix} Action: ${formatToolArgs(toolCall.name, toolCall.arguments)}`
+            )
+
             // Yield action
             yield {
               type: 'action',
@@ -159,6 +212,9 @@ export class AgentLoop {
               toolCall.name,
               toolCall.arguments
             )
+
+            // INFO: Observation
+            this.log.info(`${stepPrefix} Observation: ${formatToolResult(result)}`)
 
             // Yield observation
             yield { type: 'observation', content: result, iteration: state.iteration }
@@ -176,6 +232,12 @@ export class AgentLoop {
           // No tool calls = final answer
           state.finalContent = response.content
 
+          // INFO: Completed
+          this.log.info(
+            { toolsUsed: state.toolsUsed },
+            `${agentPrefix('Loop')} Completed in ${state.iteration} steps`
+          )
+
           // Stream final answer character by character
           if (state.finalContent) {
             for (const char of state.finalContent) {
@@ -191,6 +253,7 @@ export class AgentLoop {
         }
       } catch (error) {
         state.finishReason = 'error'
+        this.log.error({ err: error }, `${stepPrefix} Error in iteration`)
         yield {
           type: 'error',
           content: error instanceof Error ? error.message : 'Unknown error'
@@ -199,7 +262,12 @@ export class AgentLoop {
       }
     }
 
-    // Max iterations reached
+    // WARN: Max iterations reached
+    this.log.warn(
+      { maxIterations: this.config.maxIterations },
+      `${agentPrefix('Loop')} Reached max iterations`
+    )
+
     state.finishReason = 'max_iterations'
     const maxIterMessage = `I reached the maximum number of tool call iterations (${this.config.maxIterations}) without completing the task. You can try breaking the task into smaller steps.`
 

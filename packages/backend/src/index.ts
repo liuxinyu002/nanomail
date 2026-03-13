@@ -1,9 +1,4 @@
-import { config } from 'dotenv'
-import { resolve } from 'path'
-
-// Load .env from project root (monorepo root)
-config({ path: resolve(__dirname, '../../../.env') })
-
+// Bootstrap is imported by logger.ts to load .env before any config is read
 import 'reflect-metadata'
 import express from 'express'
 import cors from 'cors'
@@ -17,7 +12,24 @@ import { EmailSyncService } from './services/EmailSyncService.js'
 import { SmtpService } from './services/SmtpService.js'
 import { JobService } from './services/JobService.js'
 import { AsyncSyncExecutor } from './services/AsyncSyncExecutor.js'
-import { createEmailRoutes, createTodoRoutes, createSettingsRoutes } from './routes/index.js'
+import { createEmailRoutes, createTodoRoutes, createSettingsRoutes, createAgentRoutes } from './routes/index.js'
+import { LiteLLMProvider } from './services/llm/litellm-provider.js'
+import type { LLMConfig } from './services/llm/types.js'
+import { ToolRegistry } from './services/agent/tools/registry.js'
+import { ContextBuilder } from './services/agent/context/types.js'
+import { MemoryStore } from './services/agent/memory/types.js'
+import { TokenTruncator } from './services/agent/utils/token-truncator.js'
+import { SearchEmailsTool } from './services/agent/tools/search-emails.js'
+import { SettingKeySchema } from '@nanomail/shared'
+
+/**
+ * Get workspace path for agent memory and context
+ */
+function getWorkspacePath(): string {
+  // In production, use a dedicated workspace directory
+  // In development, use current working directory
+  return process.env.WORKSPACE_PATH || process.cwd()
+}
 
 export const APP_VERSION = '0.1.0'
 
@@ -101,7 +113,62 @@ export async function createApp(): Promise<{
     asyncSyncExecutor
   ))
   app.use('/api/todos', createTodoRoutes(AppDataSource))
-  app.use('/api/settings', createSettingsRoutes(settingsService))
+  app.use('/api/settings', createSettingsRoutes(settingsService, {
+    onLLMConfigChanged: () => {
+      configCache.timestamp = 0
+    }
+  }))
+
+  // Initialize agent services
+  const workspacePath = getWorkspacePath()
+  const memoryStore = new MemoryStore(workspacePath)
+  // ContextBuilder uses prompts directory (configs/prompts by default)
+  const contextBuilder = new ContextBuilder()
+  const tokenTruncator = new TokenTruncator()
+  const toolRegistry = new ToolRegistry()
+
+  // Register search emails tool
+  const searchEmailsTool = SearchEmailsTool.fromDataSource(AppDataSource)
+  toolRegistry.register(searchEmailsTool)
+
+  // Create LLM provider with dynamic config getter
+  // Uses TTL cache to avoid DB queries on every LLM call
+  const configCache = {
+    data: null as LLMConfig | null,
+    timestamp: 0,
+    ttl: 60_000 // 1 minute cache
+  }
+
+  const llmProvider = new LiteLLMProvider({
+    getConfig: async () => {
+      const now = Date.now()
+      if (configCache.data && (now - configCache.timestamp) < configCache.ttl) {
+        return configCache.data
+      }
+      const config: LLMConfig = {
+        apiKey: await settingsService.get(SettingKeySchema.Enum.LLM_API_KEY),
+        apiBase: await settingsService.get(SettingKeySchema.Enum.LLM_BASE_URL),
+        model: await settingsService.get(SettingKeySchema.Enum.LLM_MODEL)
+      }
+      configCache.data = config
+      configCache.timestamp = now
+      return config
+    },
+    // Static fallback from environment
+    apiKey: process.env.OPENAI_API_KEY || process.env.LLM_API_KEY,
+    apiBase: process.env.OPENAI_BASE_URL || process.env.LLM_BASE_URL,
+    defaultModel: process.env.LLM_MODEL || 'gpt-4o-mini'
+  })
+
+  // Mount agent routes
+  app.use('/api/agent', createAgentRoutes({
+    dataSource: AppDataSource,
+    llmProvider,
+    toolRegistry,
+    contextBuilder,
+    memoryStore,
+    tokenTruncator
+  }))
 
   // Error handler
   app.use(

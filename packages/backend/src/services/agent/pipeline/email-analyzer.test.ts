@@ -45,12 +45,29 @@ const mockDataSource = {
   })
 }
 
+// Mock ContextBuilder - returns a valid system prompt for email-analyzer role
+const createMockContextBuilder = () => ({
+  buildSystemPrompt: vi.fn().mockImplementation(async (role: string) => {
+    if (role === 'email-analyzer') {
+      return `<agents>\nAgent behavior rules\n</agents>\n\n<email-analyzer>\nEmail analysis rules\n</email-analyzer>`
+    }
+    return ''
+  }),
+  buildMessages: vi.fn()
+})
+
 describe('EmailAnalyzer', () => {
   let analyzer: EmailAnalyzer
+  let mockContextBuilder: ReturnType<typeof createMockContextBuilder>
 
   beforeEach(() => {
     vi.clearAllMocks()
-    analyzer = new EmailAnalyzer(mockLLMProvider as any, mockDataSource as any)
+    mockContextBuilder = createMockContextBuilder()
+    analyzer = new EmailAnalyzer(
+      mockLLMProvider as any,
+      mockDataSource as any,
+      mockContextBuilder as any
+    )
   })
 
   afterEach(() => {
@@ -120,8 +137,9 @@ describe('EmailAnalyzer', () => {
 
       // Find the user message with email content
       const userMessage = messages.find((m: any) => m.role === 'user')
-      expect(userMessage.content).toContain('<email>')
-      expect(userMessage.content).toContain('</email>')
+      // Uses <email_data> tag for security isolation
+      expect(userMessage.content).toContain('<email_data>')
+      expect(userMessage.content).toContain('</email_data>')
     })
 
     it('should return default fallback for parsing failures', async () => {
@@ -328,7 +346,7 @@ describe('EmailAnalyzer', () => {
   })
 
   describe('buildPrompt', () => {
-    it('should include system prompt with classification instructions', () => {
+    it('should include system prompt with classification instructions', async () => {
       const email = {
         subject: 'Test',
         bodyText: 'Body',
@@ -336,16 +354,23 @@ describe('EmailAnalyzer', () => {
         date: new Date('2024-12-01')
       }
 
-      const messages = analyzer.buildPrompt(email as any)
+      const messages = await analyzer.buildPrompt(email as any)
+
+      // Debug: Check what we got
+      expect(messages).toBeDefined()
+      expect(messages.length).toBe(2)
 
       const systemMessage = messages.find((m: any) => m.role === 'system')
-      expect(systemMessage.content).toContain('classification')
-      expect(systemMessage.content).toContain('SPAM')
-      expect(systemMessage.content).toContain('NEWSLETTER')
-      expect(systemMessage.content).toContain('IMPORTANT')
+      expect(systemMessage).toBeDefined()
+
+      // Check that content exists and contains email-analyzer
+      const content = systemMessage?.content
+      expect(content).toBeDefined()
+      expect(content).toBeTypeOf('string')
+      expect(content).toContain('email-analyzer')
     })
 
-    it('should include email metadata in prompt', () => {
+    it('should include email metadata in prompt', async () => {
       const email = {
         subject: 'Project Update',
         bodyText: 'Here is the update',
@@ -353,14 +378,15 @@ describe('EmailAnalyzer', () => {
         date: new Date('2024-12-01')
       }
 
-      const messages = analyzer.buildPrompt(email as any)
+      const messages = await analyzer.buildPrompt(email as any)
 
       const userMessage = messages.find((m: any) => m.role === 'user')
-      expect(userMessage.content).toContain('Project Update')
-      expect(userMessage.content).toContain('team@company.com')
+      expect(userMessage).toBeDefined()
+      expect(userMessage!.content).toContain('Project Update')
+      expect(userMessage!.content).toContain('team@company.com')
     })
 
-    it('should request JSON output format', () => {
+    it('should use XML tags to isolate email data', async () => {
       const email = {
         subject: 'Test',
         bodyText: 'Body',
@@ -368,10 +394,12 @@ describe('EmailAnalyzer', () => {
         date: new Date()
       }
 
-      const messages = analyzer.buildPrompt(email as any)
+      const messages = await analyzer.buildPrompt(email as any)
 
-      const systemMessage = messages.find((m: any) => m.role === 'system')
-      expect(systemMessage.content).toContain('JSON')
+      const userMessage = messages.find((m: any) => m.role === 'user')
+      expect(userMessage).toBeDefined()
+      expect(userMessage!.content).toContain('<email_data>')
+      expect(userMessage!.content).toContain('</email_data>')
     })
   })
 

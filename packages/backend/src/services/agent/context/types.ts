@@ -1,23 +1,28 @@
 /**
- * Context Builder Service
- * Reference: nanobot/agent/context.py
+ * Context Builder Service - Role-based Prompt Assembly
+ * Reference: docs/phase_2/plans/plan_3_agent.md
  *
  * Builds system prompts and message arrays for LLM interactions.
- * Handles bootstrap files, memory context, skills, and runtime context.
+ * Supports role-based prompt assembly with required/optional file handling.
  */
 
 import { promises as fs } from 'fs'
 import path from 'path'
+import type { Logger } from '../../../config/logger'
 import type { LLMResponse, ToolCallRequest } from '../../llm/types'
-import type { MemoryStore } from '../memory/types'
+import { createLogger } from '../../../config/logger'
 
 /**
- * SkillsLoader interface for dependency injection
+ * Agent role type
  */
-export interface SkillsLoader {
-  buildSkillsSummary(): string
-  getAlwaysSkills(): string[]
-  loadSkillsForContext(names: string[]): string
+export type AgentRole = 'email-analyzer' | 'draft-agent'
+
+/**
+ * Role configuration for prompt assembly
+ */
+export interface RoleConfig {
+  files: string[]      // Array order follows primacy-recency effect
+  required: string[]   // Missing required files throw errors
 }
 
 /**
@@ -50,77 +55,115 @@ export interface ContextMessage {
 }
 
 /**
+ * Loaded file with name and content
+ */
+interface LoadedFile {
+  name: string
+  content: string | null
+}
+
+/**
+ * Memory safeguard threshold (characters)
+ * Prevents MEMORY.md from exploding token count
+ */
+const MEMORY_MAX_LENGTH = 5000
+
+/**
  * Context builder for constructing system prompts and message history
- * Reference: nanobot/agent/context.py - ContextBuilder class
+ * Supports role-based prompt assembly following the primacy-recency effect.
  */
 export class ContextBuilder {
-  private workspacePath: string
-  private memoryStore: MemoryStore
-  private skillsLoader: SkillsLoader
+  private promptsDir: string
+  private readonly log: Logger = createLogger('ContextBuilder')
 
   /**
-   * Bootstrap files loaded in order
-   * Reference: nanobot/agent/context.py - BOOTSTRAP_FILES
+   * Role configuration mapping
+   * Files array order follows primacy-recency effect:
+   * 1. AGENTS.md first (global rules)
+   * 2. Personality/Memory in middle
+   * 3. Task-specific rules near end
+   * 4. TOOLS.md last (tool specifications)
    */
-  private static readonly BOOTSTRAP_FILES = [
-    'AGENTS.md', // Agent identity
-    'SOUL.md', // Core personality
-    'USER.md', // User preferences
-    'TOOLS.md' // Tool usage guidelines
-  ]
-
-  constructor(
-    workspacePath: string,
-    memoryStore: MemoryStore,
-    skillsLoader: SkillsLoader
-  ) {
-    this.workspacePath = workspacePath
-    this.memoryStore = memoryStore
-    this.skillsLoader = skillsLoader
+  static readonly ROLE_CONFIG: Record<AgentRole, RoleConfig> = {
+    'email-analyzer': {
+      files: ['AGENTS.md', 'USER.md', 'email-analyzer.md', 'TOOLS.md'],
+      required: ['AGENTS.md', 'email-analyzer.md']
+      // Excludes SOUL.md and MEMORY.md for objectivity
+    },
+    'draft-agent': {
+      files: ['AGENTS.md', 'SOUL.md', 'MEMORY.md', 'USER.md', 'draft-agent.md', 'TOOLS.md'],
+      required: ['AGENTS.md', 'draft-agent.md']
+      // SOUL.md and MEMORY.md are optional (user may not have them)
+    }
   }
 
   /**
-   * Build the complete system prompt
-   * Reference: nanobot/agent/context.py - build_system_prompt()
+   * Constructor with flexible path resolution
+   * Priority: constructor param > PROMPTS_DIR env var > default path
    */
-  async buildSystemPrompt(): Promise<string> {
-    const parts: string[] = []
+  constructor(promptsDir?: string) {
+    this.promptsDir = promptsDir
+      ?? process.env.PROMPTS_DIR
+      ?? path.resolve(__dirname, '../prompts')
 
-    // Add identity
-    const identity = await this.getIdentity()
-    parts.push(identity)
+    // Log initialization for debugging
+    this.log.info({
+      promptsDir: this.promptsDir,
+      userId: 'default'  // Current version fixed to 'default'
+    }, 'ContextBuilder initialized')
+  }
 
-    // Load bootstrap files
-    const bootstrap = await this.loadBootstrapFiles()
-    if (bootstrap) {
-      parts.push(bootstrap)
-    }
+  /**
+   * Get the current prompts directory (for testing)
+   */
+  getPromptsDir(): string {
+    return this.promptsDir
+  }
 
-    // Add memory context
-    const memory = await this.memoryStore.getMemoryContext()
-    if (memory) {
-      parts.push(`# Memory\n\n${memory}`)
-    }
+  /**
+   * Build the complete system prompt for a specific agent role
+   * Uses Promise.all for concurrent file reads
+   */
+  async buildSystemPrompt(
+    agentRole: AgentRole = 'email-analyzer',
+    _userId?: string  // Reserved for multi-user support, currently unused
+  ): Promise<string> {
+    const roleConfig = ContextBuilder.ROLE_CONFIG[agentRole]
 
-    // Add skills summary
-    const skillsSummary = this.skillsLoader.buildSkillsSummary()
-    if (skillsSummary) {
-      parts.push(`# Skills\n\n${skillsSummary}`)
-    }
+    // Load all prompt files concurrently
+    const loadedFiles = await this.loadPromptFiles(roleConfig.files, roleConfig.required)
 
-    return parts.filter(Boolean).join('\n\n---\n\n')
+    // Apply memory safeguard if MEMORY.md is present and too long
+    const processedFiles = loadedFiles.map(file => this.applyMemorySafeguard(file))
+
+    // Filter out null/empty content
+    const validFiles = processedFiles.filter(f => f.content && f.content.trim())
+
+    // Assemble with XML tag wrapping (not Markdown headers - avoids attention drift)
+    const assembled = validFiles
+      .map(f => {
+        const tagName = f.name.replace('.md', '').toLowerCase()
+        return `<${tagName}>\n${f.content}\n</${tagName}>`
+      })
+      .join('\n\n')
+
+    return assembled
   }
 
   /**
    * Build message array for LLM
-   * Reference: nanobot/agent/context.py - build_messages()
+   * System prompt (all .md files) -> role: "system"
+   * User input (runtime content) -> role: "user"
    */
   async buildMessages(params: {
+    agentRole?: AgentRole
+    userId?: string
     history: ContextMessage[]
     currentMessage: string
     runtimeContext?: RuntimeContext
   }): Promise<ContextMessage[]> {
-    const systemPrompt = await this.buildSystemPrompt()
+    const role = params.agentRole ?? 'email-analyzer'
+    const systemPrompt = await this.buildSystemPrompt(role, params.userId)
     const runtimeCtx = this.buildRuntimeContext(params.runtimeContext)
 
     const userContent = runtimeCtx
@@ -136,7 +179,6 @@ export class ContextBuilder {
 
   /**
    * Build runtime context with current time, channel, etc.
-   * Reference: nanobot/agent/context.py - _build_runtime_context()
    */
   buildRuntimeContext(ctx?: RuntimeContext): string {
     if (!ctx) return ''
@@ -152,7 +194,6 @@ export class ContextBuilder {
 
   /**
    * Add assistant message with tool calls to history
-   * Reference: nanobot/agent/context.py - add_assistant_message()
    */
   addAssistantMessage(
     messages: Array<{ role: string; content: string | null; toolCalls?: ToolCallRequest[] }>,
@@ -173,7 +214,6 @@ export class ContextBuilder {
 
   /**
    * Add tool result to message history
-   * Reference: nanobot/agent/context.py - add_tool_result()
    */
   addToolResult(
     messages: Array<{ role: string; content: string | null; toolCallId?: string }>,
@@ -191,53 +231,54 @@ export class ContextBuilder {
   }
 
   /**
-   * Get the core identity section
-   * Reference: nanobot/agent/context.py - _get_identity()
+   * Load prompt files concurrently using Promise.all
+   * Throws error for missing required files, gracefully skips optional files
    */
-  async getIdentity(): Promise<string> {
-    const platform = process.platform
-    const nodeVersion = process.version
+  private async loadPromptFiles(
+    files: string[],
+    required: string[]
+  ): Promise<LoadedFile[]> {
+    const results = await Promise.all(
+      files.map(async (filename) => {
+        const filePath = path.join(this.promptsDir, filename)
+        try {
+          const content = await fs.readFile(filePath, 'utf-8')
+          return { name: filename, content }
+        } catch {
+          // Required file missing: throw error to fail fast
+          if (required.includes(filename)) {
+            throw new Error(`Required prompt file missing: ${filename}`)
+          }
+          // Optional file missing: log warning and skip
+          this.log.warn({ file: filename }, 'Optional prompt file not found, skipping')
+          return { name: filename, content: null }
+        }
+      })
+    )
 
-    return `# nanobot
-
-You are nanobot, a helpful AI assistant.
-
-## Runtime
-${platform} ${process.arch}, Node.js ${nodeVersion}
-
-## Workspace
-Your workspace is at: ${this.workspacePath}
-- Long-term memory: ${this.workspacePath}/memory/MEMORY.md (write important facts here)
-- History log: ${this.workspacePath}/memory/HISTORY.md (grep-searchable)
-- Custom skills: ${this.workspacePath}/skills/{skill-name}/SKILL.md
-
-## nanobot Guidelines
-- State intent before tool calls, but NEVER predict or claim results before receiving them.
-- Before modifying a file, read it first. Do not assume files or directories exist.
-- After writing or editing a file, re-read it if accuracy matters.
-- If a tool call fails, analyze the error before retrying with a different approach.
-- Ask for clarification when the request is ambiguous.`
+    return results
   }
 
   /**
-   * Load all bootstrap files from workspace
-   * Reference: nanobot/agent/context.py - _load_bootstrap_files()
+   * Apply memory safeguard to prevent token explosion
+   * Truncates MEMORY.md to last 5000 characters if too long
+   * (Most recent memories are more relevant)
    */
-  async loadBootstrapFiles(): Promise<string> {
-    const parts: string[] = []
+  private applyMemorySafeguard(file: LoadedFile): LoadedFile {
+    if (file.name === 'MEMORY.md' && file.content && file.content.length > MEMORY_MAX_LENGTH) {
+      const originalLength = file.content.length
+      // Keep most recent content (tail)
+      const truncatedContent = file.content.slice(-MEMORY_MAX_LENGTH)
 
-    for (const filename of ContextBuilder.BOOTSTRAP_FILES) {
-      const filePath = path.join(this.workspacePath, filename)
-      try {
-        const content = await fs.readFile(filePath, 'utf-8')
-        if (content.trim()) {
-          parts.push(`## ${filename}\n\n${content}`)
-        }
-      } catch {
-        // File doesn't exist, skip it
-      }
+      this.log.warn({
+        file: file.name,
+        originalLength,
+        truncatedLength: truncatedContent.length,
+        threshold: MEMORY_MAX_LENGTH
+      }, 'MEMORY.md exceeded safe length, truncated to most recent content')
+
+      return { ...file, content: truncatedContent }
     }
-
-    return parts.join('\n\n')
+    return file
   }
 }

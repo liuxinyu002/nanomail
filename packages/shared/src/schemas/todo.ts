@@ -19,6 +19,7 @@ export const TodoSchema = z.object({
   description: z.string().min(1).max(2000),
   urgency: UrgencySchema,
   status: TodoStatusSchema,
+  deadline: z.string().datetime().nullable(),
   createdAt: z.coerce.date()
 })
 

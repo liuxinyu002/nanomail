@@ -25,6 +25,7 @@ describe('TodoService', () => {
             description: 'Review the report',
             urgency: 'high',
             status: 'pending',
+            deadline: null,
             createdAt: '2024-01-01T00:00:00.000Z',
           },
         ],
@@ -82,6 +83,7 @@ describe('TodoService', () => {
         description: 'Review the report',
         urgency: 'high',
         status: 'completed' as TodoStatus,
+        deadline: null,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 

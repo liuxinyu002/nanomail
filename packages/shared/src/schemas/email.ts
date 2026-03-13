@@ -1,18 +1,33 @@
 import { z } from 'zod'
 
 /**
+ * Email classification types from LLM analysis
+ */
+export const EmailClassificationSchema = z.enum(['IMPORTANT', 'NEWSLETTER', 'SPAM'])
+export type EmailClassification = z.infer<typeof EmailClassificationSchema>
+
+/**
  * Schema for Email entity
  */
 export const EmailSchema = z.object({
   id: z.number().int().positive(),
-  subject: z.string().max(500),
-  sender: z.string().email().max(255),
-  snippet: z.string().max(200),
-  bodyText: z.string(),
+  subject: z.string().max(500).nullable(),
+  sender: z.string().email().max(255).nullable(),
+  snippet: z.string().max(200).nullable(),
+  bodyText: z.string().nullable(),
   hasAttachments: z.boolean(),
   date: z.coerce.date(),
   isProcessed: z.boolean(),
-  isSpam: z.boolean()
+  classification: EmailClassificationSchema,
+  summary: z.string().max(500).nullable()
+})
+
+/**
+ * Schema for email list item (API response)
+ * Includes dynamically computed isSpam field for backward compatibility
+ */
+export const EmailListItemSchema = EmailSchema.extend({
+  isSpam: z.boolean() // Dynamically computed: classification === 'SPAM'
 })
 
 /**
@@ -21,10 +36,12 @@ export const EmailSchema = z.object({
 export const CreateEmailSchema = EmailSchema.omit({
   id: true,
   isProcessed: true,
-  isSpam: true
+  classification: true,
+  summary: true
 }).extend({
   isProcessed: z.boolean().optional().default(false),
-  isSpam: z.boolean().optional().default(false)
+  classification: EmailClassificationSchema.optional().default('IMPORTANT'),
+  summary: z.string().max(500).nullable().optional()
 })
 
 /**
@@ -107,6 +124,7 @@ export type CreateSyncJob = z.infer<typeof CreateSyncJobSchema>
 export type SyncJobResponse = z.infer<typeof SyncJobResponseSchema>
 
 export type Email = z.infer<typeof EmailSchema>
+export type EmailListItem = z.infer<typeof EmailListItemSchema>
 export type CreateEmail = z.infer<typeof CreateEmailSchema>
 export type Label = z.infer<typeof LabelSchema>
 export type CreateLabel = z.infer<typeof CreateLabelSchema>

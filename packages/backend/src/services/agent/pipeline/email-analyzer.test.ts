@@ -213,7 +213,7 @@ describe('EmailAnalyzer', () => {
   })
 
   describe('persistResults', () => {
-    it('should update email with analysis results', async () => {
+    it('should update email with classification instead of isSpam', async () => {
       mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
 
       const email = { id: 1 }
@@ -229,10 +229,95 @@ describe('EmailAnalyzer', () => {
       expect(mockEmailRepo.update).toHaveBeenCalledWith(
         { id: 1 },
         expect.objectContaining({
-          isSpam: true,
+          classification: 'SPAM',
           isProcessed: true
         })
       )
+    })
+
+    it('should store IMPORTANT classification correctly', async () => {
+      mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
+
+      const email = { id: 1 }
+      const analysis: EmailAnalysis = {
+        classification: 'IMPORTANT',
+        confidence: 0.95,
+        summary: 'Important email',
+        actionItems: []
+      }
+
+      await analyzer.persistResults(email as any, analysis)
+
+      expect(mockEmailRepo.update).toHaveBeenCalledWith(
+        { id: 1 },
+        expect.objectContaining({
+          classification: 'IMPORTANT',
+          summary: 'Important email'
+        })
+      )
+    })
+
+    it('should store NEWSLETTER classification correctly', async () => {
+      mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
+
+      const email = { id: 1 }
+      const analysis: EmailAnalysis = {
+        classification: 'NEWSLETTER',
+        confidence: 0.90,
+        summary: 'Newsletter content',
+        actionItems: []
+      }
+
+      await analyzer.persistResults(email as any, analysis)
+
+      expect(mockEmailRepo.update).toHaveBeenCalledWith(
+        { id: 1 },
+        expect.objectContaining({
+          classification: 'NEWSLETTER'
+        })
+      )
+    })
+
+    it('should create todos with deadline', async () => {
+      mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
+      mockTodoRepo.save.mockResolvedValueOnce({ id: 1 })
+
+      const email = { id: 1 }
+      const analysis: EmailAnalysis = {
+        classification: 'IMPORTANT',
+        confidence: 0.9,
+        summary: 'Action needed',
+        actionItems: [
+          { description: 'Task 1', urgency: 'HIGH', deadline: '2024-12-31' }
+        ]
+      }
+
+      await analyzer.persistResults(email as any, analysis)
+
+      const savedTodo = mockTodoRepo.save.mock.calls[0][0]
+      expect(savedTodo.deadline).toBeInstanceOf(Date)
+      // Should be end of day UTC
+      expect(savedTodo.deadline.toISOString()).toBe('2024-12-31T23:59:59.000Z')
+    })
+
+    it('should handle null deadline in action items', async () => {
+      mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
+      mockTodoRepo.save.mockResolvedValueOnce({ id: 1 })
+
+      const email = { id: 1 }
+      const analysis: EmailAnalysis = {
+        classification: 'IMPORTANT',
+        confidence: 0.9,
+        summary: 'Action needed',
+        actionItems: [
+          { description: 'Task without deadline', urgency: 'LOW', deadline: null }
+        ]
+      }
+
+      await analyzer.persistResults(email as any, analysis)
+
+      const savedTodo = mockTodoRepo.save.mock.calls[0][0]
+      expect(savedTodo.deadline).toBeNull()
     })
 
     it('should create todos for action items', async () => {

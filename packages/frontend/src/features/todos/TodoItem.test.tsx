@@ -46,6 +46,7 @@ describe('TodoItem', () => {
     description: 'Review the quarterly report',
     urgency: 'high',
     status: 'pending',
+    deadline: null,
     createdAt: '2024-01-15T10:00:00.000Z',
   }
 

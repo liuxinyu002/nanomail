@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { DataSource } from 'typeorm'
-import { Email } from '../entities/Email.entity'
+import { Email, type EmailClassification } from '../entities/Email.entity'
 import type { EmailSyncService } from '../services/EmailSyncService'
 import type { JobService } from '../services/JobService'
 import type { AsyncSyncExecutor } from '../services/AsyncSyncExecutor'
@@ -21,7 +21,7 @@ export interface PaginationQuery {
  */
 export interface EmailsQuery extends PaginationQuery {
   processed?: boolean
-  spam?: boolean
+  classification?: EmailClassification
 }
 
 /**
@@ -36,6 +36,7 @@ export interface EmailsResponse {
     summary: string | null
     date: string
     isProcessed: boolean
+    classification: EmailClassification
     isSpam: boolean
     hasAttachments: boolean
   }>
@@ -92,15 +93,15 @@ export function createEmailRoutes(
         100
       )
       const processed = req.query.processed === 'true'
-      const spam = req.query.spam === 'true'
+      const classification = req.query.classification as EmailClassification | undefined
 
       // Build where clause
       const where: Record<string, unknown> = {}
       if (req.query.processed !== undefined) {
         where.isProcessed = processed
       }
-      if (req.query.spam !== undefined) {
-        where.isSpam = spam
+      if (classification) {
+        where.classification = classification
       }
 
       // Get total count
@@ -124,7 +125,8 @@ export function createEmailRoutes(
           summary: email.summary,
           date: email.date.toISOString(),
           isProcessed: email.isProcessed,
-          isSpam: email.isSpam,
+          classification: email.classification,
+          isSpam: email.classification === 'SPAM', // Dynamically computed
           hasAttachments: email.hasAttachments,
         })),
         pagination: {

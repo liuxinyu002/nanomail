@@ -6,6 +6,8 @@ import { TodoService } from '@/services'
 import type { TodoItem } from '@/services'
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { EmailClassification } from '@nanomail/shared'
+import { DeadlineDisplay } from '@/components/DeadlineDisplay'
 
 export interface EmailDetailProps {
   email: {
@@ -16,7 +18,7 @@ export interface EmailDetailProps {
     bodyText?: string | null
     date: Date
     isProcessed: boolean
-    isSpam: boolean
+    classification: EmailClassification
     summary?: string | null
   }
 }
@@ -118,14 +120,17 @@ export function EmailDetail({ email }: EmailDetailProps) {
                     >
                       {todo.description}
                     </p>
-                    <span
-                      className={cn(
-                        'text-xs font-medium',
-                        urgencyColors[todo.urgency]
-                      )}
-                    >
-                      {todo.urgency}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'text-xs font-medium',
+                          urgencyColors[todo.urgency]
+                        )}
+                      >
+                        {todo.urgency}
+                      </span>
+                      <DeadlineDisplay deadline={todo.deadline} />
+                    </div>
                   </div>
                 </div>
               ))}

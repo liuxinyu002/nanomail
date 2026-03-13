@@ -76,9 +76,10 @@ describe('EmailRoutes', () => {
           subject: 'Test Email',
           sender: 'sender@example.com',
           snippet: 'Test snippet',
+          summary: 'AI summary',
           date: new Date('2024-01-15'),
           isProcessed: false,
-          isSpam: false,
+          classification: 'IMPORTANT',
           hasAttachments: false,
         },
       ]
@@ -92,6 +93,46 @@ describe('EmailRoutes', () => {
       expect(response.body.emails).toHaveLength(1)
       expect(response.body.pagination).toBeDefined()
       expect(response.body.pagination.total).toBe(1)
+    })
+
+    it('should include classification and computed isSpam in response', async () => {
+      const mockEmails = [
+        {
+          id: 1,
+          subject: 'Spam Email',
+          sender: 'spam@spam.com',
+          snippet: 'Spam content',
+          summary: null,
+          date: new Date('2024-01-15'),
+          isProcessed: true,
+          classification: 'SPAM',
+          hasAttachments: false,
+        },
+        {
+          id: 2,
+          subject: 'Newsletter',
+          sender: 'newsletter@news.com',
+          snippet: 'Newsletter content',
+          summary: 'Weekly newsletter',
+          date: new Date('2024-01-15'),
+          isProcessed: true,
+          classification: 'NEWSLETTER',
+          hasAttachments: false,
+        },
+      ]
+
+      vi.mocked(mockRepository.find).mockResolvedValue(mockEmails)
+      vi.mocked(mockRepository.count).mockResolvedValue(2)
+
+      const response = await request(app).get('/api/emails')
+
+      expect(response.status).toBe(200)
+      // First email is SPAM - isSpam should be true
+      expect(response.body.emails[0].classification).toBe('SPAM')
+      expect(response.body.emails[0].isSpam).toBe(true)
+      // Second email is NEWSLETTER - isSpam should be false
+      expect(response.body.emails[1].classification).toBe('NEWSLETTER')
+      expect(response.body.emails[1].isSpam).toBe(false)
     })
 
     it('should support pagination parameters', async () => {
@@ -122,17 +163,32 @@ describe('EmailRoutes', () => {
       )
     })
 
-    it('should filter by spam status', async () => {
+    it('should filter by classification', async () => {
       vi.mocked(mockRepository.find).mockResolvedValue([])
       vi.mocked(mockRepository.count).mockResolvedValue(0)
 
       await request(app)
         .get('/api/emails')
-        .query({ spam: true })
+        .query({ classification: 'IMPORTANT' })
 
       expect(mockRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ isSpam: true }),
+          where: expect.objectContaining({ classification: 'IMPORTANT' }),
+        })
+      )
+    })
+
+    it('should filter by SPAM classification', async () => {
+      vi.mocked(mockRepository.find).mockResolvedValue([])
+      vi.mocked(mockRepository.count).mockResolvedValue(0)
+
+      await request(app)
+        .get('/api/emails')
+        .query({ classification: 'SPAM' })
+
+      expect(mockRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ classification: 'SPAM' }),
         })
       )
     })

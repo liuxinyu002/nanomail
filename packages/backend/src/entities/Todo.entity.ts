@@ -39,6 +39,14 @@ export class Todo {
   })
   status!: TodoStatus
 
+  /**
+   * Deadline for the todo item
+   * Stored as UTC datetime (with Z suffix) to ensure timezone consistency
+   * Set from LLM-extracted deadline in YYYY-MM-DD format, converted to end of day UTC
+   */
+  @Column({ type: 'datetime', nullable: true })
+  deadline!: Date | null
+
   @CreateDateColumn({ type: 'datetime' })
   createdAt!: Date
 }

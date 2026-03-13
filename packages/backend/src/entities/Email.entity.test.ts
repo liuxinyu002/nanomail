@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Email } from './Email.entity'
+import type { EmailClassification } from './Email.entity'
 import { validate } from 'class-validator'
 
 describe('Email Entity - Thread Context Fields', () => {
@@ -174,6 +175,37 @@ describe('Email Entity - Thread Context Fields', () => {
     })
   })
 
+  describe('classification field', () => {
+    it('should have classification field', () => {
+      const email = new Email()
+      email.classification = 'IMPORTANT'
+      expect(email.classification).toBe('IMPORTANT')
+    })
+
+    it('should default to IMPORTANT', () => {
+      const email = new Email()
+      expect(email.classification).toBe('IMPORTANT')
+    })
+
+    it('should accept SPAM classification', () => {
+      const email = new Email()
+      email.classification = 'SPAM'
+      expect(email.classification).toBe('SPAM')
+    })
+
+    it('should accept NEWSLETTER classification', () => {
+      const email = new Email()
+      email.classification = 'NEWSLETTER'
+      expect(email.classification).toBe('NEWSLETTER')
+    })
+
+    it('should accept IMPORTANT classification', () => {
+      const email = new Email()
+      email.classification = 'IMPORTANT'
+      expect(email.classification).toBe('IMPORTANT')
+    })
+  })
+
   describe('existing fields', () => {
     it('should maintain all existing fields', () => {
       const email = new Email()
@@ -186,7 +218,7 @@ describe('Email Entity - Thread Context Fields', () => {
       email.hasAttachments = true
       email.date = new Date('2024-01-15')
       email.isProcessed = false
-      email.isSpam = false
+      email.classification = 'IMPORTANT'
 
       expect(email.id).toBe(1)
       expect(email.subject).toBe('Test Subject')
@@ -197,7 +229,7 @@ describe('Email Entity - Thread Context Fields', () => {
       expect(email.hasAttachments).toBe(true)
       expect(email.date).toEqual(new Date('2024-01-15'))
       expect(email.isProcessed).toBe(false)
-      expect(email.isSpam).toBe(false)
+      expect(email.classification).toBe('IMPORTANT')
     })
   })
 })

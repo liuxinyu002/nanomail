@@ -1,6 +1,8 @@
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle, Inbox } from 'lucide-react'
+import type { EmailClassification } from '@nanomail/shared'
+import { ClassificationTag } from '@/components/ClassificationTag'
 
 export interface EmailCardProps {
   email: {
@@ -10,7 +12,7 @@ export interface EmailCardProps {
     snippet: string | null
     date: Date
     isProcessed: boolean
-    isSpam: boolean
+    classification: EmailClassification
   }
   selected: boolean
   onSelect: (id: number) => void
@@ -56,7 +58,8 @@ export function EmailCard({
   selectionDisabled = false,
 }: EmailCardProps) {
   const isDisabled = selectionDisabled && !selected
-  const isSpam = email.isSpam
+  // Compute isSpam from classification
+  const isSpam = email.classification === 'SPAM'
 
   const handleClick = () => {
     if (!isDisabled) {
@@ -80,13 +83,17 @@ export function EmailCard({
           onCheckedChange={handleClick}
           disabled={isDisabled}
           data-testid="email-checkbox"
+          onClick={(e) => e.stopPropagation()}
         />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium truncate">
-              {email.sender || 'Unknown sender'}
-            </span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium truncate">
+                {email.sender || 'Unknown sender'}
+              </span>
+              <ClassificationTag classification={email.classification} />
+            </div>
             <span className="text-xs text-muted-foreground shrink-0">
               {formatRelativeDate(email.date)}
             </span>

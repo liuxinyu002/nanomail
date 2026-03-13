@@ -3,6 +3,11 @@
  * Handles API calls for email operations
  */
 
+import type { EmailClassification } from '@nanomail/shared'
+
+// Re-export type for convenience
+export type { EmailClassification } from '@nanomail/shared'
+
 export interface EmailListItem {
   id: number
   subject: string | null
@@ -11,6 +16,7 @@ export interface EmailListItem {
   summary: string | null
   date: string
   isProcessed: boolean
+  classification: EmailClassification
   isSpam: boolean
   hasAttachments: boolean
 }
@@ -29,7 +35,7 @@ export interface EmailsQuery {
   page?: number
   limit?: number
   processed?: boolean
-  spam?: boolean
+  classification?: EmailClassification
 }
 
 export interface ProcessEmailsResponse {
@@ -46,6 +52,7 @@ export interface EmailDetail {
   bodyText: string | null
   date: string
   isProcessed: boolean
+  classification: EmailClassification
   isSpam: boolean
   hasAttachments: boolean
 }
@@ -90,7 +97,7 @@ export const EmailService = {
    * Fetch emails with pagination and optional filters
    */
   async getEmails(query: EmailsQuery = {}): Promise<EmailsResponse> {
-    const { page = 1, limit = 10, processed, spam } = query
+    const { page = 1, limit = 10, processed, classification } = query
 
     const params = new URLSearchParams()
     params.set('page', String(page))
@@ -99,8 +106,8 @@ export const EmailService = {
     if (processed !== undefined) {
       params.set('processed', String(processed))
     }
-    if (spam !== undefined) {
-      params.set('spam', String(spam))
+    if (classification) {
+      params.set('classification', classification)
     }
 
     const response = await fetch(`/api/emails?${params.toString()}`)

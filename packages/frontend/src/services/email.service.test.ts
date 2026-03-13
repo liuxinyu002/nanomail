@@ -27,7 +27,7 @@ describe('EmailService', () => {
             summary: 'Test summary',
             date: '2024-01-01T00:00:00.000Z',
             isProcessed: false,
-            isSpam: false,
+            classification: 'IMPORTANT', isSpam: false,
             hasAttachments: false,
           },
         ],
@@ -142,7 +142,7 @@ describe('EmailService', () => {
         bodyText: 'Full email body text here.',
         date: '2024-01-01T00:00:00.000Z',
         isProcessed: false,
-        isSpam: false,
+        classification: 'IMPORTANT', isSpam: false,
         hasAttachments: false,
       }
 

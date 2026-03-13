@@ -44,6 +44,7 @@ describe('TodoRoutes', () => {
           description: 'Test todo',
           urgency: 'high',
           status: 'pending',
+          deadline: new Date('2024-12-31T23:59:59Z'),
           createdAt: new Date('2024-01-15'),
         },
       ]
@@ -54,6 +55,54 @@ describe('TodoRoutes', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.todos).toHaveLength(1)
+    })
+
+    it('should include deadline in response', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Todo with deadline',
+          urgency: 'high',
+          status: 'pending',
+          deadline: new Date('2024-12-31T23:59:59Z'),
+          createdAt: new Date('2024-01-15'),
+        },
+        {
+          id: 2,
+          emailId: 1,
+          description: 'Todo without deadline',
+          urgency: 'low',
+          status: 'pending',
+          deadline: null,
+          createdAt: new Date('2024-01-15'),
+        },
+      ]
+
+      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+
+      const response = await request(app).get('/api/todos')
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos[0].deadline).toBe('2024-12-31T23:59:59.000Z')
+      expect(response.body.todos[1].deadline).toBeNull()
+    })
+
+    it('should sort by deadline with nulls last', async () => {
+      vi.mocked(mockRepository.find).mockResolvedValue([])
+
+      await request(app).get('/api/todos')
+
+      expect(mockRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: expect.objectContaining({
+            deadline: expect.objectContaining({
+              direction: 'ASC',
+              nulls: 'LAST'
+            })
+          })
+        })
+      )
     })
 
     it('should filter by status', async () => {
@@ -133,6 +182,7 @@ describe('TodoRoutes', () => {
         description: 'Test',
         urgency: 'high' as const,
         status: 'pending' as const,
+        deadline: new Date('2024-12-31T23:59:59Z'),
         createdAt: new Date(),
       }
 
@@ -148,6 +198,30 @@ describe('TodoRoutes', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.status).toBe('completed')
+    })
+
+    it('should include deadline in update response', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        urgency: 'high' as const,
+        status: 'pending' as const,
+        deadline: new Date('2024-12-31T23:59:59Z'),
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        status: 'completed',
+      })
+
+      const response = await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'completed' })
+
+      expect(response.body.deadline).toBe('2024-12-31T23:59:59.000Z')
     })
 
     it('should reject invalid status', async () => {

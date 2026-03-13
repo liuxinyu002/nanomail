@@ -10,7 +10,7 @@ describe('EmailCard', () => {
     snippet: 'This is a test email snippet that should be truncated...',
     date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     isProcessed: false,
-    isSpam: false,
+    classification: 'IMPORTANT',
   }
 
   const mockOnSelect = vi.fn()
@@ -63,7 +63,7 @@ describe('EmailCard', () => {
     })
 
     it('should visually mute spam emails', () => {
-      const spamEmail = { ...mockEmail, isSpam: true }
+      const spamEmail = { ...mockEmail, classification: 'SPAM' as const }
       const { container } = render(<EmailCard email={spamEmail} selected={false} onSelect={mockOnSelect} />)
 
       const card = container.firstChild

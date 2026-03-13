@@ -4,7 +4,9 @@ import { toast } from 'sonner'
 import { EmailService } from '@/services'
 import { Button } from '@/components/ui'
 import { EmailCard, EmptyInbox } from './EmailCard'
+import { ClassificationFilter } from './ClassificationFilter'
 import { Loader2, Sparkles, RefreshCw } from 'lucide-react'
+import type { EmailClassification } from '@nanomail/shared'
 
 const MAX_SELECTION = 5
 const POLL_INTERVAL = 2000 // 2 seconds
@@ -14,10 +16,15 @@ export function InboxPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [processing, setProcessing] = useState(false)
   const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
+  const [classificationFilter, setClassificationFilter] = useState<EmailClassification | 'ALL'>('ALL')
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['emails', 1, 10],
-    queryFn: () => EmailService.getEmails({ page: 1, limit: 10 }),
+    queryKey: ['emails', 1, 10, classificationFilter],
+    queryFn: () => EmailService.getEmails({
+      page: 1,
+      limit: 10,
+      classification: classificationFilter === 'ALL' ? undefined : classificationFilter,
+    }),
   })
 
   // Polling effect for sync status
@@ -220,24 +227,30 @@ export function InboxPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Inbox</h1>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSync}
-          disabled={!!syncingJobId}
-        >
-          {syncingJobId ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Sync
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-4">
+          <ClassificationFilter
+            value={classificationFilter}
+            onChange={setClassificationFilter}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={!!syncingJobId}
+          >
+            {syncingJobId ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Selection limit indicator */}

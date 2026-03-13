@@ -14,6 +14,11 @@ import { Label } from './Label.entity'
  */
 export type ProcessStatus = 'PENDING' | 'QUEUED' | 'PROCESSING' | 'PROCESSED' | 'FAILED'
 
+/**
+ * Email classification types from LLM analysis
+ */
+export type EmailClassification = 'IMPORTANT' | 'NEWSLETTER' | 'SPAM'
+
 @Entity('emails')
 @Index(['date'])
 @Index(['isProcessed'])
@@ -22,6 +27,7 @@ export type ProcessStatus = 'PENDING' | 'QUEUED' | 'PROCESSING' | 'PROCESSED' | 
 @Index(['uid'])
 @Index(['uidl'])
 @Index(['process_status'])
+@Index(['classification'])
 export class Email {
   @PrimaryGeneratedColumn('increment')
   id!: number
@@ -50,8 +56,16 @@ export class Email {
   @Column({ type: 'boolean', default: false })
   isProcessed!: boolean
 
-  @Column({ type: 'boolean', default: false })
-  isSpam!: boolean
+  /**
+   * Email classification from LLM analysis
+   * Replaces the previous isSpam boolean field
+   */
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'IMPORTANT'
+  })
+  classification: EmailClassification = 'IMPORTANT'
 
   // Thread context fields for email threading/conversation grouping
   @Column({ type: 'varchar', length: 500, nullable: true, unique: true })

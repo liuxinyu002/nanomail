@@ -21,6 +21,7 @@ export interface TodosResponse {
     description: string
     urgency: TodoUrgency
     status: TodoStatus
+    deadline: string | null
     createdAt: string
   }>
 }
@@ -60,10 +61,13 @@ export function createTodoRoutes(dataSource: DataSource): Router {
         where.emailId = parseInt(req.query.emailId as string, 10)
       }
 
-      // Get todos
+      // Get todos sorted by deadline (nulls last) then by createdAt
       const todos = await todoRepository.find({
         where,
-        order: { createdAt: 'DESC' },
+        order: {
+          deadline: { direction: 'ASC', nulls: 'LAST' },
+          createdAt: 'ASC',
+        },
       })
 
       // Format response
@@ -74,6 +78,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
           description: todo.description,
           urgency: todo.urgency,
           status: todo.status,
+          deadline: todo.deadline?.toISOString() ?? null,
           createdAt: todo.createdAt.toISOString(),
         })),
       }
@@ -116,6 +121,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
         description: todo.description,
         urgency: todo.urgency,
         status: todo.status,
+        deadline: todo.deadline?.toISOString() ?? null,
         createdAt: todo.createdAt.toISOString(),
       })
     } catch (error) {

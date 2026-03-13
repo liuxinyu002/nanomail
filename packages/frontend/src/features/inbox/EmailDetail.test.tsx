@@ -22,13 +22,13 @@ describe('EmailDetail', () => {
     bodyText: 'Full email body text',
     date: new Date('2024-01-15'),
     isProcessed: true,
-    isSpam: false,
+    classification: 'IMPORTANT',
     summary: 'This is a summary of the email content.',
   }
 
   const mockTodos = [
-    { id: 1, emailId: 1, description: 'Reply to the email', urgency: 'high' as const, status: 'pending' as const, createdAt: '2024-01-15T10:00:00.000Z' },
-    { id: 2, emailId: 1, description: 'Schedule a meeting', urgency: 'medium' as const, status: 'pending' as const, createdAt: '2024-01-15T10:00:00.000Z' },
+    { id: 1, emailId: 1, description: 'Reply to the email', urgency: 'high' as const, status: 'pending' as const, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
+    { id: 2, emailId: 1, description: 'Schedule a meeting', urgency: 'medium' as const, status: 'pending' as const, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
   ]
 
   beforeEach(() => {
@@ -197,6 +197,7 @@ describe('EmailDetail', () => {
         ...mockTodos[0],
         status: 'completed',
         createdAt: mockTodos[0].createdAt,
+        deadline: null,
       })
 
       render(<EmailDetail email={mockEmail} />)

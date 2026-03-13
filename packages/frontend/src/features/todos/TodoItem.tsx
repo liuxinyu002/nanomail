@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { TodoService, type TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
 import { AssistReplySheet } from './AssistReplySheet'
+import { DeadlineDisplay } from '@/components/DeadlineDisplay'
 
 export interface TodoItemProps {
   todo: TodoItemType
@@ -76,6 +77,7 @@ export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
           <Badge variant={todo.urgency} className="text-xs">
             {todo.urgency}
           </Badge>
+          <DeadlineDisplay deadline={todo.deadline} />
           <Link
             to={`/inbox?email=${todo.emailId}`}
             className="text-xs text-muted-foreground hover:text-primary underline"

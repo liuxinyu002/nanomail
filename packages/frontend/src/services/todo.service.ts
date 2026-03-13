@@ -14,6 +14,7 @@ export interface TodoItem {
   description: string
   urgency: Urgency
   status: TodoStatus
+  deadline: string | null
   createdAt: string
 }
 

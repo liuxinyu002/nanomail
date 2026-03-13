@@ -58,8 +58,8 @@ describe('InboxPage', () => {
     it('should show selection count when emails are selected', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
       })
@@ -86,12 +86,12 @@ describe('InboxPage', () => {
     it('should show maximum reached warning when 5 emails selected', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
       })
@@ -123,12 +123,12 @@ describe('InboxPage', () => {
     it('should disable unselected checkboxes when 5 are selected', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
       })
@@ -160,12 +160,12 @@ describe('InboxPage', () => {
     it('should allow deselecting when at max limit', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 3, sender: '3@test.com', subject: 'E3', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 4, sender: '4@test.com', subject: 'E4', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
       })
@@ -206,7 +206,7 @@ describe('InboxPage', () => {
     it('should show floating action button when emails are selected', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
@@ -236,7 +236,7 @@ describe('InboxPage', () => {
     it('should show processing state when clicked', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
@@ -270,8 +270,8 @@ describe('InboxPage', () => {
     it('should call processEmails API and show success toast', async () => {
       mockGetEmails.mockResolvedValue({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
-          { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
       })
@@ -312,7 +312,7 @@ describe('InboxPage', () => {
     it('should show error toast on failure', async () => {
       mockGetEmails.mockResolvedValueOnce({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
@@ -346,7 +346,7 @@ describe('InboxPage', () => {
     it('should clear selection after processing', async () => {
       mockGetEmails.mockResolvedValue({
         emails: [
-          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, isSpam: false, hasAttachments: false },
+          { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })

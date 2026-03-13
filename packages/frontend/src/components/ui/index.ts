@@ -1,5 +1,6 @@
 export { Badge, badgeVariants } from './badge'
 export { Button, buttonVariants } from './button'
+export { Calendar, type CalendarProps } from './calendar'
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './card'
 export { Checkbox } from './checkbox'
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './collapsible'

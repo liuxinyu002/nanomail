@@ -8,4 +8,12 @@ export {
   type SendEmailRequest,
   type SendEmailResponse
 } from './email.service'
-export { TodoService, type TodoItem, type TodosResponse, type TodosQuery } from './todo.service'
+export {
+  TodoService,
+  type TodoItem,
+  type TodosResponse,
+  type TodosQuery,
+  type Urgency,
+  type TodoStatus,
+  type UpdateTodo,
+} from './todo.service'

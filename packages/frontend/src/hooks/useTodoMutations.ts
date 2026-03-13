@@ -50,7 +50,7 @@ export function useUpdateTodoMutation() {
 
       // 2. Cancel ongoing queries to prevent overwriting optimistic update
       await Promise.all(
-        todoQueries.map((query) => queryClient.cancelQueries(query.queryKey))
+        todoQueries.map((query) => query.cancel())
       )
 
       // 3. Save previous data for ALL queries (not just the first one)
@@ -124,7 +124,7 @@ export function useDeleteTodoMutation() {
 
       // 2. Cancel ongoing queries to prevent overwriting optimistic update
       await Promise.all(
-        todoQueries.map((query) => queryClient.cancelQueries(query.queryKey))
+        todoQueries.map((query) => query.cancel())
       )
 
       // 3. Save previous data for ALL queries (not just the first one)

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { TodosPage } from './TodosPage'
 import type { TodoItem } from '@/services'
 
@@ -48,6 +49,11 @@ vi.mock('@/features/todos/TodoItem', () => ({
       </button>
     </div>
   ),
+}))
+
+// Mock TodoCalendar component
+vi.mock('@/features/todos/TodoCalendar', () => ({
+  TodoCalendar: () => <div data-testid="todo-calendar-view">Calendar View</div>,
 }))
 
 describe('TodosPage', () => {
@@ -396,6 +402,100 @@ describe('TodosPage', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('status-1')).toHaveTextContent('completed')
+      })
+    })
+  })
+
+  describe('Tab Navigation', () => {
+    it('should render list tab and calendar tab', async () => {
+      mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
+
+      render(<TodosPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /list/i })).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: /calendar/i })).toBeInTheDocument()
+      })
+    })
+
+    it('should show list view by default', async () => {
+      mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
+
+      render(<TodosPage />)
+
+      await waitFor(() => {
+        // List view should be visible (shows todos-grid)
+        expect(screen.getByTestId('todos-grid')).toBeInTheDocument()
+      })
+    })
+
+    it('should switch to calendar view when calendar tab is clicked', async () => {
+      const user = userEvent.setup()
+      mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
+
+      render(<TodosPage />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /calendar/i })).toBeInTheDocument()
+      })
+
+      // Click calendar tab
+      await user.click(screen.getByRole('tab', { name: /calendar/i }))
+
+      // Calendar view should be visible
+      await waitFor(() => {
+        expect(screen.getByTestId('todo-calendar-view')).toBeInTheDocument()
+      })
+    })
+
+    it('should switch back to list view when list tab is clicked', async () => {
+      const user = userEvent.setup()
+      mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
+
+      render(<TodosPage />)
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /calendar/i })).toBeInTheDocument()
+      })
+
+      // Go to calendar view
+      await user.click(screen.getByRole('tab', { name: /calendar/i }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('todo-calendar-view')).toBeInTheDocument()
+      })
+
+      // Go back to list view
+      await user.click(screen.getByRole('tab', { name: /list/i }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('todos-grid')).toBeInTheDocument()
+      })
+    })
+
+    it('should indicate active tab with data-state attribute', async () => {
+      const user = userEvent.setup()
+      mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
+
+      render(<TodosPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /list/i })).toBeInTheDocument()
+      })
+
+      // List tab should be active initially
+      const listTab = screen.getByRole('tab', { name: /list/i })
+      expect(listTab).toHaveAttribute('data-state', 'active')
+
+      // Click calendar tab
+      await user.click(screen.getByRole('tab', { name: /calendar/i }))
+
+      // Calendar tab should now be active
+      await waitFor(() => {
+        const calendarTab = screen.getByRole('tab', { name: /calendar/i })
+        expect(calendarTab).toHaveAttribute('data-state', 'active')
       })
     })
   })

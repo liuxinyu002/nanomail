@@ -1,4 +1,5 @@
 import { useState, useEffect, type ChangeEvent } from 'react'
+import { toast } from 'sonner'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import { SettingsFormSchema, defaultSettings, type SettingsForm } from '@nanomail/shared'
 
@@ -37,11 +38,14 @@ export function SettingsPage() {
       })
 
       if (response.ok) {
-        // Could show a toast notification here
-        console.log('Settings saved successfully')
+        toast.success('Settings saved successfully')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        toast.error(errorData.error || 'Failed to save settings')
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
+      toast.error('Failed to save settings. Please check your connection.')
     } finally {
       setSaving(false)
     }

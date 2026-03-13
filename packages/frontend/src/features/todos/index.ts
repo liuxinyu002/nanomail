@@ -1,2 +1,8 @@
 export { TodoItem, type TodoItemProps } from './TodoItem'
 export { TodoColumn, type TodoColumnProps } from './TodoColumn'
+
+// Calendar components
+export { CalendarDayCell, type CalendarDayCellProps } from './CalendarDayCell'
+export { TodoCalendarGrid, type TodoCalendarGridProps } from './TodoCalendarGrid'
+export { TodoCalendar, type TodoCalendarProps } from './TodoCalendar'
+export { TodoDayDrawer, type TodoDayDrawerProps } from './TodoDayDrawer'

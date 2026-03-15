@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { format } from 'date-fns'
-import { MoreHorizontal, Pencil, Trash2, Maximize2, Minimize2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, Maximize2, Minimize2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogClose,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -243,13 +244,14 @@ export function TodoDayModal({
           isExpanded ? EXPANDED_WIDTH : COMPACT_WIDTH,
           'max-h-[85vh] flex flex-col'
         )}
+        hideClose
       >
-        {/* Sticky Header */}
+        {/* Sticky Header with flex layout for title and action buttons */}
         <DialogHeader
           role="banner"
           className="shrink-0 sticky top-0 z-10 bg-background border-b pb-4"
         >
-          <div className="flex items-center justify-between pr-8">
+          <div className="flex items-start justify-between">
             <div>
               <DialogTitle>{formattedDate}</DialogTitle>
               {displayDate && todoCount > 0 && (
@@ -258,20 +260,27 @@ export function TodoDayModal({
                 </DialogDescription>
               )}
             </div>
-            {/* Expand/Collapse Toggle Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleToggleExpand}
-              aria-label={isExpanded ? 'Collapse' : 'Expand'}
-            >
-              {isExpanded ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
-            </Button>
+            {/* Action buttons group */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={handleToggleExpand}
+                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+              >
+                {isExpanded ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
           </div>
         </DialogHeader>
 

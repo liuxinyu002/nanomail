@@ -7,3 +7,6 @@ export type { SyncJob, SyncJobStatus, CreateSyncJob, SyncJobResponse } from './s
 export { SyncJobSchema, SyncJobStatusSchema, CreateSyncJobSchema, SyncJobResponseSchema } from './schemas/email'
 // Explicitly re-export Todo schemas for Node.js compatibility
 export { UpdateTodoSchema, TodoDateRangeQuerySchema } from './schemas/todo'
+// Explicitly re-export SendEmail schemas for Node.js compatibility
+export { SendEmailSchema, SendEmailResponseSchema } from './schemas/email'
+export type { SendEmail, SendEmailResponse } from './schemas/email'

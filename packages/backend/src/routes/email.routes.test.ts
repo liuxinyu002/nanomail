@@ -6,6 +6,7 @@ import type { DataSource, Repository } from 'typeorm'
 import type { EmailSyncService } from '../services/EmailSyncService'
 import type { JobService } from '../services/JobService'
 import type { AsyncSyncExecutor } from '../services/AsyncSyncExecutor'
+import type { SmtpService } from '../services/SmtpService'
 import { Email } from '../entities/Email.entity'
 
 describe('EmailRoutes', () => {
@@ -15,6 +16,7 @@ describe('EmailRoutes', () => {
   let mockEmailSyncService: EmailSyncService
   let mockJobService: JobService
   let mockAsyncSyncExecutor: AsyncSyncExecutor
+  let mockSmtpService: SmtpService
 
   beforeEach(() => {
     // Create mock repository
@@ -53,6 +55,13 @@ describe('EmailRoutes', () => {
       executeSync: vi.fn().mockResolvedValue(undefined),
     } as unknown as AsyncSyncExecutor
 
+    // Create mock SmtpService
+    mockSmtpService = {
+      sendEmail: vi.fn(),
+      testConnection: vi.fn(),
+      getConfig: vi.fn(),
+    } as unknown as SmtpService
+
     // Create express app with routes
     app = express()
     app.use(express.json())
@@ -60,7 +69,8 @@ describe('EmailRoutes', () => {
       mockDataSource,
       mockEmailSyncService,
       mockJobService,
-      mockAsyncSyncExecutor
+      mockAsyncSyncExecutor,
+      mockSmtpService
     ))
   })
 
@@ -418,6 +428,155 @@ describe('EmailRoutes', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.progress).toBe(75)
+    })
+  })
+
+  describe('POST /api/emails/send', () => {
+    it('should send an email successfully', async () => {
+      vi.mocked(mockSmtpService.sendEmail).mockResolvedValue({
+        success: true,
+        messageId: '<test-message-id@example.com>',
+      })
+
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'Test Subject',
+          body: 'Test body content',
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.messageId).toBe('<test-message-id@example.com>')
+      expect(mockSmtpService.sendEmail).toHaveBeenCalledWith({
+        to: 'recipient@example.com',
+        subject: 'Test Subject',
+        body: 'Test body content',
+        replyTo: undefined,
+        isHtml: false,
+      })
+    })
+
+    it('should send HTML email when isHtml is true', async () => {
+      vi.mocked(mockSmtpService.sendEmail).mockResolvedValue({
+        success: true,
+        messageId: '<html-message-id@example.com>',
+      })
+
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'HTML Email',
+          body: '<p>HTML content</p>',
+          isHtml: true,
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(mockSmtpService.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ isHtml: true })
+      )
+    })
+
+    it('should include replyTo when provided', async () => {
+      vi.mocked(mockSmtpService.sendEmail).mockResolvedValue({
+        success: true,
+        messageId: '<reply-message-id@example.com>',
+      })
+
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'Reply Test',
+          body: 'Body',
+          replyTo: 'original@example.com',
+        })
+
+      expect(response.status).toBe(200)
+      expect(mockSmtpService.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ replyTo: 'original@example.com' })
+      )
+    })
+
+    it('should return 400 for invalid email', async () => {
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'invalid-email',
+          subject: 'Test',
+          body: 'Body',
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe('Validation failed')
+    })
+
+    it('should return 400 for missing subject', async () => {
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          body: 'Body',
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for missing body', async () => {
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'Test',
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 500 when email send fails', async () => {
+      vi.mocked(mockSmtpService.sendEmail).mockResolvedValue({
+        success: false,
+        error: 'SMTP connection failed',
+      })
+
+      const response = await request(app)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'Test',
+          body: 'Body',
+        })
+
+      expect(response.status).toBe(500)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error).toBe('SMTP connection failed')
+    })
+
+    it('should return 503 when SMTP service is not available', async () => {
+      // Create app without SMTP service
+      const appWithoutSmtp = express()
+      appWithoutSmtp.use(express.json())
+      appWithoutSmtp.use('/api/emails', createEmailRoutes(
+        mockDataSource,
+        mockEmailSyncService,
+        mockJobService,
+        mockAsyncSyncExecutor
+        // No SMTP service passed
+      ))
+
+      const response = await request(appWithoutSmtp)
+        .post('/api/emails/send')
+        .send({
+          to: 'recipient@example.com',
+          subject: 'Test',
+          body: 'Body',
+        })
+
+      expect(response.status).toBe(503)
+      expect(response.body.error).toBe('SMTP service not configured')
     })
   })
 })

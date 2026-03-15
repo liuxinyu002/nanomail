@@ -110,7 +110,8 @@ export async function createApp(): Promise<{
     AppDataSource,
     emailSyncService,
     jobService,
-    asyncSyncExecutor
+    asyncSyncExecutor,
+    smtpService
   ))
   app.use('/api/todos', createTodoRoutes(AppDataSource))
   app.use('/api/settings', createSettingsRoutes(settingsService, {

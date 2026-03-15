@@ -4,7 +4,9 @@ import { Email, type EmailClassification } from '../entities/Email.entity'
 import type { EmailSyncService } from '../services/EmailSyncService'
 import type { JobService } from '../services/JobService'
 import type { AsyncSyncExecutor } from '../services/AsyncSyncExecutor'
+import type { SmtpService } from '../services/SmtpService'
 import { createLogger } from '../config/logger.js'
+import { SendEmailSchema, type SendEmailResponse } from '@nanomail/shared'
 
 const log = createLogger('EmailRoutes')
 
@@ -78,7 +80,8 @@ export function createEmailRoutes(
   dataSource: DataSource,
   _emailSyncService?: EmailSyncService,
   _jobService?: JobService,
-  _asyncSyncExecutor?: AsyncSyncExecutor
+  _asyncSyncExecutor?: AsyncSyncExecutor,
+  smtpService?: SmtpService
 ): Router {
   const router = Router()
   const emailRepository = dataSource.getRepository(Email)
@@ -138,6 +141,42 @@ export function createEmailRoutes(
       }
 
       res.json(response)
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  // GET /api/emails/:id - Get single email by ID
+  router.get('/:id', async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id)
+
+      if (isNaN(id)) {
+        res.status(400).json({ error: 'Invalid email ID' })
+        return
+      }
+
+      const email = await emailRepository.findOne({
+        where: { id },
+      })
+
+      if (!email) {
+        res.status(404).json({ error: 'Email not found' })
+        return
+      }
+
+      res.json({
+        id: email.id,
+        subject: email.subject,
+        sender: email.sender,
+        snippet: email.snippet,
+        bodyText: email.bodyText,
+        date: email.date.toISOString(),
+        isProcessed: email.isProcessed,
+        classification: email.classification,
+        isSpam: email.classification === 'SPAM',
+        hasAttachments: email.hasAttachments,
+      })
     } catch (error) {
       next(error)
     }
@@ -247,6 +286,52 @@ export function createEmailRoutes(
     }
 
     res.json(job)
+  })
+
+  // POST /api/emails/send - Send an email
+  router.post('/send', async (req, res, next) => {
+    try {
+      if (!smtpService) {
+        res.status(503).json({ error: 'SMTP service not configured' })
+        return
+      }
+
+      // Validate request body
+      const parseResult = SendEmailSchema.safeParse(req.body)
+      if (!parseResult.success) {
+        res.status(400).json({
+          error: 'Validation failed',
+          details: parseResult.error.issues,
+        })
+        return
+      }
+
+      const { to, subject, body, replyTo, isHtml } = parseResult.data
+
+      log.info({ to, subject, replyTo, isHtml }, 'Sending email')
+
+      const result = await smtpService.sendEmail({
+        to,
+        subject,
+        body,
+        replyTo,
+        isHtml,
+      })
+
+      const response: SendEmailResponse = {
+        success: result.success,
+        messageId: result.messageId,
+        error: result.error,
+      }
+
+      if (result.success) {
+        res.json(response)
+      } else {
+        res.status(500).json(response)
+      }
+    } catch (error) {
+      next(error)
+    }
   })
 
   return router

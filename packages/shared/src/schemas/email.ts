@@ -130,3 +130,26 @@ export type Label = z.infer<typeof LabelSchema>
 export type CreateLabel = z.infer<typeof CreateLabelSchema>
 export type LabelName = z.infer<typeof LabelNameSchema>
 export type EmailWithLabels = z.infer<typeof EmailWithLabelsSchema>
+
+/**
+ * Schema for sending an email
+ */
+export const SendEmailSchema = z.object({
+  to: z.string().email('Invalid recipient email address'),
+  subject: z.string().min(1, 'Subject is required').max(500),
+  body: z.string().min(1, 'Body is required'),
+  replyTo: z.string().email('Invalid reply-to email address').optional(),
+  isHtml: z.boolean().optional().default(false),
+})
+
+/**
+ * Schema for send email response
+ */
+export const SendEmailResponseSchema = z.object({
+  success: z.boolean(),
+  messageId: z.string().optional(),
+  error: z.string().optional(),
+})
+
+export type SendEmail = z.infer<typeof SendEmailSchema>
+export type SendEmailResponse = z.infer<typeof SendEmailResponseSchema>

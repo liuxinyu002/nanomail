@@ -36,7 +36,7 @@ export interface AgentState {
  * Reference: nanobot/agent/loop.py - AgentLoop.__init__()
  */
 export interface AgentConfig {
-  model: string
+  model?: string // Optional: if not provided, provider uses dynamic config from database
   temperature: number
   maxTokens: number
   maxIterations: number // Default: 5 for email drafts
@@ -69,9 +69,10 @@ export type AgentPreset = keyof typeof AGENT_PRESETS
 
 /**
  * Default agent configuration
+ * Note: model is intentionally not set here - provider will use dynamic config from database
  */
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'gpt-4o-mini',
+  // model: undefined by default, let provider decide from database settings
   temperature: 0.7,
   maxTokens: 8192,
   maxIterations: 5,

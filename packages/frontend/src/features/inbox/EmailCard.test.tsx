@@ -201,4 +201,390 @@ describe('EmailCard', () => {
       })
     })
   })
+
+  describe('Active State', () => {
+    it('should apply active styling when email.id matches activeId', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={1}
+        />
+      )
+
+      const card = container.firstChild
+      expect(card).toHaveClass('border-l-4')
+      expect(card).toHaveClass('border-l-blue-600')
+      expect(card).toHaveClass('bg-blue-50')
+    })
+
+    it('should not apply active styling when email.id does not match activeId', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={999}
+        />
+      )
+
+      const card = container.firstChild
+      expect(card).not.toHaveClass('border-l-4')
+      expect(card).not.toHaveClass('border-l-blue-600')
+    })
+
+    it('should show active left border even when selected (states coexist)', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={true}
+          onSelect={mockOnSelect}
+          activeId={1}
+        />
+      )
+
+      const card = container.firstChild
+      // Selected background should take priority
+      expect(card).toHaveClass('bg-primary/10')
+      // Active left border should still show
+      expect(card).toHaveClass('border-l-4')
+      expect(card).toHaveClass('border-l-blue-600')
+    })
+
+    it('should not apply active styling when activeId is undefined', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={undefined}
+        />
+      )
+
+      const card = container.firstChild
+      expect(card).not.toHaveClass('border-l-4')
+      expect(card).not.toHaveClass('bg-blue-50')
+    })
+
+    it('should not apply active styling when activeId is NaN', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={NaN}
+        />
+      )
+
+      const card = container.firstChild
+      expect(card).not.toHaveClass('border-l-4')
+      expect(card).not.toHaveClass('bg-blue-50')
+    })
+
+    it('should not apply active styling when activeId is zero (zero is not a valid email ID)', () => {
+      const { container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={0}
+        />
+      )
+
+      const card = container.firstChild
+      // Zero is not a valid email ID (IDs start from 1)
+      expect(card).not.toHaveClass('border-l-4')
+      expect(card).not.toHaveClass('bg-blue-50')
+    })
+  })
+
+  describe('Card Click Navigation', () => {
+    const mockOnCardClick = vi.fn()
+
+    beforeEach(() => {
+      mockOnCardClick.mockClear()
+    })
+
+    it('should call onCardClick when card is clicked', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      // Click on the card body
+      fireEvent.click(screen.getByText('Test Subject'))
+
+      expect(mockOnCardClick).toHaveBeenCalledWith(1)
+    })
+
+    it('should NOT call onCardClick when checkbox is clicked', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('checkbox'))
+
+      expect(mockOnCardClick).not.toHaveBeenCalled()
+      expect(mockOnSelect).toHaveBeenCalledWith(1)
+    })
+
+    it('should NOT call onCardClick when onCardClick is undefined', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={undefined}
+        />
+      )
+
+      fireEvent.click(screen.getByText('Test Subject'))
+
+      // Should not throw error, expand/collapse should still work
+      expect(screen.getByText('Test summary')).toBeInTheDocument()
+    })
+  })
+
+  describe('Keyboard Accessibility', () => {
+    const mockOnCardClick = vi.fn()
+
+    beforeEach(() => {
+      mockOnCardClick.mockClear()
+    })
+
+    it('should have role="button" when card is clickable (canExpand=true)', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).toHaveAttribute('role', 'button')
+    })
+
+    it('should have role="button" when onCardClick is provided (even if canExpand=false)', () => {
+      const unprocessedEmail = { ...mockEmail, isProcessed: false, summary: null }
+      render(
+        <EmailCard
+          email={unprocessedEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).toHaveAttribute('role', 'button')
+    })
+
+    it('should NOT have role="button" when card is not interactive', () => {
+      const unprocessedEmail = { ...mockEmail, isProcessed: false, summary: null }
+      render(
+        <EmailCard
+          email={unprocessedEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).not.toHaveAttribute('role', 'button')
+    })
+
+    it('should have tabIndex={0} when card is clickable', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).toHaveAttribute('tabindex', '0')
+    })
+
+    it('should have tabIndex={0} when onCardClick is provided (even if canExpand=false)', () => {
+      const unprocessedEmail = { ...mockEmail, isProcessed: false, summary: null }
+      render(
+        <EmailCard
+          email={unprocessedEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).toHaveAttribute('tabindex', '0')
+    })
+
+    it('should NOT have tabIndex={0} when card is not interactive', () => {
+      const unprocessedEmail = { ...mockEmail, isProcessed: false, summary: null }
+      render(
+        <EmailCard
+          email={unprocessedEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      expect(card).not.toHaveAttribute('tabindex', '0')
+    })
+
+    it('should call onCardClick when Enter key is pressed on focused card', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      fireEvent.keyDown(card, { key: 'Enter' })
+
+      expect(mockOnCardClick).toHaveBeenCalledWith(1)
+    })
+
+    it('should call onCardClick when Space key is pressed on focused card', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      fireEvent.keyDown(card, { key: ' ' })
+
+      expect(mockOnCardClick).toHaveBeenCalledWith(1)
+    })
+
+    it('should toggle expansion when Enter is pressed and no onCardClick', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      fireEvent.keyDown(card, { key: 'Enter' })
+
+      expect(screen.getByText('Test summary')).toBeInTheDocument()
+    })
+
+    it('should NOT call onCardClick when other keys are pressed', () => {
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'Test summary' }
+      render(
+        <EmailCard
+          email={emailWithSummary}
+          selected={false}
+          onSelect={mockOnSelect}
+          onCardClick={mockOnCardClick}
+        />
+      )
+
+      const card = screen.getByTestId('email-card')
+      fireEvent.keyDown(card, { key: 'Escape' })
+      fireEvent.keyDown(card, { key: 'Tab' })
+
+      expect(mockOnCardClick).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Date Formatting', () => {
+    it('shows "just now" for emails less than a minute old', () => {
+      const nowEmail = { ...mockEmail, date: new Date() }
+      render(<EmailCard email={nowEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('just now')).toBeInTheDocument()
+    })
+
+    it('shows "X minutes ago" for emails under an hour old', () => {
+      const minutesAgo = new Date(Date.now() - 5 * 60 * 1000) // 5 minutes ago
+      const recentEmail = { ...mockEmail, date: minutesAgo }
+      render(<EmailCard email={recentEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('5 minutes ago')).toBeInTheDocument()
+    })
+
+    it('shows "1 minute ago" for singular minute', () => {
+      const minuteAgo = new Date(Date.now() - 1 * 60 * 1000) // 1 minute ago
+      const recentEmail = { ...mockEmail, date: minuteAgo }
+      render(<EmailCard email={recentEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('1 minute ago')).toBeInTheDocument()
+    })
+
+    it('shows "1 hour ago" for emails 1 hour old', () => {
+      const hourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000) // 1 hour ago
+      const hourEmail = { ...mockEmail, date: hourAgo }
+      render(<EmailCard email={hourEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('1 hour ago')).toBeInTheDocument()
+    })
+
+    it('shows "X hours ago" for emails under a day old', () => {
+      const hoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000) // 5 hours ago
+      const hourEmail = { ...mockEmail, date: hoursAgo }
+      render(<EmailCard email={hourEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('5 hours ago')).toBeInTheDocument()
+    })
+
+    it('shows "yesterday" for emails 1 day old', () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      const yesterdayEmail = { ...mockEmail, date: yesterday }
+      render(<EmailCard email={yesterdayEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('yesterday')).toBeInTheDocument()
+    })
+
+    it('shows "X days ago" for emails under a week old', () => {
+      const daysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+      const daysEmail = { ...mockEmail, date: daysAgo }
+      render(<EmailCard email={daysEmail} selected={false} onSelect={mockOnSelect} />)
+
+      expect(screen.getByText('3 days ago')).toBeInTheDocument()
+    })
+
+    it('shows formatted date for emails older than a week', () => {
+      const oldDate = new Date('2024-01-15')
+      const oldEmail = { ...mockEmail, date: oldDate }
+      render(<EmailCard email={oldEmail} selected={false} onSelect={mockOnSelect} />)
+
+      // Should show locale date string
+      expect(screen.getByText('1/15/2024')).toBeInTheDocument()
+    })
+  })
 })

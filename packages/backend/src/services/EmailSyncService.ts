@@ -119,7 +119,6 @@ export class EmailSyncService {
       date: email.date,
       hasAttachments: email.hasAttachments,
       isProcessed: false,
-      isSpam: false,
       process_status: 'PENDING',
       // Protocol identifier (union type ensures only one is assigned)
       uid: hasUidField(email) ? email.uid : null,

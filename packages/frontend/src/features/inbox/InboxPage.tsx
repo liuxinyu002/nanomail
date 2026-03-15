@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { EmailService } from '@/services'
 import { Button } from '@/components/ui'
 import { EmailCard, EmptyInbox } from './EmailCard'
 import { ClassificationFilter } from './ClassificationFilter'
+import { EmailDetailPanel } from './EmailDetail/EmailDetailPanel'
 import { Loader2, Sparkles, RefreshCw } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
 
@@ -13,6 +15,13 @@ const POLL_INTERVAL = 2000 // 2 seconds
 
 export function InboxPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  // Parse emailId from URL with NaN and positive number protection
+  const { emailId } = useParams<{ emailId: string }>()
+  const parsedId = emailId ? parseInt(emailId, 10) : null
+  const activeId = parsedId !== null && !Number.isNaN(parsedId) && parsedId > 0 ? parsedId : null
+
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [processing, setProcessing] = useState(false)
   const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
@@ -120,41 +129,62 @@ export function InboxPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Inbox</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={!!syncingJobId}
-          >
-            {syncingJobId ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
-              </>
-            )}
-          </Button>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Inbox</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={!!syncingJobId}
+            >
+              {syncingJobId ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="p-4 rounded-lg bg-muted animate-pulse">
-              <div className="flex items-start gap-3">
-                <div className="h-4 w-4 rounded bg-muted-foreground/20" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-1/3 rounded bg-muted-foreground/20" />
-                  <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
-                  <div className="h-3 w-full rounded bg-muted-foreground/20" />
+
+        {/* Split Pane */}
+        <div className="flex-1 flex min-h-0">
+          {/* Left Pane: Email List Skeleton */}
+          <div
+            className="w-[350px] border-r border-gray-200 overflow-y-auto"
+            data-testid="email-list-pane"
+          >
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-4 rounded-lg bg-muted animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <div className="h-4 w-4 rounded bg-muted-foreground/20" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-1/3 rounded bg-muted-foreground/20" />
+                      <div className="h-3 w-2/3 rounded bg-muted-foreground/20" />
+                      <div className="h-3 w-full rounded bg-muted-foreground/20" />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* Right Pane: Empty */}
+          <div
+            className="flex-1 min-w-0 overflow-y-auto bg-white"
+            data-testid="email-detail-pane"
+          >
+            <EmailDetailPanel emailId={null} />
+          </div>
         </div>
       </div>
     )
@@ -162,33 +192,45 @@ export function InboxPage() {
 
   if (isError) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Inbox</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={!!syncingJobId}
-          >
-            {syncingJobId ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
-              </>
-            )}
-          </Button>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Inbox</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={!!syncingJobId}
+            >
+              {syncingJobId ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-muted-foreground mb-4">Failed to load emails</p>
-          <Button variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
+
+        {/* Error State */}
+        <div className="flex-1 flex min-h-0">
+          <div
+            className="flex-1 flex items-center justify-center"
+            data-testid="email-list-pane"
+          >
+            <div className="flex flex-col items-center justify-center text-center">
+              <p className="text-muted-foreground mb-4">Failed to load emails</p>
+              <Button variant="outline" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -196,87 +238,123 @@ export function InboxPage() {
 
   if (!data || data.emails.length === 0) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Inbox</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={!!syncingJobId}
-          >
-            {syncingJobId ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
-              </>
-            )}
-          </Button>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Inbox</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={!!syncingJobId}
+            >
+              {syncingJobId ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <EmptyInbox />
+
+        {/* Empty State */}
+        <div className="flex-1 flex min-h-0">
+          <div
+            className="flex-1 flex items-center justify-center"
+            data-testid="email-list-pane"
+          >
+            <EmptyInbox />
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Inbox</h1>
-        <div className="flex items-center gap-4">
-          <ClassificationFilter
-            value={classificationFilter}
-            onChange={setClassificationFilter}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={!!syncingJobId}
-          >
-            {syncingJobId ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync
-              </>
-            )}
-          </Button>
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="p-6 pb-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Inbox</h1>
+          <div className="flex items-center gap-4">
+            <ClassificationFilter
+              value={classificationFilter}
+              onChange={setClassificationFilter}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={!!syncingJobId}
+            >
+              {syncingJobId ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Selection limit indicator */}
-      {selectedIds.size > 0 && (
-        <div className="mb-4 text-sm text-muted-foreground">
-          {selectedIds.size}/{MAX_SELECTION} emails selected
-          {selectedIds.size >= MAX_SELECTION && (
-            <span className="text-amber-500 ml-2">(Maximum reached)</span>
+      {/* Split Pane */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left Pane: Email List */}
+        <div
+          className="w-[350px] border-r border-gray-200 overflow-y-auto"
+          data-testid="email-list-pane"
+        >
+          {/* Selection limit indicator */}
+          {selectedIds.size > 0 && (
+            <div className="px-4 pt-2 text-sm text-muted-foreground">
+              {selectedIds.size}/{MAX_SELECTION} emails selected
+              {selectedIds.size >= MAX_SELECTION && (
+                <span className="text-amber-500 ml-2">(Maximum reached)</span>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {/* Email list */}
-      <div className="space-y-2">
-        {data.emails.map((email) => (
-          <EmailCard
-            key={email.id}
-            email={{
-              ...email,
-              date: new Date(email.date),
-            }}
-            selected={selectedIds.has(email.id)}
-            onSelect={handleSelect}
-            selectionDisabled={isSelectionDisabled(email.id)}
+          <div className="p-4 space-y-2">
+            {data.emails.map((email) => (
+              <EmailCard
+                key={email.id}
+                email={{
+                  ...email,
+                  date: new Date(email.date),
+                }}
+                selected={selectedIds.has(email.id)}
+                onSelect={handleSelect}
+                activeId={activeId ?? undefined}
+                onCardClick={(id) => navigate(`/inbox/${id}`)}
+                selectionDisabled={isSelectionDisabled(email.id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Right Pane: Email Detail */}
+        <div
+          className="flex-1 min-w-0 overflow-y-auto bg-white"
+          data-testid="email-detail-pane"
+        >
+          <EmailDetailPanel
+            emailId={activeId}
+            onClose={() => navigate('/inbox')}
           />
-        ))}
+        </div>
       </div>
 
       {/* Floating action button */}

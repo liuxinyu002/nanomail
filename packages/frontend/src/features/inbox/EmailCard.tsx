@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { formatRelativeDate } from '@/lib/date-format'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle, Inbox, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
@@ -20,38 +21,10 @@ export interface EmailCardProps {
   selected: boolean
   onSelect: (id: number) => void
   selectionDisabled?: boolean
-}
-
-/**
- * Format a date relative to now (e.g., "2 days ago")
- */
-function formatRelativeDate(date: Date): string {
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSeconds = Math.floor(diffMs / 1000)
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  const diffHours = Math.floor(diffMinutes / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffDays === 0) {
-    if (diffHours === 0) {
-      if (diffMinutes === 0) {
-        return 'just now'
-      }
-      return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`
-    }
-    if (diffHours === 1) {
-      return '1 hour ago'
-    }
-    return `${diffHours} hours ago`
-  }
-  if (diffDays === 1) {
-    return 'yesterday'
-  }
-  if (diffDays < 7) {
-    return `${diffDays} days ago`
-  }
-  return date.toLocaleDateString()
+  /** Currently viewed email ID for active state styling */
+  activeId?: number
+  /** Callback when card is clicked to navigate to detail view */
+  onCardClick?: (id: number) => void
 }
 
 export function EmailCard({
@@ -59,6 +32,8 @@ export function EmailCard({
   selected,
   onSelect,
   selectionDisabled = false,
+  activeId,
+  onCardClick,
 }: EmailCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const isDisabled = selectionDisabled && !selected
@@ -67,10 +42,28 @@ export function EmailCard({
   // Computed properties for summary expansion
   const canExpand = email.isProcessed && email.summary !== null
   const showSparkles = !email.isProcessed
+  // Active state: check if this card is the currently viewed email
+  // Note: activeId must be a positive number (email IDs start from 1)
+  const isActive = typeof activeId === 'number' && !Number.isNaN(activeId) && activeId > 0 && email.id === activeId
+  // Card is interactive if it can expand or has a click handler
+  const isInteractive = canExpand || !!onCardClick
 
   const handleCardBodyClick = () => {
-    if (canExpand) {
+    if (onCardClick) {
+      onCardClick(email.id)
+    } else if (canExpand) {
       setIsExpanded(!isExpanded)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault() // Prevent page scroll on Space
+      if (onCardClick) {
+        onCardClick(email.id)
+      } else if (canExpand) {
+        setIsExpanded(!isExpanded)
+      }
     }
   }
 
@@ -78,10 +71,22 @@ export function EmailCard({
     <Collapsible
       open={isExpanded}
       onOpenChange={setIsExpanded}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={handleKeyDown}
       className={cn(
         'p-4 rounded-lg transition-colors',
         canExpand && 'cursor-pointer hover:bg-muted',
-        selected && 'bg-primary/10 border border-primary',
+
+        // Background color: selected takes priority over active
+        selected ? 'bg-primary/10' : (isActive ? 'bg-blue-50' : 'bg-transparent'),
+
+        // Border styling
+        selected ? 'border border-primary' : 'border border-transparent',
+
+        // Active state: always show left border indicator
+        isActive && 'border-l-4 border-l-blue-600',
+
         isSpam && 'opacity-60'
       )}
       data-testid="email-card"

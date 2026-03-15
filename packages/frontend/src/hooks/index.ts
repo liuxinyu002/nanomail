@@ -8,3 +8,5 @@ export type { SSEEvent, SSEEventType, UseAgentDraftReturn, ProcessEmailsResult, 
 export { useTodosByDateRange } from './useTodosByDateRange'
 
 export { useUpdateTodoMutation, useDeleteTodoMutation } from './useTodoMutations'
+
+export { useEmailDetail } from './useEmailDetail'

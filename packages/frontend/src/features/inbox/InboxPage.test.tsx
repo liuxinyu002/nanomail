@@ -1,18 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { InboxPage } from './InboxPage'
 import { EmailService } from '@/services'
 
 // Mock sonner toast - must be defined before vi.mock
 const mockToastSuccess = vi.fn()
 const mockToastError = vi.fn()
+const mockToastInfo = vi.fn()
 
 // Mock services
 vi.mock('@/services', () => ({
   EmailService: {
     getEmails: vi.fn(),
+    getEmail: vi.fn(),
     processEmails: vi.fn(),
+    getSyncStatus: vi.fn(),
+    triggerSync: vi.fn(),
   },
 }))
 
@@ -21,14 +26,18 @@ vi.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
   },
 }))
 
 const mockGetEmails = vi.mocked(EmailService.getEmails)
+const mockGetEmail = vi.mocked(EmailService.getEmail)
 const mockProcessEmails = vi.mocked(EmailService.processEmails)
+const mockTriggerSync = vi.mocked(EmailService.triggerSync)
+const mockGetSyncStatus = vi.mocked(EmailService.getSyncStatus)
 
-// Helper to create wrapper with QueryClient
-function createWrapper() {
+// Helper to create wrapper with QueryClient and Router
+function createWrapper(initialRoute = '/inbox') {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -40,7 +49,12 @@ function createWrapper() {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        {children}
+        <MemoryRouter initialEntries={[initialRoute]}>
+          <Routes>
+            <Route path="/inbox" element={children} />
+            <Route path="/inbox/:emailId" element={children} />
+          </Routes>
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }
@@ -49,9 +63,13 @@ function createWrapper() {
 describe('InboxPage', () => {
   beforeEach(() => {
     mockGetEmails.mockReset()
+    mockGetEmail.mockReset()
     mockProcessEmails.mockReset()
+    mockTriggerSync.mockReset()
+    mockGetSyncStatus.mockReset()
     mockToastSuccess.mockReset()
     mockToastError.mockReset()
+    mockToastInfo.mockReset()
   })
 
   describe('Selection Counter', () => {
@@ -70,13 +88,11 @@ describe('InboxPage', () => {
         expect(screen.getByText('A')).toBeInTheDocument()
       })
 
-      // Select first email by clicking the card
-      const card = screen.getByText('A').closest('[data-testid="email-card"]')
-      if (card) {
-        await act(async () => {
-          fireEvent.click(card)
-        })
-      }
+      // Select first email by clicking the checkbox (not the card body)
+      const checkbox = screen.getAllByRole('checkbox')[0]
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
 
       await waitFor(() => {
         expect(screen.getByText('1/5 emails selected')).toBeInTheDocument()
@@ -102,15 +118,12 @@ describe('InboxPage', () => {
         expect(screen.getByText('E1')).toBeInTheDocument()
       })
 
-      // Select 5 emails by clicking cards
-      const subjects = ['E1', 'E2', 'E3', 'E4', 'E5']
-      for (const subject of subjects) {
-        const card = screen.getByText(subject).closest('[data-testid="email-card"]')
-        if (card) {
-          await act(async () => {
-            fireEvent.click(card)
-          })
-        }
+      // Select 5 emails by clicking checkboxes
+      const checkboxes = screen.getAllByRole('checkbox')
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          fireEvent.click(checkboxes[i])
+        })
       }
 
       await waitFor(() => {
@@ -139,20 +152,16 @@ describe('InboxPage', () => {
         expect(screen.getByText('E1')).toBeInTheDocument()
       })
 
-      // Select 5 emails by clicking cards
-      const subjects = ['E1', 'E2', 'E3', 'E4', 'E5']
-      for (const subject of subjects) {
-        const card = screen.getByText(subject).closest('[data-testid="email-card"]')
-        if (card) {
-          await act(async () => {
-            fireEvent.click(card)
-          })
-        }
+      // Select 5 emails by clicking checkboxes
+      const checkboxes = screen.getAllByRole('checkbox')
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          fireEvent.click(checkboxes[i])
+        })
       }
 
       await waitFor(() => {
         // The 6th checkbox should be disabled
-        const checkboxes = screen.getAllByRole('checkbox')
         expect(checkboxes[5]).toBeDisabled()
       })
     })
@@ -176,27 +185,20 @@ describe('InboxPage', () => {
         expect(screen.getByText('E1')).toBeInTheDocument()
       })
 
-      // Select 5 emails
-      const subjects = ['E1', 'E2', 'E3', 'E4', 'E5']
-      for (const subject of subjects) {
-        const card = screen.getByText(subject).closest('[data-testid="email-card"]')
-        if (card) {
-          await act(async () => {
-            fireEvent.click(card)
-          })
-        }
-      }
-
-      // Deselect first one
-      const card1 = screen.getByText('E1').closest('[data-testid="email-card"]')
-      if (card1) {
+      // Select 5 emails by clicking checkboxes
+      const checkboxes = screen.getAllByRole('checkbox')
+      for (let i = 0; i < 5; i++) {
         await act(async () => {
-          fireEvent.click(card1)
+          fireEvent.click(checkboxes[i])
         })
       }
 
+      // Deselect first one
+      await act(async () => {
+        fireEvent.click(checkboxes[0])
+      })
+
       await waitFor(() => {
-        const checkboxes = screen.getAllByRole('checkbox')
         expect(checkboxes[0]).not.toBeChecked()
       })
     })
@@ -220,13 +222,11 @@ describe('InboxPage', () => {
       // Initially no button
       expect(screen.queryByRole('button', { name: /run ai/i })).not.toBeInTheDocument()
 
-      // Select email by clicking the card
-      const card = screen.getByText('A').closest('[data-testid="email-card"]')
-      if (card) {
-        await act(async () => {
-          fireEvent.click(card)
-        })
-      }
+      // Select email by clicking the checkbox
+      const checkbox = screen.getByRole('checkbox')
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /run ai/i })).toBeInTheDocument()
@@ -249,13 +249,11 @@ describe('InboxPage', () => {
         expect(screen.getByText('A')).toBeInTheDocument()
       })
 
-      // Select email
-      const card = screen.getByText('A').closest('[data-testid="email-card"]')
-      if (card) {
-        await act(async () => {
-          fireEvent.click(card)
-        })
-      }
+      // Select email by clicking the checkbox
+      const checkbox = screen.getByRole('checkbox')
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
 
       const button = await screen.findByRole('button', { name: /run ai/i })
       await act(async () => {
@@ -288,15 +286,12 @@ describe('InboxPage', () => {
         expect(screen.getByText('A')).toBeInTheDocument()
       })
 
-      // Select both emails
-      for (const subject of ['A', 'B']) {
-        const card = screen.getByText(subject).closest('[data-testid="email-card"]')
-        if (card) {
-          await act(async () => {
-            fireEvent.click(card)
-          })
-        }
-      }
+      // Select both emails by clicking checkboxes
+      const checkboxes = screen.getAllByRole('checkbox')
+      await act(async () => {
+        fireEvent.click(checkboxes[0])
+        fireEvent.click(checkboxes[1])
+      })
 
       const button = await screen.findByRole('button', { name: /run ai/i })
       await act(async () => {
@@ -325,13 +320,11 @@ describe('InboxPage', () => {
         expect(screen.getByText('A')).toBeInTheDocument()
       })
 
-      // Select email
-      const card = screen.getByText('A').closest('[data-testid="email-card"]')
-      if (card) {
-        await act(async () => {
-          fireEvent.click(card)
-        })
-      }
+      // Select email by clicking the checkbox
+      const checkbox = screen.getByRole('checkbox')
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
 
       const button = await screen.findByRole('button', { name: /run ai/i })
       await act(async () => {
@@ -363,13 +356,11 @@ describe('InboxPage', () => {
         expect(screen.getByText('A')).toBeInTheDocument()
       })
 
-      // Select email
-      const card = screen.getByText('A').closest('[data-testid="email-card"]')
-      if (card) {
-        await act(async () => {
-          fireEvent.click(card)
-        })
-      }
+      // Select email by clicking the checkbox
+      const checkbox = screen.getByRole('checkbox')
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
 
       await waitFor(() => {
         expect(screen.getByRole('checkbox')).toBeChecked()
@@ -382,6 +373,432 @@ describe('InboxPage', () => {
 
       await waitFor(() => {
         expect(screen.queryByRole('button', { name: /run ai/i })).not.toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Split-Pane Layout', () => {
+    it('should render split-pane layout with email list and detail panel', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test Email', snippet: 'Snippet', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Email')).toBeInTheDocument()
+      })
+
+      // Check for left pane (email list) - 350px fixed width
+      const leftPane = screen.getByTestId('email-list-pane')
+      expect(leftPane).toBeInTheDocument()
+      expect(leftPane).toHaveClass('w-[350px]')
+
+      // Check for right pane (detail panel) - flex-1
+      const rightPane = screen.getByTestId('email-detail-pane')
+      expect(rightPane).toBeInTheDocument()
+      expect(rightPane).toHaveClass('flex-1')
+    })
+
+    it('should render empty state in right pane when no email selected', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Empty state should be visible
+      expect(screen.getByText(/select an email/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('URL Parameter Parsing', () => {
+    it('should parse valid emailId from URL', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Email 1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: 'b@test.com', subject: 'Email 2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      // Mock getEmail for the detail panel
+      mockGetEmail.mockResolvedValueOnce({
+        id: 2,
+        sender: 'b@test.com',
+        subject: 'Email 2',
+        snippet: '',
+        bodyText: 'Email 2 body content',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper('/inbox/2') })
+
+      await waitFor(() => {
+        expect(screen.getByText('Email 1')).toBeInTheDocument()
+      })
+
+      // Email with id=2 should be marked as active
+      const activeCard = screen.getByText('Email 2').closest('[data-testid="email-card"]')
+      expect(activeCard).toHaveClass('border-l-4')
+    })
+
+    it('should handle invalid emailId (NaN) in URL', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper('/inbox/invalid-id') })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Should show empty state (no email selected due to invalid ID)
+      expect(screen.getByText(/select an email/i)).toBeInTheDocument()
+    })
+
+    it('should handle negative emailId in URL', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper('/inbox/-1') })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Should show empty state (negative ID is invalid)
+      expect(screen.getByText(/select an email/i)).toBeInTheDocument()
+    })
+
+    it('should handle zero emailId in URL', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper('/inbox/0') })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Should show empty state (zero is not a valid email ID)
+      expect(screen.getByText(/select an email/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('Email Card Navigation', () => {
+    it('should pass activeId to EmailCard when email is selected via URL', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Active Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+          { id: 2, sender: 'b@test.com', subject: 'Other Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      // Mock getEmail for the detail panel
+      mockGetEmail.mockResolvedValueOnce({
+        id: 1,
+        sender: 'a@test.com',
+        subject: 'Active Email',
+        snippet: '',
+        bodyText: 'Active email body content',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper('/inbox/1') })
+
+      await waitFor(() => {
+        expect(screen.getByText('Active Email')).toBeInTheDocument()
+      })
+
+      // The active card should have the blue left border
+      const activeCard = screen.getByText('Active Email').closest('[data-testid="email-card"]')
+      expect(activeCard).toHaveClass('border-l-4')
+      expect(activeCard).toHaveClass('border-l-blue-600')
+
+      // Other card should not have the active styling
+      const otherCard = screen.getByText('Other Email').closest('[data-testid="email-card"]')
+      expect(otherCard).not.toHaveClass('border-l-4')
+    })
+  })
+
+  describe('Empty Inbox State', () => {
+    it('should show empty inbox message when no emails', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Your inbox is clear')).toBeInTheDocument()
+      })
+    })
+
+    it('should show sync button in empty state', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /sync/i })).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Sync Functionality', () => {
+    it('should trigger sync when sync button is clicked', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(mockTriggerSync).toHaveBeenCalledTimes(1)
+        expect(mockToastInfo).toHaveBeenCalledWith('Sync started...')
+      })
+    })
+
+    it('should show syncing state when sync is in progress', async () => {
+      mockGetEmails.mockResolvedValue({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      // Start sync but don't resolve status polling
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockGetSyncStatus.mockImplementation(() => new Promise(() => {})) // Never resolves
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /syncing/i })).toBeInTheDocument()
+      })
+    })
+
+    it('should disable sync button while syncing', async () => {
+      mockGetEmails.mockResolvedValue({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockGetSyncStatus.mockImplementation(() => new Promise(() => {}))
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /syncing/i })).toBeDisabled()
+      })
+    })
+
+    it('should show success toast when sync completes', async () => {
+      mockGetEmails.mockResolvedValue({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockGetSyncStatus
+        .mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
+        .mockResolvedValueOnce({
+          jobId: 'job-123',
+          status: 'completed',
+          result: { syncedCount: 5 },
+        })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(mockToastSuccess).toHaveBeenCalledWith('Sync completed, 5 new emails')
+      }, { timeout: 5000 })
+    })
+
+    it('should show error toast when sync fails', async () => {
+      mockGetEmails.mockResolvedValue({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockGetSyncStatus.mockResolvedValueOnce({
+        jobId: 'job-123',
+        status: 'failed',
+        error: 'Connection refused',
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Sync failed: Connection refused')
+      }, { timeout: 5000 })
+    })
+
+    it('should handle sync start failure', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockTriggerSync.mockRejectedValueOnce(new Error('Network error'))
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      const syncButton = screen.getByRole('button', { name: /sync/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Failed to start sync')
+      })
+    })
+  })
+
+  describe('Error State', () => {
+    it('should show error state when fetch fails', async () => {
+      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load emails')).toBeInTheDocument()
+      })
+    })
+
+    it('should show retry button in error state', async () => {
+      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+      })
+    })
+
+    it('should refetch when retry button is clicked', async () => {
+      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load emails')).toBeInTheDocument()
+      })
+
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      const retryButton = screen.getByRole('button', { name: /retry/i })
+      await act(async () => {
+        fireEvent.click(retryButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
       })
     })
   })

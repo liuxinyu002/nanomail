@@ -199,7 +199,7 @@ describe('AgentLoop', () => {
       })
 
       const config = agent.getConfig()
-      expect(config.model).toBe(DEFAULT_AGENT_CONFIG.model)
+      expect(config.model).toBeUndefined() // Default: no model, provider decides
       expect(config.temperature).toBe(DEFAULT_AGENT_CONFIG.temperature)
       expect(config.maxTokens).toBe(DEFAULT_AGENT_CONFIG.maxTokens)
       expect(config.maxIterations).toBe(DEFAULT_AGENT_CONFIG.maxIterations)

@@ -149,6 +149,7 @@ export class AgentLoop {
         this.log.debug(`${stepPrefix} Calling LLM`)
 
         // Call LLM with tools
+        // model from config (if set) or provider's dynamic config from database
         const response = await this.provider.chat({
           messages: state.messages,
           tools: this.toolRegistry.getDefinitions(),

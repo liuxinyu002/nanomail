@@ -13,6 +13,7 @@ function App() {
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="/inbox" replace />} />
           <Route path="inbox" element={<InboxPage />} />
+          <Route path="inbox/:emailId" element={<InboxPage />} />
           <Route path="todos" element={<TodosPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

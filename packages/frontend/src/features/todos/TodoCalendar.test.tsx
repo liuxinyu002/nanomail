@@ -48,18 +48,18 @@ vi.mock('./TodoCalendarGrid', () => ({
   ),
 }))
 
-// Mock TodoDayDrawer - placeholder for Phase 7
-vi.mock('./TodoDayDrawer', () => ({
-  TodoDayDrawer: ({ open, date, todos }: {
+// Mock TodoDayModal - Phase 3: Replaced TodoDayDrawer
+vi.mock('./TodoDayModal', () => ({
+  TodoDayModal: ({ open, date, todos }: {
     open: boolean
     date: Date | null
     todos: TodoItem[]
   }) => (
-    <div data-testid="day-drawer" data-open={open}>
+    <div data-testid="day-modal" data-open={open}>
       {open && (
         <>
-          <span data-testid="drawer-date">{date?.toISOString()}</span>
-          <span data-testid="drawer-todos-count">{todos.length}</span>
+          <span data-testid="modal-date">{date?.toISOString()}</span>
+          <span data-testid="modal-todos-count">{todos.length}</span>
         </>
       )}
     </div>
@@ -102,10 +102,10 @@ describe('TodoCalendar', () => {
       expect(screen.getByTestId('calendar-grid')).toBeInTheDocument()
     })
 
-    it('should render TodoDayDrawer', () => {
+    it('should render TodoDayModal', () => {
       render(<TodoCalendar {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByTestId('day-drawer')).toBeInTheDocument()
+      expect(screen.getByTestId('day-modal')).toBeInTheDocument()
     })
   })
 
@@ -182,24 +182,24 @@ describe('TodoCalendar', () => {
     })
   })
 
-  describe('Drawer State Management', () => {
-    it('should open drawer when day is clicked', async () => {
+  describe('Modal State Management', () => {
+    it('should open modal when day is clicked', async () => {
       render(<TodoCalendar {...defaultProps} />, { wrapper: createWrapper() })
 
-      // Initially drawer is closed
-      const drawer = screen.getByTestId('day-drawer')
-      expect(drawer).toHaveAttribute('data-open', 'false')
+      // Initially modal is closed
+      const modal = screen.getByTestId('day-modal')
+      expect(modal).toHaveAttribute('data-open', 'false')
 
       // Click a day
       const dayTrigger = screen.getByTestId('day-click-trigger')
       fireEvent.click(dayTrigger)
 
       await waitFor(() => {
-        expect(drawer).toHaveAttribute('data-open', 'true')
+        expect(modal).toHaveAttribute('data-open', 'true')
       })
     })
 
-    it('should pass selected date and todos to drawer', async () => {
+    it('should pass selected date and todos to modal', async () => {
       render(<TodoCalendar {...defaultProps} />, { wrapper: createWrapper() })
 
       // Click a day
@@ -207,10 +207,10 @@ describe('TodoCalendar', () => {
       fireEvent.click(dayTrigger)
 
       await waitFor(() => {
-        const drawerDate = screen.getByTestId('drawer-date')
-        expect(drawerDate).toBeInTheDocument()
+        const modalDate = screen.getByTestId('modal-date')
+        expect(modalDate).toBeInTheDocument()
 
-        const todosCount = screen.getByTestId('drawer-todos-count')
+        const todosCount = screen.getByTestId('modal-todos-count')
         expect(todosCount).toBeInTheDocument()
       })
     })

@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTodosByDateRange } from '@/hooks'
 import { TodoCalendarGrid } from './TodoCalendarGrid'
-import { TodoDayDrawer } from './TodoDayDrawer'
+import { TodoDayModal } from './TodoDayModal'
 import type { TodoItem } from '@/services'
 
 export interface TodoCalendarProps {
@@ -17,7 +17,7 @@ export interface TodoCalendarProps {
  * Features:
  * - Month navigation (prev/next)
  * - 42-day calendar grid (6 weeks)
- * - Day detail drawer
+ * - Day detail modal
  */
 export function TodoCalendar({ onTodoClick }: TodoCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -82,8 +82,8 @@ export function TodoCalendar({ onTodoClick }: TodoCalendarProps) {
         />
       )}
 
-      {/* Day detail drawer */}
-      <TodoDayDrawer
+      {/* Day detail modal */}
+      <TodoDayModal
         open={!!selectedDate}
         onOpenChange={handleDrawerClose}
         date={selectedDate}

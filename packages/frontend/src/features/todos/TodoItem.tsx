@@ -79,7 +79,7 @@ export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
           </Badge>
           <DeadlineDisplay deadline={todo.deadline} />
           <Link
-            to={`/inbox?email=${todo.emailId}`}
+            to={`/inbox/${todo.emailId}`}
             className="text-xs text-muted-foreground hover:text-primary underline"
             data-testid="email-link"
           >

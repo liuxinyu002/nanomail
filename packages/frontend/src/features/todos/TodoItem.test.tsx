@@ -138,7 +138,7 @@ describe('TodoItem', () => {
       render(<TodoItem {...defaultProps} />)
 
       const link = screen.getByTestId('email-link')
-      expect(link).toHaveAttribute('href', '/inbox?email=100')
+      expect(link).toHaveAttribute('href', '/inbox/100')
     })
   })
 

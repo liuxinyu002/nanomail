@@ -18,9 +18,12 @@ export function DeadlineDisplay({ deadline }: DeadlineDisplayProps) {
   const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60)
   const isUrgent = !isOverdue && hoursUntil <= 24
 
-  const formatted = deadlineDate.toLocaleDateString('en-US', {
+  const formatted = deadlineDate.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   })
 
   return (
@@ -36,7 +39,7 @@ export function DeadlineDisplay({ deadline }: DeadlineDisplayProps) {
         <AlertTriangle className="h-3 w-3" />
       )}
       {isOverdue && 'Overdue: '}
-      {isUrgent && !isOverdue && 'Due today: '}
+      {isUrgent && !isOverdue && 'Due soon: '}
       {formatted}
     </span>
   )

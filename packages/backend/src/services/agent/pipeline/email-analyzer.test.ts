@@ -81,7 +81,7 @@ describe('EmailAnalyzer', () => {
         confidence: 0.95,
         summary: 'Meeting invitation for project review',
         actionItems: [
-          { description: 'Accept meeting invite', urgency: 'HIGH', deadline: '2024-12-15' }
+          { description: 'Accept meeting invite', urgency: 'HIGH', deadline: '2024-12-15T14:00' }
         ]
       }
 
@@ -288,7 +288,7 @@ describe('EmailAnalyzer', () => {
         confidence: 0.9,
         summary: 'Action needed',
         actionItems: [
-          { description: 'Task 1', urgency: 'HIGH', deadline: '2024-12-31' }
+          { description: 'Task 1', urgency: 'HIGH', deadline: '2024-12-31T23:59' }
         ]
       }
 
@@ -296,8 +296,8 @@ describe('EmailAnalyzer', () => {
 
       const savedTodo = mockTodoRepo.save.mock.calls[0][0]
       expect(savedTodo.deadline).toBeInstanceOf(Date)
-      // Should be end of day UTC
-      expect(savedTodo.deadline.toISOString()).toBe('2024-12-31T23:59:59.000Z')
+      // 23:59 China time (UTC+8) = 15:59 UTC
+      expect(savedTodo.deadline.toISOString()).toBe('2024-12-31T15:59:00.000Z')
     })
 
     it('should handle null deadline in action items', async () => {
@@ -330,7 +330,7 @@ describe('EmailAnalyzer', () => {
         confidence: 0.9,
         summary: 'Action needed',
         actionItems: [
-          { description: 'Task 1', urgency: 'HIGH', deadline: '2024-12-31' },
+          { description: 'Task 1', urgency: 'HIGH', deadline: '2024-12-31T23:59' },
           { description: 'Task 2', urgency: 'LOW', deadline: null }
         ]
       }

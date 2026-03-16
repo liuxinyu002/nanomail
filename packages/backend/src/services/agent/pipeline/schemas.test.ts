@@ -149,7 +149,7 @@ describe('EmailAnalysisSchema', () => {
           {
             description: 'Reply to email',
             urgency: 'HIGH',
-            deadline: '2024-12-31'
+            deadline: '2024-12-31T23:59'
           }
         ]
       })
@@ -236,11 +236,11 @@ describe('ActionItemSchema', () => {
   })
 
   describe('deadline', () => {
-    it('should accept YYYY-MM-DD format', () => {
+    it('should accept YYYY-MM-DDTHH:MM format', () => {
       const result = ActionItemSchema.safeParse({
         description: 'Task',
         urgency: 'HIGH',
-        deadline: '2024-12-31'
+        deadline: '2024-12-31T23:59'
       })
       expect(result.success).toBe(true)
     })
@@ -263,11 +263,20 @@ describe('ActionItemSchema', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should reject ISO datetime format', () => {
+    it('should reject YYYY-MM-DD format (old format)', () => {
       const result = ActionItemSchema.safeParse({
         description: 'Task',
         urgency: 'HIGH',
-        deadline: '2024-12-31T10:00:00Z'
+        deadline: '2024-12-31'
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject ISO datetime with seconds', () => {
+      const result = ActionItemSchema.safeParse({
+        description: 'Task',
+        urgency: 'HIGH',
+        deadline: '2024-12-31T10:00:00'
       })
       expect(result.success).toBe(false)
     })
@@ -285,7 +294,7 @@ describe('Schema Type Inference', () => {
         {
           description: 'Prepare presentation',
           urgency: 'HIGH' as const,
-          deadline: '2024-12-31'
+          deadline: '2024-12-31T14:00'
         }
       ]
     }
@@ -298,6 +307,6 @@ describe('Schema Type Inference', () => {
     expect(result.summary).toBe('Meeting scheduled for next week')
     expect(result.actionItems[0].description).toBe('Prepare presentation')
     expect(result.actionItems[0].urgency).toBe('HIGH')
-    expect(result.actionItems[0].deadline).toBe('2024-12-31')
+    expect(result.actionItems[0].deadline).toBe('2024-12-31T14:00')
   })
 })

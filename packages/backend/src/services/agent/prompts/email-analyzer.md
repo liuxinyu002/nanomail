@@ -52,10 +52,20 @@ Respond ONLY with valid JSON in this exact format:
     {
       "description": "task description",
       "urgency": "HIGH" | "MEDIUM" | "LOW",
-      "deadline": "YYYY-MM-DD" or null
+      "deadline": "YYYY-MM-DDTHH:MM" or null
     }
   ]
 }
 ```
+
+## Deadline Format Rules
+
+- Use `YYYY-MM-DDTHH:MM` format (e.g., `2026-03-17T15:30`)
+- If the email mentions a specific time, use that time
+- If no specific time is mentioned, use `23:59` as the default (end of day)
+- Examples:
+  - "due tomorrow at 3pm" → `2026-03-17T15:00`
+  - "deadline is Friday" → `2026-03-17T23:59`
+  - "submit by end of day March 20" → `2026-03-20T23:59`
 
 Do NOT include any text outside the JSON object.

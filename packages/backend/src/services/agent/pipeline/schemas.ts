@@ -11,7 +11,7 @@ import { z } from 'zod'
 export const ActionItemSchema = z.object({
   description: z.string(),
   urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']),
-  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).nullable()
 })
 
 /**

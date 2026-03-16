@@ -361,7 +361,22 @@ describe('TipTapEditor', () => {
       expect(editorContent.className).toContain('max-w-none')
     })
 
-    it('has minimum and maximum height', () => {
+    it('has flex-1 to fill available space (no max-height for parent scrolling)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const editorContent = screen.getByTestId('editor-content')
+      expect(editorContent.className).toContain('flex-1')
+    })
+
+    it('has minimum height but NO max-height (parent handles scrolling)', () => {
       const mockEditor = createMockEditor({ isEmpty: true })
       vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
 
@@ -374,12 +389,29 @@ describe('TipTapEditor', () => {
 
       const editorContent = screen.getByTestId('editor-content')
       expect(editorContent.className).toContain('min-h')
-      expect(editorContent.className).toContain('max-h')
+      // Editor should NOT have max-h - parent container handles scrolling
+      expect(editorContent.className).not.toContain('max-h')
+    })
+
+    it('has NO overflow-y-auto (parent container handles scrolling)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const editorContent = screen.getByTestId('editor-content')
+      // Editor should NOT have its own overflow - parent handles scrolling
+      expect(editorContent.className).not.toContain('overflow-y-auto')
     })
   })
 
   describe('Container Styling', () => {
-    it('has focus-within ring for visual feedback', () => {
+    it('has NO border on container (borderless design)', () => {
       const mockEditor = createMockEditor({ isEmpty: true })
       vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
 
@@ -391,7 +423,70 @@ describe('TipTapEditor', () => {
       )
 
       const container = screen.getByTestId('tiptap-editor-container')
-      expect(container.className).toContain('focus-within:ring')
+      // Container should have no border class for borderless design
+      expect(container.className).not.toContain('border')
+    })
+
+    it('has NO focus-within ring (borderless design)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const container = screen.getByTestId('tiptap-editor-container')
+      // Container should have no focus-within ring for borderless design
+      expect(container.className).not.toContain('focus-within:ring')
+    })
+
+    it('has flex-1 to fill available space', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const container = screen.getByTestId('tiptap-editor-container')
+      expect(container.className).toContain('flex-1')
+    })
+
+    it('has flex flex-col for toolbar + editor layout', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const container = screen.getByTestId('tiptap-editor-container')
+      expect(container.className).toContain('flex')
+      expect(container.className).toContain('flex-col')
+    })
+
+    it('has minimum height on container', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const container = screen.getByTestId('tiptap-editor-container')
+      expect(container.className).toContain('min-h')
     })
 
     it('has sticky toolbar with proper z-index', () => {
@@ -408,6 +503,142 @@ describe('TipTapEditor', () => {
       const toolbar = screen.getByTestId('tiptap-toolbar')
       expect(toolbar.className).toContain('sticky')
       expect(toolbar.className).toContain('z-20')
+    })
+  })
+
+  describe('Toolbar Styling', () => {
+    it('has light gray background (bg-muted/50)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const toolbar = screen.getByTestId('tiptap-toolbar')
+      expect(toolbar.className).toContain('bg-muted')
+    })
+
+    it('has rounded corners', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const toolbar = screen.getByTestId('tiptap-toolbar')
+      expect(toolbar.className).toContain('rounded')
+    })
+
+    it('has margin from edges (mx-4 my-2)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const toolbar = screen.getByTestId('tiptap-toolbar')
+      expect(toolbar.className).toContain('mx-')
+      expect(toolbar.className).toContain('my-')
+    })
+
+    it('has NO border (borderless design)', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const toolbar = screen.getByTestId('tiptap-toolbar')
+      // Toolbar should not have border class
+      expect(toolbar.className).not.toContain('border-b')
+    })
+
+    it('has items-center for vertical alignment', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const toolbar = screen.getByTestId('tiptap-toolbar')
+      expect(toolbar.className).toContain('items-center')
+    })
+  })
+
+  describe('Toolbar Button Order', () => {
+    it('renders buttons in correct order: Undo/Redo first, then Headings, then Text Formatting, then Lists/Quote/Alignment, then Link', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      const buttons = screen.getAllByRole('button')
+
+      // Find indices of key buttons
+      const undoIndex = buttons.findIndex(b => b.getAttribute('aria-label') === 'Undo')
+      const boldIndex = buttons.findIndex(b => b.getAttribute('aria-label') === 'Bold')
+      const h1Index = buttons.findIndex(b => b.getAttribute('aria-label') === 'Heading 1')
+      const bulletListIndex = buttons.findIndex(b => b.getAttribute('aria-label') === 'Bullet list')
+      const linkIndex = buttons.findIndex(b => b.getAttribute('aria-label') === 'Link')
+
+      // Verify order: Undo should come before Bold
+      expect(undoIndex).toBeLessThan(boldIndex)
+      // Headings should come before Bold (text formatting)
+      expect(h1Index).toBeLessThan(boldIndex)
+      // Bullet list should come after Bold (text formatting)
+      expect(bulletListIndex).toBeGreaterThan(boldIndex)
+      // Link should be at the end
+      expect(linkIndex).toBeGreaterThan(bulletListIndex)
+    })
+  })
+
+  describe('Editor Configuration for Click-to-Focus', () => {
+    it('configures editorProps.attributes.class with min-h-full p-4 outline-none for click-to-focus', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let editorConfig: any = {}
+
+      vi.mocked(useEditor).mockImplementation((options) => {
+        editorConfig = options ?? {}
+        return mockEditor as unknown as ReturnType<typeof useEditor>
+      })
+
+      render(
+        <TipTapEditor
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      // Check that editorProps.attributes.class is configured for click-to-focus
+      expect(editorConfig.editorProps?.attributes?.class).toContain('min-h-full')
+      expect(editorConfig.editorProps?.attributes?.class).toContain('p-4')
+      expect(editorConfig.editorProps?.attributes?.class).toContain('outline-none')
     })
   })
 

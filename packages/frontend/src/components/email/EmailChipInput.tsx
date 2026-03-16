@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { z } from 'zod'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 interface EmailChipInputProps {
@@ -11,6 +10,8 @@ interface EmailChipInputProps {
   disabled?: boolean
   error?: string
   label: string
+  id: string
+  trailingActions?: React.ReactNode
 }
 
 /**
@@ -40,6 +41,8 @@ export function EmailChipInput({
   disabled = false,
   error,
   label,
+  id,
+  trailingActions,
 }: EmailChipInputProps) {
   const [inputValue, setInputValue] = useState('')
   const [inputError, setInputError] = useState(false)
@@ -75,7 +78,7 @@ export function EmailChipInput({
       const validEmails = extractedEmails.filter(isValidEmail)
 
       if (validEmails.length === 0) {
-        // Invalid input - show shake animation and red border
+        // Invalid input - show shake animation and red text
         showErrorFeedback()
         return
       }
@@ -126,36 +129,33 @@ export function EmailChipInput({
   }
 
   return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium text-foreground">
+    <div className="flex items-start min-h-[44px] border-b border-border/50 focus-within:bg-muted/20">
+      <label
+        htmlFor={id}
+        className="text-sm text-muted-foreground min-w-[5rem] flex-shrink-0 px-4 py-3"
+      >
         {label}
       </label>
-      <div
-        data-testid="email-chip-container"
-        className={cn(
-          "flex flex-wrap gap-1.5 p-2 border rounded-md min-h-[42px] bg-background",
-          error && "border-destructive"
-        )}
-      >
+      <div className="flex-1 flex flex-wrap gap-1.5 py-2 pr-4">
         {emails.map((email, index) => (
-          <Badge
+          <span
             key={email}
-            variant="secondary"
-            className="rounded-full px-2.5 py-0.5 text-sm flex items-center gap-1 hover:bg-destructive/20 transition-colors group"
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded-full text-sm"
           >
             {email}
             <button
               type="button"
               onClick={() => handleRemoveEmail(index)}
-              className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+              className="hover:text-destructive"
               disabled={disabled}
               aria-label={`Remove ${email}`}
             >
               <X className="h-3 w-3" />
             </button>
-          </Badge>
+          </span>
         ))}
         <input
+          id={id}
           type="text"
           value={inputValue}
           onChange={handleInputChange}
@@ -172,8 +172,13 @@ export function EmailChipInput({
           aria-label={label}
         />
       </div>
+      {trailingActions && (
+        <div className="pr-4 py-3">
+          {trailingActions}
+        </div>
+      )}
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <span className="sr-only">{error}</span>
       )}
     </div>
   )

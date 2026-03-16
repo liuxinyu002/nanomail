@@ -146,14 +146,14 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
-      // Fill form
-      const toInput = screen.getByLabelText('To')
+      // Fill form - use aria-label which is "收件人" for the To input
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -201,14 +201,14 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -222,7 +222,7 @@ describe('ComposeEmailModal - Send Operations', () => {
 
       // All inputs should be disabled during send
       await waitFor(() => {
-        expect(screen.getByLabelText('Subject')).toBeDisabled()
+        expect(screen.getByLabelText('主题')).toBeDisabled()
       })
 
       resolveSendEmail!()
@@ -255,14 +255,14 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -307,14 +307,14 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -332,8 +332,8 @@ describe('ComposeEmailModal - Send Operations', () => {
     })
   })
 
-  describe('Cancel Button', () => {
-    it('calls onOpenChange with false when Cancel is clicked and form is empty', async () => {
+  describe('Cancel Button (Trash Icon)', () => {
+    it('calls onOpenChange with false when Trash is clicked and form is empty', async () => {
       const user = userEvent.setup()
       render(
         <ComposeEmailModal open={true} onOpenChange={mockOnOpenChange} />,
@@ -341,10 +341,10 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /trash/i })).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      await user.click(screen.getByRole('button', { name: /trash/i }))
 
       expect(mockOnOpenChange).toHaveBeenCalledWith(false)
     })
@@ -376,14 +376,14 @@ describe('ComposeEmailModal - Send Operations', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')

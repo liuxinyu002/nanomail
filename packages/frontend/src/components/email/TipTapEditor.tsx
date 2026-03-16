@@ -54,6 +54,12 @@ export function TipTapEditor({
       }),
     ],
     content: value,
+    editorProps: {
+      attributes: {
+        // min-h-full ensures it stretches; p-4 ensures text isn't flush with edges
+        class: 'min-h-full p-4 outline-none',
+      },
+    },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML(), editor.isEmpty)
     },
@@ -104,13 +110,77 @@ export function TipTapEditor({
   return (
     <div
       data-testid="tiptap-editor-container"
-      className="rounded-md border focus-within:ring-1 focus-within:ring-ring"
+      className="flex flex-col flex-1 min-h-[200px]"
     >
       {/* Toolbar - Sticky at top with z-20 for modal stacking */}
       <div
         data-testid="tiptap-toolbar"
-        className="sticky top-0 z-20 bg-background border-b p-2 flex flex-wrap gap-1"
+        className="sticky top-0 z-20 bg-muted/50 rounded-md mx-4 my-2 p-2 flex flex-wrap items-center gap-1"
       >
+        {/* Undo/Redo */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!editor.can().chain().focus().undo().run()}
+          aria-label="Undo"
+        >
+          <Undo className="h-4 w-4" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!editor.can().chain().focus().redo().run()}
+          aria-label="Redo"
+        >
+          <Redo className="h-4 w-4" />
+        </Button>
+
+        <div className="w-px h-4 bg-border mx-1" />
+
+        {/* Headings */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          disabled={!editor.can().chain().focus().toggleHeading({ level: 1 }).run()}
+          className={editor.isActive('heading', { level: 1 }) ? 'bg-accent' : ''}
+          aria-label="Heading 1"
+        >
+          <Heading1 className="h-4 w-4" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          disabled={!editor.can().chain().focus().toggleHeading({ level: 2 }).run()}
+          className={editor.isActive('heading', { level: 2 }) ? 'bg-accent' : ''}
+          aria-label="Heading 2"
+        >
+          <Heading2 className="h-4 w-4" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          disabled={!editor.can().chain().focus().toggleHeading({ level: 3 }).run()}
+          className={editor.isActive('heading', { level: 3 }) ? 'bg-accent' : ''}
+          aria-label="Heading 3"
+        >
+          <Heading3 className="h-4 w-4" />
+        </Button>
+
+        <div className="w-px h-4 bg-border mx-1" />
+
         {/* Text Formatting */}
         <Button
           type="button"
@@ -160,48 +230,9 @@ export function TipTapEditor({
           <Strikethrough className="h-4 w-4" />
         </Button>
 
-        <div className="w-px h-6 bg-border mx-1 self-center" />
+        <div className="w-px h-4 bg-border mx-1" />
 
-        {/* Headings */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          disabled={!editor.can().chain().focus().toggleHeading({ level: 1 }).run()}
-          className={editor.isActive('heading', { level: 1 }) ? 'bg-accent' : ''}
-          aria-label="Heading 1"
-        >
-          <Heading1 className="h-4 w-4" />
-        </Button>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          disabled={!editor.can().chain().focus().toggleHeading({ level: 2 }).run()}
-          className={editor.isActive('heading', { level: 2 }) ? 'bg-accent' : ''}
-          aria-label="Heading 2"
-        >
-          <Heading2 className="h-4 w-4" />
-        </Button>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          disabled={!editor.can().chain().focus().toggleHeading({ level: 3 }).run()}
-          className={editor.isActive('heading', { level: 3 }) ? 'bg-accent' : ''}
-          aria-label="Heading 3"
-        >
-          <Heading3 className="h-4 w-4" />
-        </Button>
-
-        <div className="w-px h-6 bg-border mx-1 self-center" />
-
-        {/* Lists */}
+        {/* Lists, Quote, Alignment */}
         <Button
           type="button"
           variant="ghost"
@@ -238,23 +269,6 @@ export function TipTapEditor({
           <Quote className="h-4 w-4" />
         </Button>
 
-        <div className="w-px h-6 bg-border mx-1 self-center" />
-
-        {/* Link */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={setLink}
-          className={editor.isActive('link') ? 'bg-accent' : ''}
-          aria-label="Link"
-        >
-          <LinkIcon className="h-4 w-4" />
-        </Button>
-
-        <div className="w-px h-6 bg-border mx-1 self-center" />
-
-        {/* Text Alignment */}
         <Button
           type="button"
           variant="ghost"
@@ -288,36 +302,25 @@ export function TipTapEditor({
           <AlignRight className="h-4 w-4" />
         </Button>
 
-        <div className="w-px h-6 bg-border mx-1 self-center" />
+        <div className="w-px h-4 bg-border mx-1" />
 
-        {/* History */}
+        {/* Link */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().chain().focus().undo().run()}
-          aria-label="Undo"
+          onClick={setLink}
+          className={editor.isActive('link') ? 'bg-accent' : ''}
+          aria-label="Link"
         >
-          <Undo className="h-4 w-4" />
-        </Button>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().chain().focus().redo().run()}
-          aria-label="Redo"
-        >
-          <Redo className="h-4 w-4" />
+          <LinkIcon className="h-4 w-4" />
         </Button>
       </div>
 
       {/* Editor - CRITICAL: prose class for styling, max-w-none for width */}
       <EditorContent
         editor={editor}
-        className="min-h-[200px] max-h-[400px] overflow-y-auto p-3 prose prose-sm max-w-none focus:outline-none"
+        className="flex-1 min-h-[200px] prose prose-sm max-w-none focus:outline-none"
       />
     </div>
   )

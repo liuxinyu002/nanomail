@@ -136,10 +136,10 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('Subject')).toBeInTheDocument()
+        expect(screen.getByText('主题')).toBeInTheDocument()
       })
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const sendButton = screen.getByRole('button', { name: 'Send' })
@@ -155,15 +155,15 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
-      // Add To recipient - use the input with aria-label="To"
-      const toInput = screen.getByLabelText('To')
+      // Add To recipient - use aria-label which is "收件人"
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
       // Add Subject
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       // Add Body via the mocked textarea
@@ -186,16 +186,16 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Add content
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
-      // Try to close modal via Cancel button
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' })
-      await user.click(cancelButton)
+      // Try to close modal via trash button
+      const trashButton = screen.getByRole('button', { name: /trash/i })
+      await user.click(trashButton)
 
       // Should show confirmation dialog
       await waitFor(() => {
@@ -211,12 +211,12 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
-      // Click Cancel without adding content
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' })
-      await user.click(cancelButton)
+      // Click trash button without adding content
+      const trashButton = screen.getByRole('button', { name: /trash/i })
+      await user.click(trashButton)
 
       // Should not show confirmation dialog
       expect(screen.queryByText('Discard email?')).not.toBeInTheDocument()
@@ -233,16 +233,16 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Add content
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
-      // Try to close modal
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' })
-      await user.click(cancelButton)
+      // Try to close modal via trash button
+      const trashButton = screen.getByRole('button', { name: /trash/i })
+      await user.click(trashButton)
 
       // Click Discard in confirmation dialog
       await waitFor(async () => {
@@ -261,16 +261,16 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Add content
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
-      // Try to close modal
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' })
-      await user.click(cancelButton)
+      // Try to close modal via trash button
+      const trashButton = screen.getByRole('button', { name: /trash/i })
+      await user.click(trashButton)
 
       // Click Keep Editing in confirmation dialog
       await waitFor(async () => {
@@ -311,14 +311,14 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -369,14 +369,14 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Fill form
-      const toInput = screen.getByLabelText('To')
+      const toInput = screen.getByLabelText('收件人')
       await user.type(toInput, 'recipient@example.com{enter}')
 
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       const bodyInput = screen.getByTestId('prosemirror-editor')
@@ -412,11 +412,11 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Add content
-      const subjectInput = screen.getByLabelText('Subject')
+      const subjectInput = screen.getByLabelText('主题')
       await user.type(subjectInput, 'Test Subject')
 
       // Press Escape to trigger Dialog's onOpenChange
@@ -436,7 +436,7 @@ describe('ComposeEmailModal - Interactions', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText('To')).toBeInTheDocument()
+        expect(screen.getByText('收件人')).toBeInTheDocument()
       })
 
       // Press Escape without adding content

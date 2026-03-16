@@ -18,6 +18,7 @@ describe('EmailChipInput', () => {
           onChange={mockOnChange}
           label="To"
           placeholder="Enter email address"
+          id="to-input"
         />
       )
 
@@ -31,6 +32,7 @@ describe('EmailChipInput', () => {
           emails={['test@example.com', 'user@example.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -45,6 +47,7 @@ describe('EmailChipInput', () => {
           onChange={mockOnChange}
           label="To"
           placeholder="Enter email address"
+          id="to-input"
         />
       )
 
@@ -60,6 +63,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -76,6 +80,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -92,6 +97,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -108,6 +114,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -124,6 +131,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -143,6 +151,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -162,6 +171,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -178,6 +188,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -205,6 +216,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -228,6 +240,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -250,6 +263,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -265,12 +279,13 @@ describe('EmailChipInput', () => {
       expect(mockOnChange).toHaveBeenCalledWith(['a@test.com', 'b@test.com', 'c@test.com'])
     })
 
-    it('extracts emails from newline-separated text', async () => {
+    it('extracts emails from newline-separated text', () => {
       render(
         <EmailChipInput
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -285,12 +300,13 @@ describe('EmailChipInput', () => {
       expect(mockOnChange).toHaveBeenCalledWith(['a@test.com', 'b@test.com', 'c@test.com'])
     })
 
-    it('filters out invalid emails from mixed paste content', async () => {
+    it('filters out invalid emails from mixed paste content', () => {
       render(
         <EmailChipInput
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -307,12 +323,13 @@ describe('EmailChipInput', () => {
   })
 
   describe('Deduplication', () => {
-    it('prevents duplicate emails on paste', async () => {
+    it('prevents duplicate emails on paste', () => {
       render(
         <EmailChipInput
           emails={['existing@test.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -334,6 +351,7 @@ describe('EmailChipInput', () => {
           emails={['existing@test.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -344,12 +362,13 @@ describe('EmailChipInput', () => {
       expect(mockOnChange).not.toHaveBeenCalled()
     })
 
-    it('deduplicates within pasted content', async () => {
+    it('deduplicates within pasted content', () => {
       render(
         <EmailChipInput
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -373,6 +392,7 @@ describe('EmailChipInput', () => {
           emails={['test@example.com', 'remove@example.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -389,6 +409,7 @@ describe('EmailChipInput', () => {
           emails={['first@test.com', 'second@test.com', 'third@test.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -408,6 +429,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -428,6 +450,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -445,6 +468,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -465,25 +489,12 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
           error="At least one recipient is required"
         />
       )
 
       expect(screen.getByText('At least one recipient is required')).toBeInTheDocument()
-    })
-
-    it('applies error styling to container when error prop provided', () => {
-      render(
-        <EmailChipInput
-          emails={[]}
-          onChange={mockOnChange}
-          label="To"
-          error="At least one recipient is required"
-        />
-      )
-
-      const container = screen.getByTestId('email-chip-container')
-      expect(container).toHaveClass('border-destructive')
     })
   })
 
@@ -494,6 +505,7 @@ describe('EmailChipInput', () => {
           emails={['test@example.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
           disabled={true}
         />
       )
@@ -508,6 +520,7 @@ describe('EmailChipInput', () => {
           emails={['test@example.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
           disabled={true}
         />
       )
@@ -529,6 +542,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -545,6 +559,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -561,6 +576,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -570,12 +586,13 @@ describe('EmailChipInput', () => {
       expect(mockOnChange).toHaveBeenCalledWith(['first.last@example.com'])
     })
 
-    it('handles Unicode characters in name part of paste', async () => {
+    it('handles Unicode characters in name part of paste', () => {
       render(
         <EmailChipInput
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -596,6 +613,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -610,6 +628,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="To"
+          id="to-input"
         />
       )
 
@@ -624,6 +643,7 @@ describe('EmailChipInput', () => {
           emails={[]}
           onChange={mockOnChange}
           label="Email recipients"
+          id="email-recipients"
         />
       )
 
@@ -636,10 +656,212 @@ describe('EmailChipInput', () => {
           emails={['test@example.com']}
           onChange={mockOnChange}
           label="To"
+          id="to-field"
         />
       )
 
       expect(screen.getByRole('button', { name: /remove test@example\.com/i })).toBeInTheDocument()
+    })
+
+    it('links label to input via htmlFor when id prop provided', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('To')
+      expect(label).toHaveAttribute('for', 'to-input')
+
+      const input = screen.getByRole('textbox')
+      expect(input).toHaveAttribute('id', 'to-input')
+    })
+
+    it('clicking label focuses input when id is provided', async () => {
+      const user = userEvent.setup()
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('To')
+      await user.click(label)
+
+      const input = screen.getByRole('textbox')
+      expect(input).toHaveFocus()
+    })
+  })
+
+  describe('Inline Layout (Phase 2)', () => {
+    it('renders label and input on same row', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="收件人"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('收件人')
+      const input = screen.getByRole('textbox')
+
+      // Both should be in the same flex container
+      const rowContainer = label.closest('.flex')
+      expect(rowContainer).toContainElement(input)
+      expect(rowContainer).toHaveClass('items-start')
+    })
+
+    it('applies inline layout with bottom border', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('To')
+      const rowContainer = label.closest('.flex')
+
+      expect(rowContainer).toHaveClass('border-b')
+      expect(rowContainer).not.toHaveClass('rounded-md')
+    })
+
+    it('applies focus-within styling for keyboard navigation', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('To')
+      const rowContainer = label.closest('.flex')
+
+      expect(rowContainer).toHaveClass('focus-within:bg-muted/20')
+    })
+
+    it('label has minimum width for i18n compatibility', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="收件人"
+          id="to-input"
+        />
+      )
+
+      const label = screen.getByText('收件人')
+      expect(label).toHaveClass('min-w-[5rem]')
+    })
+
+    it('hides error border styling (uses text color only)', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+          error="Required field"
+        />
+      )
+
+      // Error message should be displayed
+      expect(screen.getByText('Required field')).toBeInTheDocument()
+
+      // Container should NOT have error border (borderless design)
+      const label = screen.getByText('To')
+      const rowContainer = label.closest('.flex')
+      expect(rowContainer).not.toHaveClass('border-destructive')
+    })
+  })
+
+  describe('Trailing Actions', () => {
+    it('renders trailing actions when provided', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+          trailingActions={<button type="button">Cc</button>}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: 'Cc' })).toBeInTheDocument()
+    })
+
+    it('does not render trailing actions slot when not provided', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      // Only remove buttons should exist (none in this case since no emails)
+      const buttons = screen.queryAllByRole('button')
+      expect(buttons).toHaveLength(0)
+    })
+
+    it('trailing actions are positioned on the right side', () => {
+      render(
+        <EmailChipInput
+          emails={[]}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+          trailingActions={<span data-testid="trailing-action">Action</span>}
+        />
+      )
+
+      const trailingAction = screen.getByTestId('trailing-action')
+      expect(trailingAction.parentElement).toHaveClass('pr-4')
+    })
+  })
+
+  describe('Chip Wrapping in Inline Layout', () => {
+    it('multiple chips wrap correctly without overflow', () => {
+      const manyEmails = [
+        'email1@example.com',
+        'email2@example.com',
+        'email3@example.com',
+        'email4@example.com',
+        'email5@example.com',
+      ]
+
+      render(
+        <EmailChipInput
+          emails={manyEmails}
+          onChange={mockOnChange}
+          label="To"
+          id="to-input"
+        />
+      )
+
+      // All emails should be rendered
+      manyEmails.forEach(email => {
+        expect(screen.getByText(email)).toBeInTheDocument()
+      })
+
+      // Container should have flex-wrap
+      const label = screen.getByText('To')
+      const rowContainer = label.closest('.flex')
+      const chipContainer = rowContainer?.querySelector('.flex-wrap')
+      expect(chipContainer).toHaveClass('flex-wrap')
     })
   })
 })

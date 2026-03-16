@@ -9,15 +9,14 @@
  */
 
 import { useState, useCallback } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -30,8 +29,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 import { EmailChipInput } from './EmailChipInput'
 import { TipTapEditor } from './TipTapEditor'
@@ -53,8 +50,8 @@ export function ComposeEmailModal({
   const [to, setTo] = useState<string[]>([])
   const [cc, setCc] = useState<string[]>([])
   const [bcc, setBcc] = useState<string[]>([])
-  const [showCc, setShowCc] = useState(false)
-  const [showBcc, setShowBcc] = useState(false)
+  const [isCcExpanded, setIsCcExpanded] = useState(false)
+  const [isBccExpanded, setIsBccExpanded] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [isBodyEmpty, setIsBodyEmpty] = useState(true)
@@ -62,8 +59,8 @@ export function ComposeEmailModal({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   // Determine if Cc/Bcc fields should be shown
-  const showCcField = showCc || cc.length > 0
-  const showBccField = showBcc || bcc.length > 0
+  const showCcField = isCcExpanded || cc.length > 0
+  const showBccField = isBccExpanded || bcc.length > 0
 
   // Check if form has unsaved content
   const hasContent = useCallback((): boolean => {
@@ -87,8 +84,8 @@ export function ComposeEmailModal({
     setSubject('')
     setBody('')
     setIsBodyEmpty(true)
-    setShowCc(false)
-    setShowBcc(false)
+    setIsCcExpanded(false)
+    setIsBccExpanded(false)
   }, [])
 
   // Handle modal open/close with data loss prevention
@@ -159,64 +156,78 @@ export function ComposeEmailModal({
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          className="max-w-2xl h-[80vh] flex flex-col"
+          className="max-w-2xl max-h-[85vh] flex flex-col p-0"
           data-testid="compose-email-modal"
+          hideClose
         >
-          {/* Header */}
-          <DialogHeader className="flex-shrink-0 border-b pb-4">
-            <DialogTitle className="flex items-center gap-2">
-              New Message
-              {settings?.SMTP_USER && (
-                <span
-                  className="text-sm font-normal text-muted-foreground truncate max-w-[200px]"
-                  title={settings.SMTP_USER}
-                >
-                  from {settings.SMTP_USER}
-                </span>
-              )}
-            </DialogTitle>
-          </DialogHeader>
+          {/* Header - Sender row */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+            <DialogTitle className="sr-only">New Message</DialogTitle>
+            {settings?.SMTP_USER && (
+              <span className="text-sm text-muted-foreground">
+                发件人：{settings.SMTP_USER}
+              </span>
+            )}
+            <DialogClose asChild>
+              <button
+                className="text-muted-foreground hover:text-foreground hover:bg-muted rounded p-1"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </DialogClose>
+          </div>
 
           {/* Content - Scrollable */}
-          <div className="flex-1 overflow-y-auto space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 py-4 px-4">
             {/* To Field */}
             <EmailChipInput
+              id="to-input"
               emails={to}
               onChange={setTo}
-              label="To"
-              placeholder="Enter recipient email"
+              label="收件人"
+              placeholder="可搜索邮箱、联系人..."
               disabled={sending}
+              trailingActions={
+                (!showCcField || !showBccField) && (
+                  <div className="flex gap-2 text-sm text-muted-foreground">
+                    {!showCcField && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsCcExpanded(true)
+                        }}
+                        className="hover:text-foreground"
+                      >
+                        抄送
+                      </button>
+                    )}
+                    {!showBccField && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsBccExpanded(true)
+                        }}
+                        className="hover:text-foreground"
+                      >
+                        密送
+                      </button>
+                    )}
+                  </div>
+                )
+              }
             />
-
-            {/* Cc/Bcc Toggle Buttons */}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCc(!showCc)}
-                disabled={sending}
-              >
-                Cc
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowBcc(!showBcc)}
-                disabled={sending}
-              >
-                Bcc
-              </Button>
-            </div>
 
             {/* Cc Field (conditional) */}
             {showCcField && (
               <EmailChipInput
                 emails={cc}
                 onChange={setCc}
-                label="Cc"
-                placeholder="Enter Cc email"
+                label="抄送"
+                id="cc-input"
+                placeholder="可搜索邮箱、联系人..."
                 disabled={sending}
               />
             )}
@@ -226,22 +237,26 @@ export function ComposeEmailModal({
               <EmailChipInput
                 emails={bcc}
                 onChange={setBcc}
-                label="Bcc"
-                placeholder="Enter Bcc email"
+                label="密送"
+                id="bcc-input"
+                placeholder="可搜索邮箱、联系人..."
                 disabled={sending}
               />
             )}
 
             {/* Subject Field */}
-            <div className="space-y-1.5">
-              <Label htmlFor="subject">Subject</Label>
-              <Input
-                id="subject"
+            <div className="flex items-start min-h-[44px] border-b border-border/50 focus-within:bg-muted/20">
+              <label htmlFor="subject-input" className="text-sm text-muted-foreground min-w-[5rem] flex-shrink-0 px-4 py-3">
+                主题
+              </label>
+              <input
+                id="subject-input"
+                type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Email subject"
+                placeholder="邮件主题"
                 disabled={sending}
-                aria-label="Subject"
+                className="flex-1 py-3 pr-4 outline-none bg-transparent text-sm"
               />
             </div>
 
@@ -254,14 +269,17 @@ export function ComposeEmailModal({
             />
           </div>
 
-          {/* Footer */}
-          <DialogFooter className="flex-shrink-0 border-t pt-4">
+          {/* Footer - Fixed bottom */}
+          <div className="flex justify-between items-center px-4 py-3 border-t border-border/50">
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
               onClick={handleCancel}
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               disabled={sending}
+              aria-label="Trash"
             >
-              Cancel
+              <Trash2 className="h-5 w-5" />
             </Button>
             <Button onClick={handleSend} disabled={!isValid || sending}>
               {sending ? (
@@ -273,7 +291,7 @@ export function ComposeEmailModal({
                 'Send'
               )}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -306,12 +306,14 @@ export function createEmailRoutes(
         return
       }
 
-      const { to, subject, body, replyTo, isHtml } = parseResult.data
+      const { to, cc, bcc, subject, body, replyTo, isHtml } = parseResult.data
 
-      log.info({ to, subject, replyTo, isHtml }, 'Sending email')
+      log.info({ to, cc, bcc, subject, replyTo, isHtml }, 'Sending email')
 
       const result = await smtpService.sendEmail({
         to,
+        cc,
+        bcc,
         subject,
         body,
         replyTo,

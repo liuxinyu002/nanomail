@@ -9,4 +9,4 @@ export { SyncJobSchema, SyncJobStatusSchema, CreateSyncJobSchema, SyncJobRespons
 export { UpdateTodoSchema, TodoDateRangeQuerySchema } from './schemas/todo'
 // Explicitly re-export SendEmail schemas for Node.js compatibility
 export { SendEmailSchema, SendEmailResponseSchema } from './schemas/email'
-export type { SendEmail, SendEmailResponse } from './schemas/email'
+export type { SendEmail, SendEmailInput, SendEmailResponse } from './schemas/email'

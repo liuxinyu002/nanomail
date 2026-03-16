@@ -7,7 +7,8 @@ import { Button } from '@/components/ui'
 import { EmailCard, EmptyInbox } from './EmailCard'
 import { ClassificationFilter } from './ClassificationFilter'
 import { EmailDetailPanel } from './EmailDetail/EmailDetailPanel'
-import { Loader2, Sparkles, RefreshCw } from 'lucide-react'
+import { ComposeEmailModal } from '@/components/email'
+import { Loader2, Sparkles, RefreshCw, Pencil } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
 
 const MAX_SELECTION = 5
@@ -26,6 +27,7 @@ export function InboxPage() {
   const [processing, setProcessing] = useState(false)
   const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
   const [classificationFilter, setClassificationFilter] = useState<EmailClassification | 'ALL'>('ALL')
+  const [composeOpen, setComposeOpen] = useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['emails', 1, 10, classificationFilter],
@@ -291,6 +293,14 @@ export function InboxPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setComposeOpen(true)}
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Compose
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleSync}
               disabled={!!syncingJobId}
             >
@@ -379,6 +389,12 @@ export function InboxPage() {
           </Button>
         </div>
       )}
+
+      {/* Compose Email Modal */}
+      <ComposeEmailModal
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+      />
     </div>
   )
 }

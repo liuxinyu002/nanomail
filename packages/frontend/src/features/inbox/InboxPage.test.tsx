@@ -5,6 +5,25 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { InboxPage } from './InboxPage'
 import { EmailService } from '@/services'
 
+// Mock ComposeEmailModal component
+const mockComposeModalOpen = vi.fn()
+vi.mock('@/components/email', () => ({
+  ComposeEmailModal: ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
+    mockComposeModalOpen(open, onOpenChange)
+    if (!open) return null
+    return (
+      <div data-testid="compose-email-modal" role="dialog" aria-label="Compose Email">
+        <h2>Compose Email</h2>
+        <button onClick={() => onOpenChange(false)} aria-label="Close modal">
+          Cancel
+        </button>
+      </div>
+    )
+  },
+  EmailChipInput: vi.fn(() => null),
+  TipTapEditor: vi.fn(() => null),
+}))
+
 // Mock sonner toast - must be defined before vi.mock
 const mockToastSuccess = vi.fn()
 const mockToastError = vi.fn()
@@ -70,6 +89,7 @@ describe('InboxPage', () => {
     mockToastSuccess.mockReset()
     mockToastError.mockReset()
     mockToastInfo.mockReset()
+    mockComposeModalOpen.mockReset()
   })
 
   describe('Selection Counter', () => {
@@ -590,7 +610,7 @@ describe('InboxPage', () => {
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
 
-      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
 
       render(<InboxPage />, { wrapper: createWrapper() })
 
@@ -618,7 +638,7 @@ describe('InboxPage', () => {
       })
 
       // Start sync but don't resolve status polling
-      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
       mockGetSyncStatus.mockImplementation(() => new Promise(() => {})) // Never resolves
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -645,7 +665,7 @@ describe('InboxPage', () => {
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
 
-      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
       mockGetSyncStatus.mockImplementation(() => new Promise(() => {}))
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -672,13 +692,22 @@ describe('InboxPage', () => {
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
 
-      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
       mockGetSyncStatus
-        .mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
         .mockResolvedValueOnce({
-          jobId: 'job-123',
+          id: 'job-123',
+          accountId: 1,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
           status: 'completed',
-          result: { syncedCount: 5 },
+          result: { syncedCount: 5, errors: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -705,11 +734,14 @@ describe('InboxPage', () => {
         pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
       })
 
-      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123' })
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
       mockGetSyncStatus.mockResolvedValueOnce({
-        jobId: 'job-123',
+        id: 'job-123',
+        accountId: 1,
         status: 'failed',
         error: 'Connection refused',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -799,6 +831,170 @@ describe('InboxPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Compose Email Integration', () => {
+    it('should render compose button in header', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Compose button should be visible
+      expect(screen.getByRole('button', { name: /compose/i })).toBeInTheDocument()
+    })
+
+    it('should place compose button between filter and sync button', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Get all header buttons in the right section
+      const headerButtons = screen.getByRole('button', { name: /compose/i }).parentElement?.querySelectorAll('button')
+      const buttonNames = Array.from(headerButtons || []).map(btn => btn.textContent)
+
+      // Compose should be present
+      expect(buttonNames.some(name => name?.toLowerCase().includes('compose'))).toBe(true)
+      // Sync should be present
+      expect(buttonNames.some(name => name?.toLowerCase().includes('sync'))).toBe(true)
+    })
+
+    it('should open compose modal when compose button is clicked', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Modal should not be visible initially
+      expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
+
+      // Click compose button
+      const composeButton = screen.getByRole('button', { name: /compose/i })
+      await act(async () => {
+        fireEvent.click(composeButton)
+      })
+
+      // Modal should now be visible
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+      })
+    })
+
+    it('should close compose modal when onOpenChange is called with false', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Click compose button to open modal
+      const composeButton = screen.getByRole('button', { name: /compose/i })
+      await act(async () => {
+        fireEvent.click(composeButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+      })
+
+      // Click the cancel button in the modal to close it
+      const cancelButton = screen.getByRole('button', { name: /close modal/i })
+      await act(async () => {
+        fireEvent.click(cancelButton)
+      })
+
+      // Modal should be closed
+      await waitFor(() => {
+        expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
+      })
+    })
+
+    it('should show compose button in loading state', async () => {
+      mockGetEmails.mockImplementation(() => new Promise(() => {})) // Never resolves
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      // In loading state, we still have a header with sync button
+      // Check if the page renders loading skeletons
+      expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+
+      // Compose button should NOT be visible in loading state (only sync button)
+      expect(screen.queryByRole('button', { name: /compose/i })).not.toBeInTheDocument()
+    })
+
+    it('should show compose button in empty inbox state', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Your inbox is clear')).toBeInTheDocument()
+      })
+
+      // Compose button should NOT be visible in empty state (only sync button in simple header)
+      expect(screen.queryByRole('button', { name: /compose/i })).not.toBeInTheDocument()
+    })
+
+    it('should pass correct props to ComposeEmailModal', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument()
+      })
+
+      // Click compose button to open modal
+      const composeButton = screen.getByRole('button', { name: /compose/i })
+      await act(async () => {
+        fireEvent.click(composeButton)
+      })
+
+      await waitFor(() => {
+        // Verify the modal was called with open=true
+        expect(mockComposeModalOpen).toHaveBeenCalledWith(true, expect.any(Function))
       })
     })
   })

@@ -5,7 +5,7 @@ export {
   type EmailsQuery,
   type ProcessEmailsResponse,
   type EmailDetail,
-  type SendEmailRequest,
+  type SendEmailInput,
   type SendEmailResponse
 } from './email.service'
 export {

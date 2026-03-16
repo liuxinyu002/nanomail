@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EmailService, type EmailDetail } from './email.service'
 import type { EmailsResponse, ProcessEmailsResponse } from './email.service'
+import type { SendEmailInput, SendEmailResponse } from '@nanomail/shared'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
@@ -169,8 +170,8 @@ describe('EmailService', () => {
   })
 
   describe('sendEmail', () => {
-    it('should send an email successfully', async () => {
-      const mockResponse = {
+    it('should send an email with single recipient (backward compatible)', async () => {
+      const mockResponse: SendEmailResponse = {
         success: true,
         messageId: 'msg-123',
       }
@@ -181,7 +182,7 @@ describe('EmailService', () => {
       })
 
       const result = await EmailService.sendEmail({
-        to: 'recipient@example.com',
+        to: ['recipient@example.com'],
         subject: 'Test Subject',
         body: 'Test body',
       })
@@ -190,9 +191,143 @@ describe('EmailService', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test Subject',
           body: 'Test body',
+        }),
+      })
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should send an email with multiple recipients', async () => {
+      const mockResponse: SendEmailResponse = {
+        success: true,
+        messageId: 'msg-456',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const emailData: SendEmailInput = {
+        to: ['recipient1@example.com', 'recipient2@example.com'],
+        subject: 'Multi-recipient Test',
+        body: 'Test body for multiple recipients',
+      }
+
+      const result = await EmailService.sendEmail(emailData)
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: ['recipient1@example.com', 'recipient2@example.com'],
+          subject: 'Multi-recipient Test',
+          body: 'Test body for multiple recipients',
+        }),
+      })
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should send an email with cc and bcc recipients', async () => {
+      const mockResponse: SendEmailResponse = {
+        success: true,
+        messageId: 'msg-789',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const emailData: SendEmailInput = {
+        to: ['recipient@example.com'],
+        cc: ['cc1@example.com', 'cc2@example.com'],
+        bcc: ['bcc@example.com'],
+        subject: 'Email with CC and BCC',
+        body: 'Test body',
+      }
+
+      const result = await EmailService.sendEmail(emailData)
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: ['recipient@example.com'],
+          cc: ['cc1@example.com', 'cc2@example.com'],
+          bcc: ['bcc@example.com'],
+          subject: 'Email with CC and BCC',
+          body: 'Test body',
+        }),
+      })
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should send an email with replyTo and isHtml options', async () => {
+      const mockResponse: SendEmailResponse = {
+        success: true,
+        messageId: 'msg-101',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const emailData: SendEmailInput = {
+        to: ['recipient@example.com'],
+        subject: 'HTML Email with Reply-To',
+        body: '<p>HTML body content</p>',
+        replyTo: 'replyto@example.com',
+        isHtml: true,
+      }
+
+      const result = await EmailService.sendEmail(emailData)
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: ['recipient@example.com'],
+          subject: 'HTML Email with Reply-To',
+          body: '<p>HTML body content</p>',
+          replyTo: 'replyto@example.com',
+          isHtml: true,
+        }),
+      })
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should send plain text email when isHtml is false', async () => {
+      const mockResponse: SendEmailResponse = {
+        success: true,
+        messageId: 'msg-102',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const emailData: SendEmailInput = {
+        to: ['recipient@example.com'],
+        subject: 'Plain Text Email',
+        body: 'Plain text body content',
+        isHtml: false,
+      }
+
+      const result = await EmailService.sendEmail(emailData)
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: ['recipient@example.com'],
+          subject: 'Plain Text Email',
+          body: 'Plain text body content',
+          isHtml: false,
         }),
       })
       expect(result).toEqual(mockResponse)
@@ -207,11 +342,34 @@ describe('EmailService', () => {
 
       await expect(
         EmailService.sendEmail({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test Subject',
           body: 'Test body',
         })
       ).rejects.toThrow('Failed to send email')
+    })
+
+    it('should handle error response from server', async () => {
+      const mockResponse: SendEmailResponse = {
+        success: false,
+        error: 'Invalid recipient email address',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await EmailService.sendEmail({
+        to: ['invalid-email'],
+        subject: 'Test',
+        body: 'Body',
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Invalid recipient email address',
+      })
     })
   })
 })

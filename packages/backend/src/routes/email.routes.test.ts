@@ -441,7 +441,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test Subject',
           body: 'Test body content',
         })
@@ -450,11 +450,13 @@ describe('EmailRoutes', () => {
       expect(response.body.success).toBe(true)
       expect(response.body.messageId).toBe('<test-message-id@example.com>')
       expect(mockSmtpService.sendEmail).toHaveBeenCalledWith({
-        to: 'recipient@example.com',
+        to: ['recipient@example.com'],
+        cc: [],
+        bcc: [],
         subject: 'Test Subject',
         body: 'Test body content',
         replyTo: undefined,
-        isHtml: false,
+        isHtml: true, // Default value from schema
       })
     })
 
@@ -467,7 +469,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'HTML Email',
           body: '<p>HTML content</p>',
           isHtml: true,
@@ -489,7 +491,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Reply Test',
           body: 'Body',
           replyTo: 'original@example.com',
@@ -505,7 +507,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'invalid-email',
+          to: ['invalid-email'],
           subject: 'Test',
           body: 'Body',
         })
@@ -518,7 +520,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           body: 'Body',
         })
 
@@ -529,7 +531,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test',
         })
 
@@ -545,7 +547,7 @@ describe('EmailRoutes', () => {
       const response = await request(app)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test',
           body: 'Body',
         })
@@ -570,7 +572,7 @@ describe('EmailRoutes', () => {
       const response = await request(appWithoutSmtp)
         .post('/api/emails/send')
         .send({
-          to: 'recipient@example.com',
+          to: ['recipient@example.com'],
           subject: 'Test',
           body: 'Body',
         })

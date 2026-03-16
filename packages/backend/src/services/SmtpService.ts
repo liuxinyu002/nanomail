@@ -17,7 +17,9 @@ export interface SmtpConfig {
  * Options for sending an email
  */
 export interface SendEmailOptions {
-  to: string
+  to: string[]
+  cc?: string[]
+  bcc?: string[]
   subject: string
   body: string
   replyTo?: string
@@ -160,9 +162,15 @@ export class SmtpService {
 
       this.log.info({ host: config.host }, 'SMTP server connected')
 
+      // CRITICAL: Only include cc/bcc headers if array exists AND has elements
+      // Empty string in cc/bcc headers can cause SMTP errors with strict servers (e.g., Microsoft Exchange)
       const mailOptions = {
         from: config.user,
-        to: options.to,
+        to: options.to.join(', '),
+        // Only include cc if it exists and has elements
+        ...(options.cc && options.cc.length > 0 ? { cc: options.cc.join(', ') } : {}),
+        // Only include bcc if it exists and has elements
+        ...(options.bcc && options.bcc.length > 0 ? { bcc: options.bcc.join(', ') } : {}),
         subject: options.subject,
         [options.isHtml ? 'html' : 'text']: options.body,
         ...(options.replyTo && { replyTo: options.replyTo }),

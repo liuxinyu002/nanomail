@@ -132,14 +132,30 @@ export type LabelName = z.infer<typeof LabelNameSchema>
 export type EmailWithLabels = z.infer<typeof EmailWithLabelsSchema>
 
 /**
+ * Email address validation schema
+ */
+const EmailAddressSchema = z.string().email('Invalid email address')
+
+/**
+ * Email address array schema
+ */
+const EmailArraySchema = z.array(EmailAddressSchema)
+
+/**
  * Schema for sending an email
+ * Supports multiple recipients via arrays for to, cc, and bcc fields
+ *
+ * Note: cc, bcc, and isHtml use .optional().default() pattern so they are
+ * optional in the input type (what callers provide) but have defaults in the output type.
  */
 export const SendEmailSchema = z.object({
-  to: z.string().email('Invalid recipient email address'),
+  to: EmailArraySchema.min(1, 'At least one recipient is required'),
+  cc: EmailArraySchema.optional().default([]),
+  bcc: EmailArraySchema.optional().default([]),
   subject: z.string().min(1, 'Subject is required').max(500),
   body: z.string().min(1, 'Body is required'),
-  replyTo: z.string().email('Invalid reply-to email address').optional(),
-  isHtml: z.boolean().optional().default(false),
+  replyTo: EmailAddressSchema.optional(),
+  isHtml: z.boolean().optional().default(true),
 })
 
 /**
@@ -152,4 +168,9 @@ export const SendEmailResponseSchema = z.object({
 })
 
 export type SendEmail = z.infer<typeof SendEmailSchema>
+/**
+ * Input type for sending an email - what callers provide to the API.
+ * Optional fields (cc, bcc, isHtml) are truly optional in the input.
+ */
+export type SendEmailInput = z.input<typeof SendEmailSchema>
 export type SendEmailResponse = z.infer<typeof SendEmailResponseSchema>

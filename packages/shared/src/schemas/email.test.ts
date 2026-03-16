@@ -4,6 +4,7 @@ import {
   EmailSchema,
   EmailListItemSchema,
   CreateEmailSchema,
+  SendEmailSchema,
   type EmailClassification
 } from './email'
 
@@ -133,6 +134,198 @@ describe('Email Schemas', () => {
     it('should allow explicit classification', () => {
       const result = CreateEmailSchema.parse({ ...validCreate, classification: 'SPAM' })
       expect(result.classification).toBe('SPAM')
+    })
+  })
+
+  describe('SendEmailSchema', () => {
+    const validSendEmail = {
+      to: ['recipient@example.com'],
+      subject: 'Test Subject',
+      body: 'Test body content'
+    }
+
+    describe('to field (required array)', () => {
+      it('should accept single recipient in array', () => {
+        const result = SendEmailSchema.parse(validSendEmail)
+        expect(result.to).toEqual(['recipient@example.com'])
+      })
+
+      it('should accept multiple recipients in array', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          to: ['one@example.com', 'two@example.com', 'three@example.com']
+        })
+        expect(result.to).toHaveLength(3)
+        expect(result.to).toContain('one@example.com')
+      })
+
+      it('should reject empty to array', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          to: []
+        })).toThrow()
+      })
+
+      it('should reject invalid email in to array', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          to: ['invalid-email']
+        })).toThrow()
+      })
+
+      it('should reject to as string (must be array)', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          to: 'recipient@example.com'
+        })).toThrow()
+      })
+    })
+
+    describe('cc field (optional array)', () => {
+      it('should accept empty cc array', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          cc: []
+        })
+        expect(result.cc).toEqual([])
+      })
+
+      it('should accept multiple cc recipients', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          cc: ['cc1@example.com', 'cc2@example.com']
+        })
+        expect(result.cc).toHaveLength(2)
+      })
+
+      it('should default cc to empty array when omitted', () => {
+        const result = SendEmailSchema.parse(validSendEmail)
+        expect(result.cc).toEqual([])
+      })
+
+      it('should treat undefined as empty array (default)', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          cc: undefined
+        })
+        expect(result.cc).toEqual([])
+      })
+
+      it('should reject invalid email in cc array', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          cc: ['invalid-email']
+        })).toThrow()
+      })
+    })
+
+    describe('bcc field (optional array)', () => {
+      it('should accept empty bcc array', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          bcc: []
+        })
+        expect(result.bcc).toEqual([])
+      })
+
+      it('should accept multiple bcc recipients', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          bcc: ['bcc1@example.com', 'bcc2@example.com']
+        })
+        expect(result.bcc).toHaveLength(2)
+      })
+
+      it('should default bcc to empty array when omitted', () => {
+        const result = SendEmailSchema.parse(validSendEmail)
+        expect(result.bcc).toEqual([])
+      })
+
+      it('should treat undefined as empty array (default)', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          bcc: undefined
+        })
+        expect(result.bcc).toEqual([])
+      })
+
+      it('should reject invalid email in bcc array', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          bcc: ['invalid-email']
+        })).toThrow()
+      })
+    })
+
+    describe('subject field', () => {
+      it('should reject empty subject', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          subject: ''
+        })).toThrow()
+      })
+
+      it('should accept subject up to 500 characters', () => {
+        const longSubject = 'a'.repeat(500)
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          subject: longSubject
+        })
+        expect(result.subject).toBe(longSubject)
+      })
+
+      it('should reject subject over 500 characters', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          subject: 'a'.repeat(501)
+        })).toThrow()
+      })
+    })
+
+    describe('body field', () => {
+      it('should reject empty body', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          body: ''
+        })).toThrow()
+      })
+    })
+
+    describe('replyTo field (optional)', () => {
+      it('should accept valid replyTo email', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          replyTo: 'reply@example.com'
+        })
+        expect(result.replyTo).toBe('reply@example.com')
+      })
+
+      it('should allow undefined replyTo', () => {
+        const result = SendEmailSchema.parse(validSendEmail)
+        expect(result.replyTo).toBeUndefined()
+      })
+
+      it('should reject invalid replyTo email', () => {
+        expect(() => SendEmailSchema.parse({
+          ...validSendEmail,
+          replyTo: 'invalid-email'
+        })).toThrow()
+      })
+    })
+
+    describe('isHtml field (optional)', () => {
+      it('should default isHtml to true', () => {
+        const result = SendEmailSchema.parse(validSendEmail)
+        expect(result.isHtml).toBe(true)
+      })
+
+      it('should accept explicit isHtml false', () => {
+        const result = SendEmailSchema.parse({
+          ...validSendEmail,
+          isHtml: false
+        })
+        expect(result.isHtml).toBe(false)
+      })
     })
   })
 })

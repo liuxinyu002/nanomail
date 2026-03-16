@@ -3,10 +3,10 @@
  * Handles API calls for email operations
  */
 
-import type { EmailClassification } from '@nanomail/shared'
+import type { EmailClassification, SendEmailInput, SendEmailResponse } from '@nanomail/shared'
 
-// Re-export type for convenience
-export type { EmailClassification } from '@nanomail/shared'
+// Re-export types for convenience
+export type { EmailClassification, SendEmailInput, SendEmailResponse } from '@nanomail/shared'
 
 export interface EmailListItem {
   id: number
@@ -55,17 +55,6 @@ export interface EmailDetail {
   classification: EmailClassification
   isSpam: boolean
   hasAttachments: boolean
-}
-
-export interface SendEmailRequest {
-  to: string
-  subject: string
-  body: string
-}
-
-export interface SendEmailResponse {
-  success: boolean
-  messageId: string
 }
 
 export interface SyncJobStatus {
@@ -159,8 +148,10 @@ export const EmailService = {
 
   /**
    * Send an email
+   * Supports multiple recipients via arrays for to, cc, and bcc fields
+   * Optional fields (cc, bcc, isHtml) have sensible defaults on the backend
    */
-  async sendEmail(data: SendEmailRequest): Promise<SendEmailResponse> {
+  async sendEmail(data: SendEmailInput): Promise<SendEmailResponse> {
     const response = await fetch('/api/emails/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

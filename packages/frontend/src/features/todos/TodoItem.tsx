@@ -1,12 +1,11 @@
 import { useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Trash2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
-import { AssistReplySheet } from './AssistReplySheet'
 import { DeadlineDisplay } from '@/components/DeadlineDisplay'
 import { useUpdateTodoMutation, useDeleteTodoMutation } from '@/hooks'
 
@@ -22,8 +21,8 @@ const urgencyBorderColors: Record<string, string> = {
 }
 
 export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
-  const [isAssistSheetOpen, setIsAssistSheetOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const navigate = useNavigate()
   const updateMutation = useUpdateTodoMutation()
   const deleteMutation = useDeleteTodoMutation()
 
@@ -85,7 +84,14 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
               variant="ghost"
               size="sm"
               className="text-xs h-6 px-2"
-              onClick={() => setIsAssistSheetOpen(true)}
+              onClick={() => {
+                navigate(`/inbox/${todo.emailId}`, {
+                  state: {
+                    action: 'assist_reply',
+                    instruction: todo.description,
+                  },
+                })
+              }}
               aria-label={`Assist reply for: ${todo.description}`}
             >
               Assist Reply
@@ -118,12 +124,6 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
           )}
         </Button>
       )}
-
-      <AssistReplySheet
-        open={isAssistSheetOpen}
-        onOpenChange={setIsAssistSheetOpen}
-        todo={todo}
-      />
     </div>
   )
 }

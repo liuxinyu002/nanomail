@@ -5,15 +5,36 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { InboxPage } from './InboxPage'
 import { EmailService } from '@/services'
 
+// Mock navigate function
+const mockNavigate = vi.fn()
+
+// Mock react-router-dom hooks
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
+
 // Mock ComposeEmailModal component
 const mockComposeModalOpen = vi.fn()
 vi.mock('@/components/email', () => ({
-  ComposeEmailModal: ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
-    mockComposeModalOpen(open, onOpenChange)
+  ComposeEmailModal: ({ open, onOpenChange, emailId, initialInstruction, sender }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    emailId?: number;
+    initialInstruction?: string;
+    sender?: string;
+  }) => {
+    mockComposeModalOpen(open, onOpenChange, emailId, initialInstruction, sender)
     if (!open) return null
     return (
       <div data-testid="compose-email-modal" role="dialog" aria-label="Compose Email">
         <h2>Compose Email</h2>
+        {emailId !== undefined && <span data-testid="modal-email-id">{emailId}</span>}
+        {initialInstruction && <span data-testid="modal-instruction">{initialInstruction}</span>}
+        {sender && <span data-testid="modal-sender">{sender}</span>}
         <button onClick={() => onOpenChange(false)} aria-label="Close modal">
           Cancel
         </button>
@@ -56,7 +77,7 @@ const mockTriggerSync = vi.mocked(EmailService.triggerSync)
 const mockGetSyncStatus = vi.mocked(EmailService.getSyncStatus)
 
 // Helper to create wrapper with QueryClient and Router
-function createWrapper(initialRoute = '/inbox') {
+function createWrapper(initialRoute = '/inbox', routerState?: { action?: string; instruction?: string }) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -68,7 +89,7 @@ function createWrapper(initialRoute = '/inbox') {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[initialRoute]}>
+        <MemoryRouter initialEntries={[{ pathname: initialRoute, state: routerState }]}>
           <Routes>
             <Route path="/inbox" element={children} />
             <Route path="/inbox/:emailId" element={children} />
@@ -90,6 +111,7 @@ describe('InboxPage', () => {
     mockToastError.mockReset()
     mockToastInfo.mockReset()
     mockComposeModalOpen.mockReset()
+    mockNavigate.mockReset()
   })
 
   describe('Selection Counter', () => {
@@ -994,8 +1016,228 @@ describe('InboxPage', () => {
 
       await waitFor(() => {
         // Verify the modal was called with open=true
-        expect(mockComposeModalOpen).toHaveBeenCalledWith(true, expect.any(Function))
+        expect(mockComposeModalOpen).toHaveBeenCalledWith(true, expect.any(Function), undefined, undefined, undefined)
       })
+    })
+  })
+
+  describe('Router State Parsing for AI Assist Reply', () => {
+    it('should auto-open compose modal when action is assist_reply', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'sender@example.com', subject: 'Test Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockGetEmail.mockResolvedValueOnce({
+        id: 1,
+        sender: 'sender@example.com',
+        subject: 'Test Email',
+        snippet: '',
+        bodyText: 'Email body content',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1', { action: 'assist_reply', instruction: 'Reply politely' })
+      })
+
+      // Wait for emails to load by checking the email list pane
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Modal should auto-open
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+      })
+    })
+
+    it('should pass emailId and instruction to ComposeEmailModal', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'sender@example.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockGetEmail.mockResolvedValueOnce({
+        id: 1,
+        sender: 'sender@example.com',
+        subject: 'Test',
+        snippet: '',
+        bodyText: 'Body',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1', { action: 'assist_reply', instruction: 'Reply with thanks' })
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Wait for modal to open and verify props
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+        expect(screen.getByTestId('modal-email-id')).toHaveTextContent('1')
+        expect(screen.getByTestId('modal-instruction')).toHaveTextContent('Reply with thanks')
+      })
+    })
+
+    it('should fetch email and pass sender to ComposeEmailModal', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'original@example.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockGetEmail.mockResolvedValueOnce({
+        id: 1,
+        sender: 'sender@example.com',
+        subject: 'Test',
+        snippet: '',
+        bodyText: 'Body',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1', { action: 'assist_reply', instruction: 'Reply' })
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Should fetch email for sender info
+      await waitFor(() => {
+        expect(mockGetEmail).toHaveBeenCalledWith(1)
+      })
+
+      // Wait for modal and check sender
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+        expect(screen.getByTestId('modal-sender')).toHaveTextContent('sender@example.com')
+      })
+    })
+
+    it('should not auto-open modal when action is not assist_reply', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Unique Subject ABC', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1', { action: 'other_action' })
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Modal should NOT auto-open
+      expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
+    })
+
+    it('should not auto-open modal when no action in router state', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Unique Subject XYZ', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1')
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Modal should NOT auto-open
+      expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
+    })
+
+    it('should clear router state after opening modal to prevent re-trigger on refresh', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Unique Subject 123', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      mockGetEmail.mockResolvedValueOnce({
+        id: 1,
+        sender: 'sender@example.com',
+        subject: 'Test',
+        snippet: '',
+        bodyText: 'Body',
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT',
+        isSpam: false,
+        hasAttachments: false,
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox/1', { action: 'assist_reply', instruction: 'Reply' })
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Wait for modal to open
+      await waitFor(() => {
+        expect(screen.getByTestId('compose-email-modal')).toBeInTheDocument()
+      })
+
+      // Should have called navigate with replace: true to clear router state
+      expect(mockNavigate).toHaveBeenCalledWith('/inbox/1', { replace: true })
+    })
+
+    it('should not auto-open modal when action is assist_reply but no activeId', async () => {
+      mockGetEmails.mockResolvedValueOnce({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Unique Subject NoID', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      })
+
+      render(<InboxPage />, {
+        wrapper: createWrapper('/inbox', { action: 'assist_reply', instruction: 'Reply' })
+      })
+
+      // Wait for email list to load
+      await waitFor(() => {
+        expect(screen.getByTestId('email-list-pane')).toBeInTheDocument()
+      })
+
+      // Modal should NOT auto-open because no activeId
+      expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
     })
   })
 })

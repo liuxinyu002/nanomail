@@ -1,3 +1,4 @@
+import { forwardRef, useImperativeHandle } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -28,6 +29,21 @@ import { Button } from '@/components/ui/button'
 // Allowed URL schemes for security (prevent javascript: XSS)
 const ALLOWED_URL_SCHEMES = ['http:', 'https:', 'mailto:'] as const
 
+/**
+ * Interface for imperative handle methods exposed via ref.
+ * Used for external control of the editor (e.g., AI streaming).
+ */
+export interface TipTapEditorHandle {
+  /** Append content at current cursor position */
+  appendContent: (content: string) => void
+  /** Clear all editor content */
+  clearContent: () => void
+  /** Get current HTML content */
+  getContent: () => string
+  /** Check if editor is empty */
+  isEmpty: () => boolean
+}
+
 interface TipTapEditorProps {
   value: string
   onChange: (html: string, isEmpty: boolean) => void
@@ -35,39 +51,66 @@ interface TipTapEditorProps {
   disabled?: boolean
 }
 
-export function TipTapEditor({
-  value,
-  onChange,
-  placeholder = 'Write your message here...',
-  disabled = false,
-}: TipTapEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Underline,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Link.configure({ openOnClick: false }),
-      Placeholder.configure({
-        placeholder,
-        emptyEditorClass:
-          'before:content-[attr(data-placeholder)] before:text-muted-foreground before:float-left before:h-0 before:pointer-events-none',
-      }),
-    ],
-    content: value,
-    editorProps: {
-      attributes: {
-        // min-h-full ensures it stretches; p-4 ensures text isn't flush with edges
-        class: 'min-h-full p-4 outline-none',
+export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
+  function TipTapEditor({ value, onChange, placeholder = 'Write your message here...', disabled = false }, ref) {
+    const editor = useEditor({
+      extensions: [
+        StarterKit,
+        Underline,
+        TextAlign.configure({ types: ['heading', 'paragraph'] }),
+        Link.configure({ openOnClick: false }),
+        Placeholder.configure({
+          placeholder,
+          emptyEditorClass:
+            'before:content-[attr(data-placeholder)] before:text-muted-foreground before:float-left before:h-0 before:pointer-events-none',
+        }),
+      ],
+      content: value,
+      editorProps: {
+        attributes: {
+          // min-h-full ensures it stretches; p-4 ensures text isn't flush with edges
+          class: 'min-h-full p-4 outline-none',
+        },
       },
-    },
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML(), editor.isEmpty)
-    },
-    editable: !disabled,
-  })
+      onUpdate: ({ editor }) => {
+        onChange(editor.getHTML(), editor.isEmpty)
+      },
+      editable: !disabled,
+    })
+
+    // Expose imperative methods via ref
+    useImperativeHandle(
+      ref,
+      () => ({
+        appendContent: (content: string) => {
+          editor?.chain().focus().insertContent(content).run()
+        },
+        clearContent: () => {
+          editor?.chain().clearContent().run()
+        },
+        getContent: () => {
+          return editor?.getHTML() ?? ''
+        },
+        isEmpty: () => {
+          return editor?.isEmpty ?? true
+        },
+      }),
+      [editor]
+    )
 
   if (!editor) {
-    return null
+    return (
+      <div
+        data-testid="tiptap-editor-container"
+        className="flex flex-col flex-1 min-h-[200px]"
+      >
+        <div className="animate-pulse bg-muted/50 rounded-md mx-4 my-2 p-2 h-10" />
+        <div className="flex-1 min-h-[200px] p-4">
+          <div className="h-4 bg-muted/30 rounded w-3/4 mb-2" />
+          <div className="h-4 bg-muted/30 rounded w-1/2" />
+        </div>
+      </div>
+    )
   }
 
   const setLink = () => {
@@ -324,4 +367,5 @@ export function TipTapEditor({
       />
     </div>
   )
-}
+  }
+)

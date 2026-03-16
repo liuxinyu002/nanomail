@@ -6,9 +6,10 @@
  * - TipTapEditor for email body
  * - Data loss prevention with AlertDialog
  * - Loading states during send
+ * - AI assist integration for reply generation
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Loader2, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -29,20 +30,32 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 import { EmailChipInput } from './EmailChipInput'
 import { TipTapEditor } from './TipTapEditor'
+import type { TipTapEditorHandle } from './TipTapEditor'
 import { useSettings } from '@/hooks/useSettings'
+import { useAIAssistStream } from '@/hooks/useAIAssistStream'
 import { EmailService } from '@/services/email.service'
 
 interface ComposeEmailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Email ID for AI assist - enables AI assist UI when provided */
+  emailId?: number
+  /** Pre-filled instruction for AI assist */
+  initialInstruction?: string
+  /** Auto-fill To field with sender email */
+  sender?: string
 }
 
 export function ComposeEmailModal({
   open,
   onOpenChange,
+  emailId,
+  initialInstruction,
+  sender,
 }: ComposeEmailModalProps) {
   const { data: settings } = useSettings()
 
@@ -58,9 +71,27 @@ export function ComposeEmailModal({
   const [sending, setSending] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
+  // AI assist state
+  const [instruction, setInstruction] = useState(initialInstruction ?? '')
+  const editorRef = useRef<TipTapEditorHandle>(null)
+
+  // AI assist streaming hook
+  // Note: hook's enabled flag prevents issues when emailId is undefined
+  const { isStreaming, status, start, cancel } = useAIAssistStream({
+    emailId: emailId ?? 0,
+    instruction,
+    onChunk: (chunk) => {
+      editorRef.current?.appendContent(chunk)
+    },
+    enabled: !!emailId,
+  })
+
   // Determine if Cc/Bcc fields should be shown
   const showCcField = isCcExpanded || cc.length > 0
   const showBccField = isBccExpanded || bcc.length > 0
+
+  // Show AI assist UI only when emailId is provided
+  const showAIAssist = !!emailId
 
   // Check if form has unsaved content
   const hasContent = useCallback((): boolean => {
@@ -86,7 +117,22 @@ export function ComposeEmailModal({
     setIsBodyEmpty(true)
     setIsCcExpanded(false)
     setIsBccExpanded(false)
+    setInstruction('')
   }, [])
+
+  // Auto-fill To field with sender
+  useEffect(() => {
+    if (sender) {
+      setTo([sender])
+    }
+  }, [sender])
+
+  // Reset instruction when initialInstruction changes
+  useEffect(() => {
+    if (initialInstruction !== undefined) {
+      setInstruction(initialInstruction)
+    }
+  }, [initialInstruction])
 
   // Handle modal open/close with data loss prevention
   const handleOpenChange = (newOpen: boolean) => {
@@ -152,6 +198,15 @@ export function ComposeEmailModal({
     setShowConfirmDialog(false)
   }
 
+  // Handle AI generate/stop button
+  const handleGenerateClick = () => {
+    if (isStreaming) {
+      cancel()
+    } else {
+      start()
+    }
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -180,6 +235,37 @@ export function ComposeEmailModal({
 
           {/* Content - Scrollable */}
           <div className="flex-1 overflow-y-auto space-y-4 py-4 px-4">
+            {/* AI Assist Section - only shown when emailId is provided */}
+            {showAIAssist && (
+              <>
+                {/* Instruction Input Section */}
+                <div className="flex gap-2 items-start">
+                  <Textarea
+                    placeholder="Describe what you want to reply..."
+                    value={instruction}
+                    onChange={(e) => setInstruction(e.target.value)}
+                    className="flex-1 min-h-[60px] resize-none"
+                    rows={2}
+                    disabled={isStreaming}
+                  />
+                  <Button
+                    onClick={handleGenerateClick}
+                    variant={isStreaming ? 'destructive' : 'default'}
+                    className="shrink-0"
+                  >
+                    {isStreaming ? 'Stop' : 'Generate'}
+                  </Button>
+                </div>
+
+                {/* AI Status Indicator */}
+                {status === 'thinking' && (
+                  <div className="text-sm text-muted-foreground">
+                    AI 正在分析...
+                  </div>
+                )}
+              </>
+            )}
+
             {/* To Field */}
             <EmailChipInput
               id="to-input"
@@ -262,9 +348,10 @@ export function ComposeEmailModal({
 
             {/* Body - TipTapEditor */}
             <TipTapEditor
+              ref={editorRef}
               value={body}
               onChange={handleBodyChange}
-              disabled={sending}
+              disabled={sending || isStreaming}
               placeholder="Write your message here..."
             />
           </div>

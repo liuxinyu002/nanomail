@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
+import { createRef } from 'react'
 import { TipTapEditor } from './TipTapEditor'
+import type { TipTapEditorHandle } from './TipTapEditor'
 
 // Mock sonner toast - must be at top level for hoisting
 vi.mock('sonner', () => ({
@@ -54,6 +56,8 @@ const createMockEditor = (options: {
     setTextAlign: () => mockChain,
     undo: () => mockChain,
     redo: () => mockChain,
+    insertContent: () => mockChain,
+    clearContent: () => mockChain,
     run: () => {},
   }
 
@@ -970,6 +974,168 @@ describe('TipTapEditor', () => {
       expect(chainSpy).not.toHaveBeenCalled()
       expect(mockToast.error).toHaveBeenCalledWith('Invalid URL format')
       promptSpy.mockRestore()
+    })
+  })
+
+  describe('Imperative Handle (forwardRef)', () => {
+    it('should expose appendContent method via ref', () => {
+      const ref = createRef<TipTapEditorHandle>()
+      const mockEditor = createMockEditor({ isEmpty: true })
+      const insertContentSpy = vi.fn().mockReturnValue({ run: vi.fn() })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockEditor.chain = () => ({
+        focus: () => ({ insertContent: insertContentSpy }),
+      }) as any
+
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      act(() => {
+        ref.current?.appendContent('test content')
+      })
+
+      expect(insertContentSpy).toHaveBeenCalledWith('test content')
+    })
+
+    it('should expose clearContent method via ref', () => {
+      const ref = createRef<TipTapEditorHandle>()
+      const mockEditor = createMockEditor({ isEmpty: false })
+      const clearContentSpy = vi.fn().mockReturnValue({ run: vi.fn() })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockEditor.chain = () => ({
+        clearContent: clearContentSpy,
+      }) as any
+
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value="<p>initial</p>"
+          onChange={mockOnChange}
+        />
+      )
+
+      act(() => {
+        ref.current?.clearContent()
+      })
+
+      expect(clearContentSpy).toHaveBeenCalled()
+    })
+
+    it('should expose getContent method via ref', () => {
+      const ref = createRef<TipTapEditorHandle>()
+      const mockEditor = createMockEditor({ isEmpty: false })
+      mockEditor.getHTML = vi.fn().mockReturnValue('<p>test content</p>')
+
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value="<p>test content</p>"
+          onChange={mockOnChange}
+        />
+      )
+
+      const content = ref.current?.getContent()
+      expect(content).toBe('<p>test content</p>')
+    })
+
+    it('should expose isEmpty method via ref', () => {
+      const ref = createRef<TipTapEditorHandle>()
+      const mockEditor = createMockEditor({ isEmpty: true })
+
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      expect(ref.current?.isEmpty()).toBe(true)
+    })
+
+    it('should return false for isEmpty when editor has content', () => {
+      const ref = createRef<TipTapEditorHandle>()
+      const mockEditor = createMockEditor({ isEmpty: false })
+
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value="<p>content</p>"
+          onChange={mockOnChange}
+        />
+      )
+
+      expect(ref.current?.isEmpty()).toBe(false)
+    })
+
+    it('should work without ref for backward compatibility', () => {
+      const mockEditor = createMockEditor({ isEmpty: true })
+      vi.mocked(useEditor).mockReturnValue(mockEditor as unknown as ReturnType<typeof useEditor>)
+
+      // Render without ref - should not throw
+      expect(() => {
+        render(
+          <TipTapEditor
+            value=""
+            onChange={mockOnChange}
+          />
+        )
+      }).not.toThrow()
+
+      expect(screen.getByTestId('editor-content')).toBeInTheDocument()
+    })
+
+    it('should return empty string from getContent when editor is null', () => {
+      const ref = createRef<TipTapEditorHandle>()
+
+      // Mock useEditor to return null (editor not initialized)
+      vi.mocked(useEditor).mockReturnValue(null as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      // When editor is null, getContent should return empty string
+      expect(ref.current?.getContent()).toBe('')
+    })
+
+    it('should return true from isEmpty when editor is null', () => {
+      const ref = createRef<TipTapEditorHandle>()
+
+      // Mock useEditor to return null (editor not initialized)
+      vi.mocked(useEditor).mockReturnValue(null as unknown as ReturnType<typeof useEditor>)
+
+      render(
+        <TipTapEditor
+          ref={ref}
+          value=""
+          onChange={mockOnChange}
+        />
+      )
+
+      // When editor is null, isEmpty should return true
+      expect(ref.current?.isEmpty()).toBe(true)
     })
   })
 })

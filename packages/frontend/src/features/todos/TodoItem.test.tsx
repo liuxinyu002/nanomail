@@ -1,26 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { TodoItem, type TodoItemProps } from './TodoItem'
 import type { TodoItem as TodoItemType } from '@/services'
 
-// Mock react-router-dom Link
-vi.mock('react-router-dom', () => ({
-  Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
-    <a href={to} className={className} data-testid="email-link">
-      {children}
-    </a>
-  ),
-}))
-
-// Mock AssistReplySheet
-vi.mock('./AssistReplySheet', () => ({
-  AssistReplySheet: ({ open, onOpenChange, todo }: { open: boolean; onOpenChange: (open: boolean) => void; todo: TodoItemType }) => (
-    <div data-testid="assist-reply-sheet" data-open={open}>
-      {open && <span>Assist Reply Sheet for {todo.description}</span>}
-      <button onClick={() => onOpenChange(false)}>Close Sheet</button>
-    </div>
-  ),
-}))
+// Mock react-router-dom
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
+      <a href={to} className={className} data-testid="email-link">
+        {children}
+      </a>
+    ),
+  }
+})
 
 // Mock mutation hooks
 const mockUpdateMutate = vi.fn()
@@ -55,6 +52,7 @@ describe('TodoItem', () => {
   beforeEach(() => {
     mockUpdateMutate.mockReset()
     mockDeleteMutate.mockReset()
+    mockNavigate.mockReset()
   })
 
   describe('Rendering', () => {
@@ -181,57 +179,79 @@ describe('TodoItem', () => {
 
   describe('Assist Reply Button', () => {
     it('should render Assist Reply button for pending todos', () => {
-      render(<TodoItem {...defaultProps} />)
+      render(
+        <MemoryRouter>
+          <TodoItem {...defaultProps} />
+        </MemoryRouter>
+      )
 
       expect(screen.getByRole('button', { name: /assist reply/i })).toBeInTheDocument()
     })
 
     it('should not render Assist Reply button for completed todos', () => {
       const completedTodo = { ...mockTodo, status: 'completed' as const }
-      render(<TodoItem {...defaultProps} todo={completedTodo} />)
+      render(
+        <MemoryRouter>
+          <TodoItem {...defaultProps} todo={completedTodo} />
+        </MemoryRouter>
+      )
 
       expect(screen.queryByRole('button', { name: /assist reply/i })).not.toBeInTheDocument()
     })
 
-    it('should open AssistReplySheet when button is clicked', async () => {
-      render(<TodoItem {...defaultProps} />)
+    it('should navigate to inbox with router state on Assist Reply click', async () => {
+      render(
+        <MemoryRouter>
+          <TodoItem {...defaultProps} />
+        </MemoryRouter>
+      )
 
       const assistButton = screen.getByRole('button', { name: /assist reply/i })
       fireEvent.click(assistButton)
 
-      await waitFor(() => {
-        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'true')
+      expect(mockNavigate).toHaveBeenCalledWith('/inbox/100', {
+        state: {
+          action: 'assist_reply',
+          instruction: 'Review the quarterly report',
+        },
       })
     })
 
-    it('should close AssistReplySheet when onOpenChange is called with false', async () => {
-      render(<TodoItem {...defaultProps} />)
+    it('should navigate with correct instruction from todo description', async () => {
+      const customTodo = { ...mockTodo, description: 'Reply about the meeting tomorrow' }
+      render(
+        <MemoryRouter>
+          <TodoItem {...defaultProps} todo={customTodo} />
+        </MemoryRouter>
+      )
 
-      // Open the sheet
       const assistButton = screen.getByRole('button', { name: /assist reply/i })
       fireEvent.click(assistButton)
 
-      await waitFor(() => {
-        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'true')
-      })
-
-      // Close the sheet
-      const closeButton = screen.getByRole('button', { name: /close sheet/i })
-      fireEvent.click(closeButton)
-
-      await waitFor(() => {
-        expect(screen.getByTestId('assist-reply-sheet')).toHaveAttribute('data-open', 'false')
+      expect(mockNavigate).toHaveBeenCalledWith('/inbox/100', {
+        state: {
+          action: 'assist_reply',
+          instruction: 'Reply about the meeting tomorrow',
+        },
       })
     })
 
-    it('should pass todo to AssistReplySheet', async () => {
-      render(<TodoItem {...defaultProps} />)
+    it('should navigate with correct emailId from todo', async () => {
+      const customTodo = { ...mockTodo, emailId: 456 }
+      render(
+        <MemoryRouter>
+          <TodoItem {...defaultProps} todo={customTodo} />
+        </MemoryRouter>
+      )
 
       const assistButton = screen.getByRole('button', { name: /assist reply/i })
       fireEvent.click(assistButton)
 
-      await waitFor(() => {
-        expect(screen.getByText(/Assist Reply Sheet for Review the quarterly report/i)).toBeInTheDocument()
+      expect(mockNavigate).toHaveBeenCalledWith('/inbox/456', {
+        state: {
+          action: 'assist_reply',
+          instruction: 'Review the quarterly report',
+        },
       })
     })
   })

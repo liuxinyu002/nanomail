@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { EmailService } from '@/services'
 import { Button } from '@/components/ui'
@@ -17,6 +17,7 @@ const POLL_INTERVAL = 2000 // 2 seconds
 export function InboxPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Parse emailId from URL with NaN and positive number protection
   const { emailId } = useParams<{ emailId: string }>()
@@ -28,6 +29,28 @@ export function InboxPage() {
   const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
   const [classificationFilter, setClassificationFilter] = useState<EmailClassification | 'ALL'>('ALL')
   const [composeOpen, setComposeOpen] = useState(false)
+
+  // Parse router state for AI assist reply action
+  const { action, instruction } = (location.state as {
+    action?: string
+    instruction?: string
+  }) ?? {}
+
+  // Fetch email when action is assist_reply to get sender info
+  const { data: assistReplyEmail } = useQuery({
+    queryKey: ['email', activeId],
+    queryFn: () => EmailService.getEmail(activeId!),
+    enabled: !!activeId && action === 'assist_reply',
+  })
+
+  // Auto-open modal for assist reply action
+  useEffect(() => {
+    if (action === 'assist_reply' && activeId) {
+      setComposeOpen(true)
+      // Clear state to prevent re-trigger on refresh
+      navigate(location.pathname, { replace: true })
+    }
+  }, [action, activeId, location.pathname, navigate])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['emails', 1, 10, classificationFilter],
@@ -394,6 +417,9 @@ export function InboxPage() {
       <ComposeEmailModal
         open={composeOpen}
         onOpenChange={setComposeOpen}
+        emailId={action === 'assist_reply' ? activeId ?? undefined : undefined}
+        initialInstruction={action === 'assist_reply' ? instruction : undefined}
+        sender={assistReplyEmail?.sender ?? undefined}
       />
     </div>
   )

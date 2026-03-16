@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 import type { DataSource } from 'typeorm'
-import type { LLMProvider, LLMResponse } from '../services/llm/types'
+import type { LLMProvider, LLMResponse, LLMStreamChunk } from '../services/llm/types'
 import type { ToolRegistry } from '../services/agent/tools/registry'
 import type { ContextBuilder } from '../services/agent/context/types'
 import type { MemoryStore } from '../services/agent/memory/types'
@@ -55,14 +55,46 @@ const createMockDataSource = (emails: Email[] = []) => {
   } as unknown as DataSource & { getRepository: ReturnType<typeof vi.fn> }
 }
 
+// Helper to create mock stream chunks from a response
+async function* createMockStreamChunks(
+  response: LLMResponse
+): AsyncGenerator<LLMStreamChunk, void, unknown> {
+  // If there's content, yield it as chunks
+  if (response.content) {
+    // Yield content in chunks for realistic streaming
+    const words = response.content.split(' ')
+    for (let i = 0; i < words.length; i++) {
+      const chunk = i === words.length - 1 ? words[i] : words[i] + ' '
+      yield { content: chunk, toolCalls: [], isDone: false }
+    }
+  }
+
+  // Final chunk with tool calls and finish reason
+  yield {
+    content: null,
+    toolCalls: response.toolCalls,
+    isDone: true,
+    finishReason: response.finishReason
+  }
+}
+
 // Mock factory for LLM Provider
 const createMockLLMProvider = () => ({
-  chat: vi.fn(async () => ({
+  chat: vi.fn(async (): Promise<LLMResponse> => ({
     content: 'This is a draft response.',
     toolCalls: [],
     finishReason: 'stop' as const,
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
   })),
+  chatStream: vi.fn(async function* (): AsyncGenerator<LLMStreamChunk, void, unknown> {
+    const response: LLMResponse = {
+      content: 'This is a draft response.',
+      toolCalls: [],
+      finishReason: 'stop' as const,
+      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
+    }
+    yield* createMockStreamChunks(response)
+  }),
   getDefaultModel: vi.fn(() => 'gpt-4o-mini')
 })
 
@@ -214,7 +246,10 @@ describe('Agent Routes', () => {
     })
 
     it('should stream error event when LLM fails', async () => {
-      mockLLMProvider.chat.mockRejectedValueOnce(new Error('LLM API error'))
+      // Create an async generator that throws
+      mockLLMProvider.chatStream.mockImplementationOnce(async function* () {
+        throw new Error('LLM API error')
+      })
 
       const response = await request(app)
         .post('/api/agent/draft')
@@ -232,13 +267,14 @@ describe('Agent Routes', () => {
         .post('/api/agent/draft')
         .send({ emailId: 1, instruction: 'Draft a reply about the meeting' })
 
-      // LLM provider should have been called
-      expect(mockLLMProvider.chat).toHaveBeenCalled()
+      // LLM provider should have been called via chatStream
+      expect(mockLLMProvider.chatStream).toHaveBeenCalled()
 
-      // Should use default model
-      expect(mockLLMProvider.chat).toHaveBeenCalledWith(
+      // Should pass messages and tools
+      expect(mockLLMProvider.chatStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-4o-mini'
+          messages: expect.any(Array),
+          tools: expect.any(Array)
         })
       )
     })

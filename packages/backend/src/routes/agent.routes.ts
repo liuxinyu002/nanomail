@@ -90,7 +90,15 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
     res.setHeader('Connection', 'keep-alive')
     res.setHeader('X-Accel-Buffering', 'no') // Disable nginx buffering
 
-    // Create agent loop
+    // Create AbortController for this request
+    const abortController = new AbortController()
+
+    // Listen for client disconnect
+    req.on('close', () => {
+      abortController.abort()
+    })
+
+    // Create agent loop with abort signal
     const agentLoop = new AgentLoop({
       provider: deps.llmProvider,
       toolRegistry: deps.toolRegistry,
@@ -99,12 +107,18 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
       tokenTruncator: deps.tokenTruncator,
       config: {
         preset: 'draft'
-      }
+      },
+      signal: abortController.signal
     })
 
     try {
       // Run the agent loop and stream events
       for await (const event of agentLoop.run(instruction, email)) {
+        // Check if client disconnected
+        if (abortController.signal.aborted) {
+          break // Stop streaming, LLM request already cancelled via signal
+        }
+
         // Send SSE event
         res.write(`data: ${JSON.stringify(event)}\n\n`)
 
@@ -114,6 +128,11 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
         }
       }
     } catch (error) {
+      // Handle abort gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        return // Client disconnected, clean exit
+      }
+
       res.write(
         `data: ${JSON.stringify({
           type: 'error',

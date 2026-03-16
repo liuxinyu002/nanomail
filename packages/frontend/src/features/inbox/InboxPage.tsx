@@ -29,6 +29,14 @@ export function InboxPage() {
   const [syncingJobId, setSyncingJobId] = useState<string | null>(null)
   const [classificationFilter, setClassificationFilter] = useState<EmailClassification | 'ALL'>('ALL')
   const [composeOpen, setComposeOpen] = useState(false)
+  const [composeKey, setComposeKey] = useState(0) // Force remount for clean state
+
+  // Local state for AI assist reply (preserved after router state is cleared)
+  const [assistReply, setAssistReply] = useState<{
+    emailId: number
+    instruction: string
+    sender?: string
+  } | null>(null)
 
   // Parse router state for AI assist reply action
   const { action, instruction } = (location.state as {
@@ -37,20 +45,25 @@ export function InboxPage() {
   }) ?? {}
 
   // Fetch email when action is assist_reply to get sender info
-  const { data: assistReplyEmail } = useQuery({
+  const { data: assistReplyEmail, isSuccess: isEmailLoaded } = useQuery({
     queryKey: ['email', activeId],
     queryFn: () => EmailService.getEmail(activeId!),
     enabled: !!activeId && action === 'assist_reply',
   })
 
-  // Auto-open modal for assist reply action
+  // Auto-open modal for assist reply action (wait for email data if fetching)
   useEffect(() => {
-    if (action === 'assist_reply' && activeId) {
+    if (action === 'assist_reply' && activeId && instruction && isEmailLoaded) {
+      setAssistReply({
+        emailId: activeId,
+        instruction,
+        sender: assistReplyEmail?.sender ?? undefined,
+      })
       setComposeOpen(true)
       // Clear state to prevent re-trigger on refresh
       navigate(location.pathname, { replace: true })
     }
-  }, [action, activeId, location.pathname, navigate])
+  }, [action, activeId, instruction, isEmailLoaded, assistReplyEmail, location.pathname, navigate])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['emails', 1, 10, classificationFilter],
@@ -104,6 +117,16 @@ export function InboxPage() {
       clearTimeout(timeoutId)
     }
   }, [syncingJobId, refetch])
+
+  // Handle compose modal close - clear assist reply state to prevent data pollution
+  const handleComposeOpenChange = (open: boolean) => {
+    setComposeOpen(open)
+    if (!open) {
+      setAssistReply(null)
+      // Increment key to force remount on next open (clean state)
+      setComposeKey(k => k + 1)
+    }
+  }
 
   const handleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -413,13 +436,14 @@ export function InboxPage() {
         </div>
       )}
 
-      {/* Compose Email Modal */}
+      {/* Compose Email Modal - key forces remount for clean state */}
       <ComposeEmailModal
+        key={composeKey}
         open={composeOpen}
-        onOpenChange={setComposeOpen}
-        emailId={action === 'assist_reply' ? activeId ?? undefined : undefined}
-        initialInstruction={action === 'assist_reply' ? instruction : undefined}
-        sender={assistReplyEmail?.sender ?? undefined}
+        onOpenChange={handleComposeOpenChange}
+        emailId={assistReply?.emailId}
+        initialInstruction={assistReply?.instruction}
+        sender={assistReply?.sender}
       />
     </div>
   )

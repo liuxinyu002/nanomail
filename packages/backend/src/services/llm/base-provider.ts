@@ -3,7 +3,7 @@
  * Reference: nanobot/providers/base.py
  */
 
-import type { LLMResponse, ChatMessage, ChatParams, LLMProviderConfig } from './types'
+import type { LLMResponse, ChatMessage, ChatParams, ChatStreamParams, LLMStreamResponse, LLMProviderConfig } from './types'
 
 /**
  * Abstract LLM Provider
@@ -23,6 +23,13 @@ export abstract class LLMProvider {
    * Reference: nanobot/providers/base.py - chat() abstract method
    */
   abstract chat(params: ChatParams): Promise<LLMResponse>
+
+  /**
+   * Streaming chat method with cancellation support
+   * Yields chunks as they arrive from the LLM
+   * @param params - Chat parameters including optional AbortSignal
+   */
+  abstract chatStream(params: ChatStreamParams): LLMStreamResponse
 
   /**
    * Get the default model for this provider

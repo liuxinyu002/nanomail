@@ -6,7 +6,7 @@
 import OpenAI from 'openai'
 import { LLMProvider } from './base-provider'
 import { ProviderRegistry } from './provider-registry'
-import type { LLMResponse, ChatParams, ChatMessage, ProviderSpec, LLMProviderConfig, LLMConfig, GetConfigFn, ToolCallRequest } from './types'
+import type { LLMResponse, ChatParams, ChatStreamParams, LLMStreamResponse, ChatMessage, ProviderSpec, LLMProviderConfig, LLMConfig, GetConfigFn, ToolCallRequest } from './types'
 import { createLogger } from '../../config/logger.js'
 
 const log = createLogger('LiteLLMProvider')
@@ -54,6 +54,15 @@ function normalizeToolCallId(id: string): string {
     result += chars.charAt((absHash + i * 7) % chars.length)
   }
   return result
+}
+
+/**
+ * Type for accumulated tool call delta during streaming
+ */
+interface ToolCallDelta {
+  id: string
+  name: string
+  arguments: string
 }
 
 /**
@@ -289,6 +298,54 @@ export class LiteLLMProvider extends LLMProvider {
   }
 
   /**
+   * Accumulate tool call delta from stream chunk
+   */
+  private accumulateToolCallDelta(
+    accumulated: Map<number, ToolCallDelta>,
+    tc: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta.ToolCall
+  ): void {
+    if (tc.type !== 'function') return
+
+    const index = tc.index
+    const existing = accumulated.get(index)
+
+    if (existing) {
+      // Append to existing tool call
+      if (tc.function?.arguments) {
+        existing.arguments += tc.function.arguments
+      }
+    } else {
+      // New tool call
+      accumulated.set(index, {
+        id: tc.id ?? shortToolId(),
+        name: tc.function?.name ?? '',
+        arguments: tc.function?.arguments ?? ''
+      })
+    }
+  }
+
+  /**
+   * Build final tool calls from accumulated deltas
+   */
+  private buildFinalToolCalls(accumulated: Map<number, ToolCallDelta>): ToolCallRequest[] {
+    const toolCalls: ToolCallRequest[] = []
+    for (const tc of accumulated.values()) {
+      let args: Record<string, unknown> = {}
+      try {
+        args = JSON.parse(tc.arguments) as Record<string, unknown>
+      } catch {
+        args = {}
+      }
+      toolCalls.push({
+        id: tc.id,
+        name: tc.name,
+        arguments: args
+      })
+    }
+    return toolCalls
+  }
+
+  /**
    * Send a chat completion request
    * Reference: nanobot/providers/litellm_provider.py - chat()
    */
@@ -305,7 +362,7 @@ export class LiteLLMProvider extends LLMProvider {
     log.debug({
       model: resolvedModel,
       baseURL,
-      apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : '(none)'
+      apiKeyConfigured: !!apiKey
     }, 'LLM request config')
 
     // Sanitize messages
@@ -337,6 +394,109 @@ export class LiteLLMProvider extends LLMProvider {
           completionTokens: 0,
           totalTokens: 0
         }
+      }
+    }
+  }
+
+  /**
+   * Streaming chat completion with cancellation support
+   * Yields chunks as they arrive from the LLM
+   */
+  async *chatStream(params: ChatStreamParams): LLMStreamResponse {
+    const model = await this.getModel(params.model)
+    const resolvedModel = this.applyModelPrefix(model)
+
+    // Get client with dynamic config
+    const client = await this.getClient()
+
+    // Debug: log actual LLM config being used
+    const apiKey = client.apiKey
+    const baseURL = client.baseURL
+    log.debug({
+      model: resolvedModel,
+      baseURL,
+      apiKeyConfigured: !!apiKey
+    }, 'LLM stream request config')
+
+    // Sanitize messages
+    const sanitizedMessages = this.sanitizeMessages(params.messages)
+    const openaiMessages = this.toOpenAIMessages(sanitizedMessages)
+
+    // Clamp maxTokens to at least 1
+    const maxTokens = Math.max(1, params.maxTokens ?? 4096)
+
+    try {
+      const stream = await client.chat.completions.create({
+        model: resolvedModel,
+        messages: openaiMessages,
+        max_tokens: maxTokens,
+        temperature: params.temperature ?? 0.7,
+        tools: params.tools as OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
+        tool_choice: params.tools ? 'auto' : undefined,
+        stream: true
+      }, {
+        signal: params.signal // Pass AbortSignal to OpenAI SDK
+      })
+
+      // Accumulate tool calls across chunks
+      const accumulatedToolCalls = new Map<number, ToolCallDelta>()
+      let finishReason: 'stop' | 'tool_calls' | 'length' = 'stop'
+
+      for await (const chunk of stream) {
+        // Check for abort
+        if (params.signal?.aborted) {
+          log.info('Stream aborted by client')
+          return
+        }
+
+        const delta = chunk.choices[0]?.delta
+        const chunkFinishReason = chunk.choices[0]?.finish_reason
+
+        // Track finish reason
+        if (chunkFinishReason) {
+          if (chunkFinishReason === 'tool_calls') {
+            finishReason = 'tool_calls'
+          } else if (chunkFinishReason === 'length') {
+            finishReason = 'length'
+          }
+        }
+
+        // Yield content chunks immediately
+        if (delta?.content) {
+          yield { content: delta.content, toolCalls: [], isDone: false }
+        }
+
+        // Accumulate tool call deltas by index
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            this.accumulateToolCallDelta(accumulatedToolCalls, tc)
+          }
+        }
+      }
+
+      // Final chunk with accumulated tool calls
+      yield {
+        content: null,
+        toolCalls: this.buildFinalToolCalls(accumulatedToolCalls),
+        isDone: true,
+        finishReason
+      }
+    } catch (error) {
+      // Handle abort gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        log.info('Stream aborted')
+        return
+      }
+
+      // Log error for debugging
+      log.error({ err: error }, 'Stream error')
+
+      // Yield error as final chunk
+      yield {
+        content: null,
+        toolCalls: [],
+        isDone: true,
+        finishReason: 'error'
       }
     }
   }

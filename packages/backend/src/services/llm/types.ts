@@ -31,6 +31,26 @@ export interface TokenUsage {
 }
 
 /**
+ * Streaming chunk from LLM
+ * Yielded incrementally as the LLM generates content
+ */
+export interface LLMStreamChunk {
+  /** Text content delta (null for final chunk or tool-only chunks) */
+  content: string | null
+  /** Accumulated tool calls (populated in final chunk) */
+  toolCalls: ToolCallRequest[]
+  /** Whether this is the final chunk */
+  isDone: boolean
+  /** Reason for completion (only in final chunk) */
+  finishReason?: 'stop' | 'tool_calls' | 'error' | 'length'
+}
+
+/**
+ * Async generator type for streaming responses
+ */
+export type LLMStreamResponse = AsyncGenerator<LLMStreamChunk, void, unknown>
+
+/**
  * Normalized LLM response
  * Maps to nanobot's LLMResponse dataclass
  */
@@ -80,6 +100,15 @@ export interface ChatParams {
   maxTokens?: number
   temperature?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
+}
+
+/**
+ * Parameters for streaming chat completion
+ * Extends ChatParams with cancellation support
+ */
+export interface ChatStreamParams extends ChatParams {
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
 }
 
 /**

@@ -50,8 +50,8 @@ export interface AgentConfig {
 export const AGENT_PRESETS = {
   // For email draft generation, simple tool calls
   draft: {
-    maxIterations: 5,
-    temperature: 0.7
+    maxIterations: 7,
+    temperature: 0.9
   },
   // For more complex multi-step tasks
   complex: {

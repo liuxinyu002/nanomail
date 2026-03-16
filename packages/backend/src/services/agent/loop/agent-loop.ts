@@ -8,7 +8,7 @@
  * Supports role-based context building via ContextBuilder.
  */
 
-import type { LLMResponse } from '../../llm/types'
+import type { LLMResponse, LLMStreamChunk, ToolCallRequest } from '../../llm/types'
 import type { LLMProvider } from '../../llm/base-provider'
 import type { ToolRegistry } from '../tools/registry'
 import type { ContextBuilder, AgentRole } from '../context/types'
@@ -55,6 +55,7 @@ export class AgentLoop {
   private tokenTruncator: TokenTruncator
   private config: AgentConfig
   private agentRole: AgentRole
+  private signal?: AbortSignal
   private readonly log: Logger = createLogger('AgentLoop')
 
   constructor(params: {
@@ -65,6 +66,7 @@ export class AgentLoop {
     tokenTruncator: TokenTruncator
     config?: Partial<AgentConfig> & { preset?: AgentPreset }
     agentRole?: AgentRole // Default: 'draft-agent'
+    signal?: AbortSignal // NEW: AbortSignal for cancellation
   }) {
     // Apply preset defaults if specified
     const presetConfig = params.config?.preset
@@ -86,6 +88,7 @@ export class AgentLoop {
     this._memoryStore = params.memoryStore
     this.tokenTruncator = params.tokenTruncator
     this.agentRole = params.agentRole ?? 'draft-agent'
+    this.signal = params.signal
   }
 
   /**
@@ -138,6 +141,13 @@ export class AgentLoop {
       state.iteration++
       const stepPrefix = agentPrefix('Loop', state.iteration)
 
+      // Check for abort at start of each iteration
+      if (this.signal?.aborted) {
+        this.log.info(`${stepPrefix} Request cancelled`)
+        yield { type: 'error', content: 'Request cancelled' }
+        return
+      }
+
       // DEBUG: Iteration start
       this.log.debug(
         { iteration: state.iteration, messageCount: state.messages.length },
@@ -145,26 +155,62 @@ export class AgentLoop {
       )
 
       try {
-        // DEBUG: LLM call
-        this.log.debug(`${stepPrefix} Calling LLM`)
+        // DEBUG: LLM call with streaming
+        this.log.debug(`${stepPrefix} Calling LLM with streaming`)
 
-        // Call LLM with tools
-        // model from config (if set) or provider's dynamic config from database
-        const response = await this.provider.chat({
+        // Stream LLM response with cancellation support
+        let accumulatedContent = ''
+        let finalResponse: { toolCalls: ToolCallRequest[]; finishReason: LLMResponse['finishReason'] } = {
+          toolCalls: [],
+          finishReason: 'stop'
+        }
+
+        // Use streaming for real-time response
+        for await (const chunk of this.provider.chatStream({
           messages: state.messages,
           tools: this.toolRegistry.getDefinitions(),
           model: this.config.model,
           maxTokens: this.config.maxTokens,
           temperature: this.config.temperature,
-          reasoningEffort: this.config.reasoningEffort
-        })
+          reasoningEffort: this.config.reasoningEffort,
+          signal: this.signal
+        })) {
+          // Check for abort during streaming
+          if (this.signal?.aborted) {
+            this.log.info(`${stepPrefix} Request cancelled during streaming`)
+            yield { type: 'error', content: 'Request cancelled' }
+            return
+          }
 
-        // DEBUG: LLM response
-        if (response.content) {
-          this.log.debug(
-            { finishReason: response.finishReason },
-            `${stepPrefix} LLM response: ${truncate(response.content, TRUNCATE_PRESETS.LLM_RESPONSE)}`
-          )
+          // Yield content chunks immediately
+          if (chunk.content) {
+            accumulatedContent += chunk.content
+            yield { type: 'chunk', content: chunk.content }
+          }
+
+          // Capture final response data
+          if (chunk.isDone) {
+            finalResponse = {
+              toolCalls: chunk.toolCalls,
+              finishReason: chunk.finishReason ?? 'stop'
+            }
+          }
+        }
+
+        // DEBUG: LLM response complete
+        this.log.debug(
+          { finishReason: finalResponse.finishReason, toolCallCount: finalResponse.toolCalls.length },
+          `${stepPrefix} LLM response complete: ${truncate(accumulatedContent, TRUNCATE_PRESETS.LLM_RESPONSE)}`
+        )
+
+        // Build response for processing
+        // Note: Streaming mode doesn't provide token counts in real-time.
+        // Usage metrics would require a separate API call to retrieve.
+        const response: LLMResponse = {
+          content: accumulatedContent || null,
+          toolCalls: finalResponse.toolCalls,
+          finishReason: finalResponse.finishReason,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
         }
 
         // Handle error response
@@ -230,7 +276,7 @@ export class AgentLoop {
             state.toolsUsed.push(toolCall.name)
           }
         } else {
-          // No tool calls = final answer
+          // No tool calls = final answer (already streamed via chatStream)
           state.finalContent = response.content
 
           // INFO: Completed
@@ -239,13 +285,7 @@ export class AgentLoop {
             `${agentPrefix('Loop')} Completed in ${state.iteration} steps`
           )
 
-          // Stream final answer character by character
-          if (state.finalContent) {
-            for (const char of state.finalContent) {
-              yield { type: 'chunk', content: char }
-            }
-          }
-
+          // Content was already streamed, just yield done event
           yield {
             type: 'done',
             content: state.finalContent ?? ''

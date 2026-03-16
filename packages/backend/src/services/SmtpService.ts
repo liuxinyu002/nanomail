@@ -11,6 +11,8 @@ export interface SmtpConfig {
   user: string
   password: string
   secure: boolean
+  requireTLS?: boolean    // Port 587: STARTTLS upgrade
+  ignoreTLS?: boolean     // Port 25: No TLS requirement
 }
 
 /**
@@ -90,14 +92,26 @@ export class SmtpService {
       throw new Error('SMTP_PASS is not configured')
     }
 
-    const port = portStr ? parseInt(portStr, 10) : 587
+    // Port parsing with NaN fallback to default 587
+    const parsedPort = portStr ? parseInt(portStr, 10) : 587
+    const port = !isNaN(parsedPort) ? parsedPort : 587
+
+    // Port-specific TLS configuration
+    // - Port 465: Implicit TLS (secure: true)
+    // - Port 587: STARTTLS upgrade (requireTLS: true)
+    // - Port 25: Traditional SMTP, no TLS requirement (ignoreTLS: true)
+    const secure = port === 465
+    const requireTLS = port === 587 || (port !== 465 && port !== 25) ? true : undefined
+    const ignoreTLS = port === 25 ? true : undefined
 
     return {
       host,
       port,
       user,
       password,
-      secure: port === 465,
+      secure,
+      requireTLS,
+      ignoreTLS,
     }
   }
 
@@ -111,10 +125,20 @@ export class SmtpService {
       host: config.host,
       port: config.port,
       secure: config.secure,
+      requireTLS: config.requireTLS,
+      ignoreTLS: config.ignoreTLS,
       auth: {
         user: config.user,
         pass: config.password,
       },
+      // Connection pool configuration for high-concurrency scenarios
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      // Timeout configuration
+      connectionTimeout: 30000,  // 30s connection timeout
+      socketTimeout: 30000,      // 30s socket timeout
+      greetingTimeout: 10000,    // 10s greeting timeout
     })
   }
 
@@ -148,16 +172,27 @@ export class SmtpService {
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
     this.log.info({ to: options.to, subject: options.subject }, 'Starting email send')
 
+    let config: SmtpConfig | undefined
     try {
-      const config = await this.getConfig()
+      config = await this.getConfig()
       const transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
         secure: config.secure,
+        requireTLS: config.requireTLS,
+        ignoreTLS: config.ignoreTLS,
         auth: {
           user: config.user,
           pass: config.password,
         },
+        // Connection pool configuration
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        // Timeout configuration
+        connectionTimeout: 30000,
+        socketTimeout: 30000,
+        greetingTimeout: 10000,
       })
 
       this.log.info({ host: config.host }, 'SMTP server connected')
@@ -186,7 +221,27 @@ export class SmtpService {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown send error'
-      this.log.error({ err: error }, 'Email send failed')
+
+      // Enhanced error logging with input values and configuration
+      this.log.error({
+        err: error,
+        input: {
+          to: options.to,
+          cc: options.cc,
+          bcc: options.bcc,
+          subject: options.subject,
+          isHtml: options.isHtml,
+        },
+        config: config ? {
+          host: config.host,
+          port: config.port,
+          secure: config.secure,
+          requireTLS: config.requireTLS,
+          ignoreTLS: config.ignoreTLS,
+          user: config.user,
+        } : undefined,
+      }, 'Email send failed')
+
       return {
         success: false,
         error: errorMessage,

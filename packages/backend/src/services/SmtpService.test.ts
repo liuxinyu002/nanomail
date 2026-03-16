@@ -55,6 +55,8 @@ describe('SmtpService', () => {
         user: 'user@gmail.com',
         password: 'app-password-123',
         secure: false,
+        requireTLS: true,
+        ignoreTLS: undefined,
       })
     })
 
@@ -83,6 +85,50 @@ describe('SmtpService', () => {
       const config = await service.getConfig()
 
       expect(config.port).toBe(587)
+      expect(config.requireTLS).toBe(true)
+    })
+
+    it('should create transporter with STARTTLS options for port 587', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.gmail.com')
+        .mockResolvedValueOnce('587')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      await service.testConnection()
+
+      const nodemailer = await import('nodemailer')
+      expect(nodemailer.default.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          requireTLS: true,
+          pool: true,
+          connectionTimeout: 30000,
+        })
+      )
+    })
+
+    it('should create transporter with secure options for port 465', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.gmail.com')
+        .mockResolvedValueOnce('465')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      await service.testConnection()
+
+      const nodemailer = await import('nodemailer')
+      expect(nodemailer.default.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          requireTLS: undefined,
+          ignoreTLS: undefined,
+        })
+      )
     })
 
     it('should set secure=true for port 465', async () => {
@@ -95,6 +141,64 @@ describe('SmtpService', () => {
       const config = await service.getConfig()
 
       expect(config.secure).toBe(true)
+      expect(config.requireTLS).toBeUndefined()
+      expect(config.ignoreTLS).toBeUndefined()
+    })
+
+    it('should configure STARTTLS for port 587', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.gmail.com')
+        .mockResolvedValueOnce('587')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      const config = await service.getConfig()
+
+      expect(config.secure).toBe(false)
+      expect(config.requireTLS).toBe(true)
+      expect(config.ignoreTLS).toBeUndefined()
+    })
+
+    it('should configure no TLS requirement for port 25', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.example.com')
+        .mockResolvedValueOnce('25')
+        .mockResolvedValueOnce('user@example.com')
+        .mockResolvedValueOnce('password')
+
+      const config = await service.getConfig()
+
+      expect(config.secure).toBe(false)
+      expect(config.requireTLS).toBeUndefined()
+      expect(config.ignoreTLS).toBe(true)
+    })
+
+    it('should default to STARTTLS for unknown ports', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.example.com')
+        .mockResolvedValueOnce('2525')
+        .mockResolvedValueOnce('user@example.com')
+        .mockResolvedValueOnce('password')
+
+      const config = await service.getConfig()
+
+      expect(config.secure).toBe(false)
+      expect(config.requireTLS).toBe(true)
+      expect(config.ignoreTLS).toBeUndefined()
+    })
+
+    it('should handle NaN port gracefully with default 587', async () => {
+      vi.mocked(mockSettingsService.get)
+        .mockResolvedValueOnce('smtp.gmail.com')
+        .mockResolvedValueOnce('invalid')
+        .mockResolvedValueOnce('user@gmail.com')
+        .mockResolvedValueOnce('password')
+
+      const config = await service.getConfig()
+
+      expect(config.port).toBe(587)
+      expect(config.secure).toBe(false)
+      expect(config.requireTLS).toBe(true)
     })
   })
 

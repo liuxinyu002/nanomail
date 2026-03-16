@@ -21,6 +21,14 @@ vi.mock('sonner', () => ({
   },
 }))
 
+// Mock mutation hooks
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 // Mock DraftEditor to avoid testing it here
 vi.mock('./DraftEditor', () => ({
   DraftEditor: ({ onClose }: { onClose: () => void }) => (
@@ -55,7 +63,6 @@ describe('AssistReplySheet', () => {
     open: false,
     onOpenChange: vi.fn(),
     todo: mockTodo,
-    onStatusChange: vi.fn(),
   }
 
   beforeEach(() => {

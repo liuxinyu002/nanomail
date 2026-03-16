@@ -13,12 +13,12 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { EmailService, type TodoItem } from '@/services'
 import { DraftEditor } from './DraftEditor'
+import { useUpdateTodoMutation } from '@/hooks'
 
 export interface AssistReplySheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   todo: TodoItem
-  onStatusChange?: (updatedTodo: TodoItem) => void
 }
 
 interface EmailContext {
@@ -31,12 +31,12 @@ export function AssistReplySheet({
   open,
   onOpenChange,
   todo,
-  onStatusChange,
 }: AssistReplySheetProps) {
   const [instruction, setInstruction] = useState('')
   const [emailContext, setEmailContext] = useState<EmailContext | null>(null)
   const [isLoadingEmail, setIsLoadingEmail] = useState(false)
   const [showDraftEditor, setShowDraftEditor] = useState(false)
+  const updateMutation = useUpdateTodoMutation()
 
   // Reset state when sheet closes
   useEffect(() => {
@@ -78,12 +78,10 @@ export function AssistReplySheet({
   }, [])
 
   const handleDraftSent = useCallback(async () => {
-    // Notify parent that todo status changed (email was sent)
-    if (onStatusChange) {
-      onStatusChange({ ...todo, status: 'completed' })
-    }
+    // Update todo status to completed via mutation
+    updateMutation.mutate({ id: todo.id, data: { status: 'completed' } })
     onOpenChange(false)
-  }, [onOpenChange, onStatusChange, todo])
+  }, [onOpenChange, updateMutation, todo.id])
 
   const isStartDraftDisabled = !instruction.trim()
 

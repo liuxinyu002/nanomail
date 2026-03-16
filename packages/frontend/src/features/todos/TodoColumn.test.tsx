@@ -5,12 +5,10 @@ import type { TodoItem } from '@/services'
 
 // Mock TodoItem component
 vi.mock('./TodoItem', () => ({
-  TodoItem: ({ todo, onStatusChange }: { todo: TodoItem; onStatusChange: () => void }) => (
+  TodoItem: ({ todo, showDelete }: { todo: TodoItem; showDelete?: boolean }) => (
     <div data-testid={`todo-item-${todo.id}`}>
       {todo.description}
-      <button onClick={onStatusChange} data-testid={`toggle-${todo.id}`}>
-        Toggle
-      </button>
+      {showDelete && <span data-testid={`delete-indicator-${todo.id}`}>Delete enabled</span>}
     </div>
   ),
 }))
@@ -42,7 +40,6 @@ describe('TodoColumn', () => {
     todos: mockTodos,
     emptyMessage: 'No high priority tasks',
     variant: 'high',
-    onStatusChange: vi.fn(),
   }
 
   describe('Rendering', () => {
@@ -126,15 +123,13 @@ describe('TodoColumn', () => {
     })
   })
 
-  describe('Status Change Propagation', () => {
-    it('should pass onStatusChange to each TodoItem', () => {
-      const onStatusChange = vi.fn()
-      render(<TodoColumn {...defaultProps} onStatusChange={onStatusChange} />)
+  describe('Show Delete Propagation', () => {
+    it('should pass showDelete to each TodoItem', () => {
+      render(<TodoColumn {...defaultProps} showDelete={true} />)
 
-      // Click the toggle button in the mocked TodoItem
-      fireEvent.click(screen.getByTestId('toggle-1'))
-
-      expect(onStatusChange).toHaveBeenCalled()
+      // Each todo item should have delete indicator (from mock)
+      expect(screen.getByTestId('delete-indicator-1')).toBeInTheDocument()
+      expect(screen.getByTestId('delete-indicator-2')).toBeInTheDocument()
     })
   })
 

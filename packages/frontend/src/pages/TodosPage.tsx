@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { CheckSquare, Loader2, List, Calendar } from 'lucide-react'
-import { TodoService, type TodoItem } from '@/services'
 import { TodoColumn } from '@/features/todos/TodoColumn'
 import { TodoCalendar } from '@/features/todos/TodoCalendar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useTodos } from '@/hooks'
 import { toast } from 'sonner'
 
 type ViewMode = 'list' | 'calendar'
@@ -11,27 +11,17 @@ type ViewMode = 'list' | 'calendar'
 const COMPLETED_DISPLAY_LIMIT = 10
 
 export function TodosPage() {
-  const [todos, setTodos] = useState<TodoItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [completedLimit, setCompletedLimit] = useState(COMPLETED_DISPLAY_LIMIT)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
 
-  // Fetch todos on mount
-  useEffect(() => {
-    const fetchTodos = async () => {
-      try {
-        const response = await TodoService.getTodos()
-        setTodos(response.todos)
-      } catch (error) {
-        console.error('Failed to fetch todos:', error)
-        toast.error('Failed to load todos')
-      } finally {
-        setLoading(false)
-      }
-    }
+  // Use React Query hook for fetching todos
+  const { data, isLoading, error } = useTodos()
+  const todos = data?.todos ?? []
 
-    fetchTodos()
-  }, [])
+  // Show error toast if query fails
+  if (error) {
+    toast.error('Failed to load todos')
+  }
 
   // Group todos by urgency and status
   const { highPriority, mediumPriority, lowPriority, completed } = useMemo(() => {
@@ -46,13 +36,6 @@ export function TodosPage() {
     }
   }, [todos])
 
-  // Handle status change from TodoItem
-  const handleStatusChange = useCallback((updatedTodo: TodoItem) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === updatedTodo.id ? updatedTodo : t))
-    )
-  }, [])
-
   // Load more completed items
   const handleLoadMoreCompleted = useCallback(() => {
     setCompletedLimit((prev) => prev + COMPLETED_DISPLAY_LIMIT)
@@ -64,7 +47,7 @@ export function TodosPage() {
   // Show empty state
   const isEmpty = todos.length === 0
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">To-Do</h1>
@@ -114,30 +97,27 @@ export function TodosPage() {
                 todos={highPriority}
                 emptyMessage="No high priority tasks"
                 variant="high"
-                onStatusChange={handleStatusChange}
               />
               <TodoColumn
                 title="Medium Priority"
                 todos={mediumPriority}
                 emptyMessage="No medium priority tasks"
                 variant="medium"
-                onStatusChange={handleStatusChange}
               />
               <TodoColumn
                 title="Low Priority"
                 todos={lowPriority}
                 emptyMessage="No low priority tasks"
                 variant="low"
-                onStatusChange={handleStatusChange}
               />
               <TodoColumn
                 title="Completed"
                 todos={displayCompleted}
                 emptyMessage="No completed tasks"
                 variant="completed"
-                onStatusChange={handleStatusChange}
                 showLoadMore={hasMoreCompleted}
                 onLoadMore={handleLoadMoreCompleted}
+                showDelete={true}
               />
             </div>
           )}

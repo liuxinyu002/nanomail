@@ -1,17 +1,18 @@
 import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
+import { Trash2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { TodoService, type TodoItem as TodoItemType } from '@/services'
+import type { TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
 import { AssistReplySheet } from './AssistReplySheet'
 import { DeadlineDisplay } from '@/components/DeadlineDisplay'
+import { useUpdateTodoMutation, useDeleteTodoMutation } from '@/hooks'
 
 export interface TodoItemProps {
   todo: TodoItemType
-  onStatusChange?: (updatedTodo: TodoItemType) => void
+  showDelete?: boolean
 }
 
 const urgencyBorderColors: Record<string, string> = {
@@ -20,47 +21,41 @@ const urgencyBorderColors: Record<string, string> = {
   low: 'border-l-blue-500',
 }
 
-export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
-  const [optimisticStatus, setOptimisticStatus] = useState<TodoItemType['status'] | null>(null)
-  const [isUpdating, setIsUpdating] = useState(false)
+export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
   const [isAssistSheetOpen, setIsAssistSheetOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const updateMutation = useUpdateTodoMutation()
+  const deleteMutation = useDeleteTodoMutation()
 
-  const currentStatus = optimisticStatus ?? todo.status
-  const isCompleted = currentStatus === 'completed'
+  const isCompleted = todo.status === 'completed'
 
-  const handleToggle = useCallback(async () => {
+  const handleToggle = useCallback(() => {
     const newStatus = isCompleted ? 'pending' : 'completed'
+    updateMutation.mutate({ id: todo.id, data: { status: newStatus } })
+  }, [todo.id, isCompleted, updateMutation])
 
-    // Optimistic update
-    setOptimisticStatus(newStatus)
-    setIsUpdating(true)
-
-    try {
-      const updated = await TodoService.updateTodoStatus(todo.id, newStatus)
-      setOptimisticStatus(null)
-      onStatusChange?.(updated)
-    } catch (error) {
-      // Rollback on error
-      console.error('Failed to update todo status:', error)
-      setOptimisticStatus(null)
-      toast.error('Failed to update todo status')
-    } finally {
-      setIsUpdating(false)
+  const handleDeleteClick = useCallback(() => {
+    if (confirmDelete) {
+      deleteMutation.mutate(todo.id)
+      setConfirmDelete(false)
+    } else {
+      setConfirmDelete(true)
     }
-  }, [todo.id, isCompleted, onStatusChange])
+  }, [confirmDelete, deleteMutation, todo.id])
 
   return (
     <div
       data-testid="todo-item-container"
+      onMouseLeave={() => setConfirmDelete(false)}
       className={cn(
-        'flex items-start gap-3 p-3 rounded-lg border-l-4 bg-background/50 hover:bg-background/80 transition-colors',
+        'group flex items-start gap-3 p-3 rounded-lg border-l-4 bg-background/50 hover:bg-background/80 transition-colors',
         urgencyBorderColors[todo.urgency]
       )}
     >
       <Checkbox
         checked={isCompleted}
         onCheckedChange={handleToggle}
-        disabled={isUpdating}
+        disabled={updateMutation.isPending}
         aria-label={todo.description}
         className="mt-0.5"
       />
@@ -99,11 +94,35 @@ export function TodoItem({ todo, onStatusChange }: TodoItemProps) {
         </div>
       </div>
 
+      {showDelete && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'shrink-0 h-8 min-w-[60px] justify-center',
+            'opacity-0 group-hover:opacity-100 transition-opacity',
+            confirmDelete
+              ? 'text-destructive hover:text-destructive'
+              : 'text-muted-foreground hover:text-destructive'
+          )}
+          onClick={handleDeleteClick}
+          disabled={deleteMutation.isPending}
+          aria-label={confirmDelete ? 'Confirm delete' : 'Delete todo'}
+        >
+          {deleteMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : confirmDelete ? (
+            '确认?'
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+        </Button>
+      )}
+
       <AssistReplySheet
         open={isAssistSheetOpen}
         onOpenChange={setIsAssistSheetOpen}
         todo={todo}
-        onStatusChange={onStatusChange}
       />
     </div>
   )

@@ -3,15 +3,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { TodoItem, type TodoItemProps } from './TodoItem'
 import type { TodoItem as TodoItemType } from '@/services'
 
-// Mock the services
-const mockUpdateTodoStatus = vi.fn()
-
-vi.mock('@/services', () => ({
-  TodoService: {
-    updateTodoStatus: (id: number, status: string) => mockUpdateTodoStatus(id, status),
-  },
-}))
-
 // Mock react-router-dom Link
 vi.mock('react-router-dom', () => ({
   Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
@@ -19,14 +10,6 @@ vi.mock('react-router-dom', () => ({
       {children}
     </a>
   ),
-}))
-
-// Mock sonner toast
-vi.mock('sonner', () => ({
-  toast: {
-    error: vi.fn(),
-    success: vi.fn(),
-  },
 }))
 
 // Mock AssistReplySheet
@@ -37,6 +20,21 @@ vi.mock('./AssistReplySheet', () => ({
       <button onClick={() => onOpenChange(false)}>Close Sheet</button>
     </div>
   ),
+}))
+
+// Mock mutation hooks
+const mockUpdateMutate = vi.fn()
+const mockDeleteMutate = vi.fn()
+
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: mockUpdateMutate,
+    isPending: false,
+  }),
+  useDeleteTodoMutation: () => ({
+    mutate: mockDeleteMutate,
+    isPending: false,
+  }),
 }))
 
 describe('TodoItem', () => {
@@ -52,11 +50,11 @@ describe('TodoItem', () => {
 
   const defaultProps: TodoItemProps = {
     todo: mockTodo,
-    onStatusChange: vi.fn(),
   }
 
   beforeEach(() => {
-    mockUpdateTodoStatus.mockReset()
+    mockUpdateMutate.mockReset()
+    mockDeleteMutate.mockReset()
   })
 
   describe('Rendering', () => {
@@ -142,67 +140,21 @@ describe('TodoItem', () => {
     })
   })
 
-  describe('Toggle Completion - Optimistic UI', () => {
-    it('should call onStatusChange when checkbox is clicked', async () => {
-      const onStatusChange = vi.fn()
-      mockUpdateTodoStatus.mockResolvedValueOnce({
-        ...mockTodo,
-        status: 'completed',
-      })
-
-      render(<TodoItem {...defaultProps} onStatusChange={onStatusChange} />)
-
-      const checkbox = screen.getByRole('checkbox')
-      fireEvent.click(checkbox)
-
-      await waitFor(() => {
-        expect(mockUpdateTodoStatus).toHaveBeenCalledWith(1, 'completed')
-      })
-    })
-
-    it('should optimistically show as completed immediately on click', async () => {
-      mockUpdateTodoStatus.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)))
-
+  describe('Toggle Completion', () => {
+    it('should call updateMutation.mutate when checkbox is clicked', async () => {
       render(<TodoItem {...defaultProps} />)
 
       const checkbox = screen.getByRole('checkbox')
       fireEvent.click(checkbox)
 
-      // Should immediately show as checked (optimistic update)
-      expect(checkbox).toBeChecked()
-
-      // Description should have line-through
-      const description = screen.getByText('Review the quarterly report')
-      expect(description).toHaveClass('line-through')
-    })
-
-    it('should rollback to pending state if API fails', async () => {
-      const { toast } = await import('sonner')
-      mockUpdateTodoStatus.mockRejectedValueOnce(new Error('API Error'))
-
-      render(<TodoItem {...defaultProps} />)
-
-      const checkbox = screen.getByRole('checkbox')
-      fireEvent.click(checkbox)
-
-      // Optimistically checked
-      expect(checkbox).toBeChecked()
-
-      await waitFor(() => {
-        // After failure, should rollback
-        expect(checkbox).not.toBeChecked()
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: 1,
+        data: { status: 'completed' },
       })
-
-      // Should show error toast
-      expect(toast.error).toHaveBeenCalledWith('Failed to update todo status')
     })
 
     it('should toggle from completed to pending', async () => {
       const completedTodo = { ...mockTodo, status: 'completed' as const }
-      mockUpdateTodoStatus.mockResolvedValueOnce({
-        ...mockTodo,
-        status: 'pending',
-      })
 
       render(<TodoItem {...defaultProps} todo={completedTodo} />)
 
@@ -211,8 +163,9 @@ describe('TodoItem', () => {
 
       fireEvent.click(checkbox)
 
-      await waitFor(() => {
-        expect(mockUpdateTodoStatus).toHaveBeenCalledWith(1, 'pending')
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: 1,
+        data: { status: 'pending' },
       })
     })
   })
@@ -280,6 +233,62 @@ describe('TodoItem', () => {
       await waitFor(() => {
         expect(screen.getByText(/Assist Reply Sheet for Review the quarterly report/i)).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('Delete Button', () => {
+    it('should not render delete button by default', () => {
+      render(<TodoItem {...defaultProps} />)
+
+      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+    })
+
+    it('should render delete button when showDelete is true', () => {
+      render(<TodoItem {...defaultProps} showDelete={true} />)
+
+      expect(screen.getByRole('button', { name: /delete todo/i })).toBeInTheDocument()
+    })
+
+    it('should show confirmation text on first click', async () => {
+      render(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
+      fireEvent.click(deleteButton)
+
+      expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
+      expect(screen.getByText('确认?')).toBeInTheDocument()
+    })
+
+    it('should call delete mutation on second click', async () => {
+      render(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
+
+      // First click - show confirmation
+      fireEvent.click(deleteButton)
+
+      // Second click - confirm delete
+      const confirmButton = screen.getByRole('button', { name: /confirm delete/i })
+      fireEvent.click(confirmButton)
+
+      expect(mockDeleteMutate).toHaveBeenCalledWith(1)
+    })
+
+    it('should reset confirmation state on mouse leave', async () => {
+      render(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
+      fireEvent.click(deleteButton)
+
+      // Should show confirmation
+      expect(screen.getByText('确认?')).toBeInTheDocument()
+
+      // Mouse leave should reset
+      const container = screen.getByTestId('todo-item-container')
+      fireEvent.mouseLeave(container)
+
+      // Should be back to delete button
+      expect(screen.getByRole('button', { name: /delete todo/i })).toBeInTheDocument()
     })
   })
 })

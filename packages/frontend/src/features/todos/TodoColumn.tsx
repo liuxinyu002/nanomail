@@ -9,9 +9,9 @@ export interface TodoColumnProps {
   todos: TodoItemType[]
   emptyMessage: string
   variant: 'high' | 'medium' | 'low' | 'completed'
-  onStatusChange?: (updatedTodo: TodoItemType) => void
   showLoadMore?: boolean
   onLoadMore?: () => void
+  showDelete?: boolean
 }
 
 const variantConfig = {
@@ -38,9 +38,9 @@ export function TodoColumn({
   todos,
   emptyMessage,
   variant,
-  onStatusChange,
   showLoadMore = false,
   onLoadMore,
+  showDelete = false,
 }: TodoColumnProps) {
   const config = variantConfig[variant]
   const Icon = config.icon
@@ -68,7 +68,7 @@ export function TodoColumn({
             <TodoItem
               key={todo.id}
               todo={todo}
-              onStatusChange={onStatusChange}
+              showDelete={showDelete}
             />
           ))
         )}

@@ -9,4 +9,8 @@ export { useTodosByDateRange } from './useTodosByDateRange'
 
 export { useUpdateTodoMutation, useDeleteTodoMutation } from './useTodoMutations'
 
+export { useTodos } from './useTodos'
+
 export { useEmailDetail } from './useEmailDetail'
+
+export { useSettings } from './useSettings'

@@ -1,5 +1,6 @@
 import { memo, useCallback, KeyboardEvent } from 'react'
 import { format } from 'date-fns'
+import { useDroppable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
 
 export interface CalendarDayCellProps {
@@ -27,6 +28,16 @@ export const CalendarDayCell = memo(function CalendarDayCell({
   onClick,
 }: CalendarDayCellProps) {
   const dayNumber = format(date, 'd')
+  const dateStr = format(date, 'yyyy-MM-dd')
+
+  // Make this cell a droppable zone for the planner
+  const { setNodeRef, isOver } = useDroppable({
+    id: `planner-${dateStr}`,
+    data: {
+      type: 'planner',
+      date: dateStr,
+    },
+  })
 
   const ariaLabel = todoCount > 0
     ? `${dayNumber}, ${todoCount} todo${todoCount > 1 ? 's' : ''}`
@@ -45,6 +56,7 @@ export const CalendarDayCell = memo(function CalendarDayCell({
 
   return (
     <div
+      ref={setNodeRef}
       data-testid="calendar-day-cell"
       role="button"
       tabIndex={0}
@@ -54,7 +66,8 @@ export const CalendarDayCell = memo(function CalendarDayCell({
       className={cn(
         'relative h-16 p-1 border cursor-pointer hover:bg-accent transition-colors',
         !isCurrentMonth && 'bg-muted/30 text-muted-foreground',
-        isToday && 'ring-2 ring-primary'
+        isToday && 'ring-2 ring-primary',
+        isOver && 'bg-blue-100 ring-2 ring-blue-400' // Visual feedback when dragging over
       )}
     >
       <span className="text-sm font-medium">{dayNumber}</span>

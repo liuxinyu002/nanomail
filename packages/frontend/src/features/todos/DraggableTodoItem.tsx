@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
@@ -22,17 +21,6 @@ export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
       todo,
     },
   })
-
-  // Debug logging for draggable state changes
-  useEffect(() => {
-    if (isDragging) {
-      console.log('[DnD Debug] DraggableTodoItem - Started dragging:', {
-        todoId: todo.id,
-        todoDescription: todo.description,
-        boardColumnId: todo.boardColumnId,
-      })
-    }
-  }, [isDragging, todo.id, todo.description, todo.boardColumnId])
 
   const style = {
     transform: transform ? CSS.Translate.toString(transform) : undefined,

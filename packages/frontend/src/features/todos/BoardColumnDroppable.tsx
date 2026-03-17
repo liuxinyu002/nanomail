@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { BoardColumn } from '@nanomail/shared'
@@ -43,17 +42,6 @@ export function BoardColumnDroppable({ column, todos, className }: BoardColumnDr
       columnId: column.id,
     },
   })
-
-  // Debug logging for column drop zone state
-  useEffect(() => {
-    if (isOver) {
-      console.log('[DnD Debug] BoardColumnDroppable - Item hovering over column:', {
-        columnId: column.id,
-        columnName: column.name,
-        zoneId: `column-${column.id}`,
-      })
-    }
-  }, [isOver, column.id, column.name])
 
   const todoIds = todos.map(t => t.id)
   const safeColor = getSafeColor(column.color)

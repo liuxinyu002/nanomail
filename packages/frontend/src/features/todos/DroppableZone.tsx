@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
@@ -56,18 +55,6 @@ export function DroppableZone({
       date,
     },
   })
-
-  // Debug logging for drop zone state
-  useEffect(() => {
-    if (isOver) {
-      console.log('[DnD Debug] DroppableZone - Item hovering over:', {
-        zoneId: id,
-        zoneType: type,
-        columnId,
-        date,
-      })
-    }
-  }, [isOver, id, type, columnId, date])
 
   return (
     <div

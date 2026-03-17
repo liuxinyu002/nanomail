@@ -106,10 +106,6 @@ export function DndProvider({
   // Handle drag start
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
-      console.log('[DnD Debug] Drag Start:', {
-        activeId: event.active.id,
-        activeData: event.active.data.current,
-      })
       setIsDragging(true)
       setActiveItem({
         id: event.active.id,
@@ -124,11 +120,6 @@ export function DndProvider({
   // Handle drag over
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      console.log('[DnD Debug] Drag Over:', {
-        activeId: event.active.id,
-        overId: event.over?.id,
-        overData: event.over?.data.current,
-      })
       if (event.over) {
         setOverZone({
           id: event.over.id,
@@ -147,13 +138,6 @@ export function DndProvider({
   // Handle drag end
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      console.log('[DnD Debug] Drag End:', {
-        activeId: event.active.id,
-        activeData: event.active.data.current,
-        overId: event.over?.id,
-        overData: event.over?.data.current,
-        hasOnDragEndCallback: !!onDragEnd,
-      })
       setIsDragging(false)
       setActiveItem(null)
       setOverZone(null)

@@ -15,9 +15,9 @@ describe('TodoEditForm', () => {
     id: 1,
     emailId: 100,
     description: 'Test todo description',
-    urgency: 'medium',
     status: 'pending',
     deadline: '2024-01-20T00:00:00.000Z',
+    boardColumnId: 2,
     createdAt: '2024-01-10T00:00:00.000Z',
   }
 
@@ -46,7 +46,6 @@ describe('TodoEditForm', () => {
       )
 
       expect(screen.getByDisplayValue('Test todo description')).toBeInTheDocument()
-      expect(screen.getByText('Medium')).toBeInTheDocument()
     })
 
     it('renders description textarea', () => {
@@ -55,14 +54,6 @@ describe('TodoEditForm', () => {
       )
 
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
-    })
-
-    it('renders priority selector', () => {
-      renderWithQueryClient(
-        <TodoEditForm todo={mockTodo} onCancel={mockOnCancel} />
-      )
-
-      expect(screen.getByLabelText(/priority/i)).toBeInTheDocument()
     })
 
     it('renders deadline picker button', () => {
@@ -109,7 +100,6 @@ describe('TodoEditForm', () => {
         id: 1,
         data: {
           description: 'Test todo description',
-          urgency: 'medium',
           deadline: mockTodo.deadline,
         },
       })

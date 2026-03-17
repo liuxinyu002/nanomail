@@ -6,12 +6,12 @@ import type { TodoItem } from '@/services'
 
 // Mock CalendarDayCell
 vi.mock('./CalendarDayCell', () => ({
-  CalendarDayCell: ({ date, isCurrentMonth, isToday, todoCount, highestUrgency, onClick }: {
+  CalendarDayCell: ({ date, isCurrentMonth, isToday, todoCount, highestPriorityColumn, onClick }: {
     date: Date
     isCurrentMonth: boolean
     isToday: boolean
     todoCount: number
-    highestUrgency: string | null
+    highestPriorityColumn: number | null
     onClick: (date: Date) => void
   }) => (
     <div
@@ -19,7 +19,7 @@ vi.mock('./CalendarDayCell', () => ({
       data-current-month={isCurrentMonth}
       data-is-today={isToday}
       data-todo-count={todoCount}
-      data-highest-urgency={highestUrgency || 'none'}
+      data-highest-priority-column={highestPriorityColumn || 'none'}
       onClick={() => onClick(date)}
     >
       {date.getDate()}
@@ -37,9 +37,9 @@ describe('TodoCalendarGrid', () => {
     {
       id: 1,
       emailId: 100,
-      description: 'Task on March 15',
-      urgency: 'high',
+      description: 'Task on March 15 (Todo column)',
       status: 'pending',
+      boardColumnId: 2, // Todo (high priority)
       // Use noon UTC to ensure it's on March 15 in all timezones
       deadline: '2024-03-15T12:00:00.000Z',
       createdAt: '2024-03-01T10:00:00.000Z',
@@ -47,9 +47,9 @@ describe('TodoCalendarGrid', () => {
     {
       id: 2,
       emailId: 100,
-      description: 'Another task on March 15',
-      urgency: 'medium',
+      description: 'Another task on March 15 (In Progress)',
       status: 'pending',
+      boardColumnId: 3, // In Progress (medium priority)
       deadline: '2024-03-15T12:00:00.000Z',
       createdAt: '2024-03-01T10:00:00.000Z',
     },
@@ -57,8 +57,8 @@ describe('TodoCalendarGrid', () => {
       id: 3,
       emailId: 100,
       description: 'Completed task on March 15',
-      urgency: 'low',
       status: 'completed',
+      boardColumnId: 1, // Inbox
       deadline: '2024-03-15T12:00:00.000Z',
       createdAt: '2024-03-01T10:00:00.000Z',
     },
@@ -66,8 +66,8 @@ describe('TodoCalendarGrid', () => {
       id: 4,
       emailId: 100,
       description: 'Task on March 20',
-      urgency: 'low',
       status: 'pending',
+      boardColumnId: 1, // Inbox (low priority)
       deadline: '2024-03-20T12:00:00.000Z',
       createdAt: '2024-03-01T10:00:00.000Z',
     },
@@ -75,8 +75,8 @@ describe('TodoCalendarGrid', () => {
       id: 5,
       emailId: 100,
       description: 'Task in February (overflow)',
-      urgency: 'medium',
       status: 'pending',
+      boardColumnId: 3, // In Progress (medium priority)
       deadline: '2024-02-28T12:00:00.000Z',
       createdAt: '2024-02-01T10:00:00.000Z',
     },
@@ -186,21 +186,21 @@ describe('TodoCalendarGrid', () => {
     })
   })
 
-  describe('Highest Urgency Calculation', () => {
-    it('should show high urgency when day has high priority todo', () => {
+  describe('Highest Priority Column Calculation', () => {
+    it('should show Todo column (2) when day has Todo task', () => {
       render(<TodoCalendarGrid {...defaultProps} />)
 
-      // March 15 has high and medium priority todos, high should win
+      // March 15 has Todo (2) and In Progress (3) tasks, Todo should win
       const march15 = screen.getByTestId('day-cell-2024-03-15')
-      expect(march15).toHaveAttribute('data-highest-urgency', 'high')
+      expect(march15).toHaveAttribute('data-highest-priority-column', '2')
     })
 
-    it('should show low urgency when day has only low priority todo', () => {
+    it('should show Inbox column (1) when day has only Inbox task', () => {
       render(<TodoCalendarGrid {...defaultProps} />)
 
-      // March 20 has only low priority todo
+      // March 20 has only Inbox (1) task
       const march20 = screen.getByTestId('day-cell-2024-03-20')
-      expect(march20).toHaveAttribute('data-highest-urgency', 'low')
+      expect(march20).toHaveAttribute('data-highest-priority-column', '1')
     })
 
     it('should show none when day has no todos', () => {
@@ -208,15 +208,15 @@ describe('TodoCalendarGrid', () => {
 
       // March 1 has no todos
       const march1 = screen.getByTestId('day-cell-2024-03-01')
-      expect(march1).toHaveAttribute('data-highest-urgency', 'none')
+      expect(march1).toHaveAttribute('data-highest-priority-column', 'none')
     })
 
-    it('should show medium urgency when day has medium priority todo', () => {
+    it('should show In Progress column (3) when day has In Progress task', () => {
       render(<TodoCalendarGrid {...defaultProps} />)
 
-      // Feb 28 has medium priority todo
+      // Feb 28 has In Progress (3) task
       const feb28 = screen.getByTestId('day-cell-2024-02-28')
-      expect(feb28).toHaveAttribute('data-highest-urgency', 'medium')
+      expect(feb28).toHaveAttribute('data-highest-priority-column', '3')
     })
   })
 
@@ -244,7 +244,7 @@ describe('TodoCalendarGrid', () => {
       const dayCells = screen.getAllByTestId(/^day-cell-/)
       dayCells.forEach(cell => {
         expect(cell).toHaveAttribute('data-todo-count', '0')
-        expect(cell).toHaveAttribute('data-highest-urgency', 'none')
+        expect(cell).toHaveAttribute('data-highest-priority-column', 'none')
       })
     })
 
@@ -254,8 +254,8 @@ describe('TodoCalendarGrid', () => {
           id: 1,
           emailId: 100,
           description: 'Task without deadline',
-          urgency: 'high',
           status: 'pending',
+          boardColumnId: 2,
           deadline: null,
           createdAt: '2024-03-01T10:00:00.000Z',
         },

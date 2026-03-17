@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Trash2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
@@ -14,10 +13,18 @@ export interface TodoItemProps {
   showDelete?: boolean
 }
 
-const urgencyBorderColors: Record<string, string> = {
-  high: 'border-l-red-500',
-  medium: 'border-l-amber-500',
-  low: 'border-l-blue-500',
+/**
+ * Get border color based on board column
+ * - Column 1 (Inbox): blue
+ * - Column 2 (Todo): red
+ * - Column 3 (In Progress): amber
+ * - Column 4 (Done): green
+ */
+const columnBorderColors: Record<number, string> = {
+  1: 'border-l-blue-500',
+  2: 'border-l-red-500',
+  3: 'border-l-amber-500',
+  4: 'border-l-green-500',
 }
 
 export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
@@ -48,7 +55,7 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
       onMouseLeave={() => setConfirmDelete(false)}
       className={cn(
         'group flex items-start gap-3 p-3 rounded-lg border-l-4 bg-background/50 hover:bg-background/80 transition-colors',
-        urgencyBorderColors[todo.urgency]
+        columnBorderColors[todo.boardColumnId] || 'border-l-gray-500'
       )}
     >
       <Checkbox
@@ -68,9 +75,6 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
           {todo.description}
         </p>
         <div className="flex items-center gap-2 mt-1">
-          <Badge variant={todo.urgency} className="text-xs">
-            {todo.urgency}
-          </Badge>
           <DeadlineDisplay deadline={todo.deadline} />
           <Link
             to={`/inbox/${todo.emailId}`}

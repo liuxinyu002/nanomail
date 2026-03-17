@@ -38,6 +38,7 @@ describe('TodoRoutes', () => {
       findOne: vi.fn(),
       save: vi.fn(),
       delete: vi.fn(),
+      update: vi.fn(),
       createQueryBuilder: vi.fn().mockReturnValue(mockQueryBuilder),
     } as unknown as Repository<Todo>
 
@@ -45,6 +46,12 @@ describe('TodoRoutes', () => {
     mockDataSource = {
       getRepository: vi.fn().mockReturnValue(mockRepository),
       isInitialized: true,
+      transaction: vi.fn().mockImplementation(async (cb) => {
+        const transactionManager = {
+          getRepository: vi.fn().mockReturnValue(mockRepository),
+        }
+        return cb(transactionManager)
+      }),
     } as unknown as DataSource
 
     // Create express app with routes
@@ -64,9 +71,10 @@ describe('TodoRoutes', () => {
           id: 1,
           emailId: 1,
           description: 'Test todo',
-          urgency: 'high',
-          status: 'pending',
+          status: 'pending' as const,
           deadline: new Date('2024-12-31T23:59:59Z'),
+          boardColumnId: 1,
+          position: 0,
           createdAt: new Date('2024-01-15'),
         },
       ]
@@ -85,18 +93,20 @@ describe('TodoRoutes', () => {
           id: 1,
           emailId: 1,
           description: 'Todo with deadline',
-          urgency: 'high',
-          status: 'pending',
+          status: 'pending' as const,
           deadline: new Date('2024-12-31T23:59:59Z'),
+          boardColumnId: 1,
+          position: 0,
           createdAt: new Date('2024-01-15'),
         },
         {
           id: 2,
           emailId: 1,
           description: 'Todo without deadline',
-          urgency: 'low',
-          status: 'pending',
+          status: 'pending' as const,
           deadline: null,
+          boardColumnId: 1,
+          position: 1,
           createdAt: new Date('2024-01-15'),
         },
       ]
@@ -110,7 +120,30 @@ describe('TodoRoutes', () => {
       expect(response.body.todos[1].deadline).toBeNull()
     })
 
-    it('should sort by deadline with nulls last', async () => {
+    it('should include boardColumnId and position in response', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Test todo',
+          status: 'pending' as const,
+          deadline: null,
+          boardColumnId: 2,
+          position: 5,
+          createdAt: new Date('2024-01-15'),
+        },
+      ]
+
+      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+
+      const response = await request(app).get('/api/todos')
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos[0].boardColumnId).toBe(2)
+      expect(response.body.todos[0].position).toBe(5)
+    })
+
+    it('should sort by position then deadline with nulls last', async () => {
       vi.mocked(mockRepository.find).mockResolvedValue([])
 
       await request(app).get('/api/todos')
@@ -118,6 +151,7 @@ describe('TodoRoutes', () => {
       expect(mockRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({
           order: expect.objectContaining({
+            position: 'ASC',
             deadline: expect.objectContaining({
               direction: 'ASC',
               nulls: 'LAST'
@@ -141,16 +175,16 @@ describe('TodoRoutes', () => {
       )
     })
 
-    it('should filter by urgency', async () => {
+    it('should filter by boardColumnId', async () => {
       vi.mocked(mockRepository.find).mockResolvedValue([])
 
       await request(app)
         .get('/api/todos')
-        .query({ urgency: 'high' })
+        .query({ boardColumnId: 2 })
 
       expect(mockRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ urgency: 'high' }),
+          where: expect.objectContaining({ boardColumnId: 2 }),
         })
       )
     })
@@ -174,13 +208,13 @@ describe('TodoRoutes', () => {
 
       await request(app)
         .get('/api/todos')
-        .query({ status: 'pending', urgency: 'high' })
+        .query({ status: 'pending', boardColumnId: 2 })
 
       expect(mockRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             status: 'pending',
-            urgency: 'high',
+            boardColumnId: 2,
           }),
         })
       )
@@ -202,9 +236,10 @@ describe('TodoRoutes', () => {
         id: 1,
         emailId: 1,
         description: 'Test',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: new Date('2024-12-31T23:59:59Z'),
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -227,9 +262,10 @@ describe('TodoRoutes', () => {
         id: 1,
         emailId: 1,
         description: 'Test',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: new Date('2024-12-31T23:59:59Z'),
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -272,9 +308,10 @@ describe('TodoRoutes', () => {
           id: 1,
           emailId: 1,
           description: 'Todo in range',
-          urgency: 'high' as const,
           status: 'pending' as const,
           deadline: new Date('2024-03-15T23:59:59Z'),
+          boardColumnId: 1,
+          position: 0,
           createdAt: new Date(),
         },
       ]
@@ -317,10 +354,11 @@ describe('TodoRoutes', () => {
         {
           id: 1,
           emailId: 1,
-          description: 'High urgency todo',
-          urgency: 'high' as const,
+          description: 'High priority todo',
           status: 'pending' as const,
           deadline: new Date('2024-03-15T23:59:59Z'),
+          boardColumnId: 2,
+          position: 0,
           createdAt: new Date(),
         },
       ]
@@ -333,11 +371,133 @@ describe('TodoRoutes', () => {
           startDate: '2024-03-01',
           endDate: '2024-03-31',
           status: 'pending',
-          urgency: 'high'
+          boardColumnId: 2
         })
 
       expect(response.status).toBe(200)
       expect(response.body.todos).toHaveLength(1)
+    })
+  })
+
+  describe('PATCH /api/todos/:id/position', () => {
+    it('should update todo position and column', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        boardColumnId: 2,
+        position: 5,
+      })
+
+      const response = await request(app)
+        .patch('/api/todos/1/position')
+        .send({ boardColumnId: 2, position: 5 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.boardColumnId).toBe(2)
+      expect(response.body.position).toBe(5)
+    })
+
+    it('should require boardColumnId', async () => {
+      const response = await request(app)
+        .patch('/api/todos/1/position')
+        .send({ position: 5 })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should allow updating deadline along with position', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        boardColumnId: 2,
+        position: 5,
+        deadline: new Date('2024-12-31T23:59:59Z'),
+      })
+
+      const response = await request(app)
+        .patch('/api/todos/1/position')
+        .send({
+          boardColumnId: 2,
+          position: 5,
+          deadline: '2024-12-31T23:59:59Z'
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.deadline).toBe('2024-12-31T23:59:59.000Z')
+    })
+
+    it('should return 404 for non-existent todo', async () => {
+      vi.mocked(mockRepository.findOne).mockResolvedValue(null)
+
+      const response = await request(app)
+        .patch('/api/todos/999/position')
+        .send({ boardColumnId: 2 })
+
+      expect(response.status).toBe(404)
+    })
+  })
+
+  describe('POST /api/todos/batch-position', () => {
+    it('should batch update multiple todo positions', async () => {
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 3, raw: {} })
+
+      const response = await request(app)
+        .post('/api/todos/batch-position')
+        .send({
+          updates: [
+            { id: 1, boardColumnId: 2, position: 0 },
+            { id: 2, boardColumnId: 2, position: 1 },
+            { id: 3, boardColumnId: 2, position: 2 },
+          ]
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.updated).toBe(3)
+      expect(mockRepository.update).toHaveBeenCalledTimes(3)
+    })
+
+    it('should reject empty updates array', async () => {
+      const response = await request(app)
+        .post('/api/todos/batch-position')
+        .send({ updates: [] })
+
+      expect(response.status).toBe(200)
+      expect(response.body.updated).toBe(0)
+    })
+
+    it('should reject invalid update format', async () => {
+      const response = await request(app)
+        .post('/api/todos/batch-position')
+        .send({
+          updates: [
+            { id: 1, boardColumnId: 'invalid', position: 0 },
+          ]
+        })
+
+      expect(response.status).toBe(400)
     })
   })
 
@@ -347,9 +507,10 @@ describe('TodoRoutes', () => {
         id: 1,
         emailId: 1,
         description: 'Old description',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: null,
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -367,39 +528,15 @@ describe('TodoRoutes', () => {
       expect(response.body.description).toBe('New description')
     })
 
-    it('should update todo urgency', async () => {
-      const mockTodo = {
-        id: 1,
-        emailId: 1,
-        description: 'Test',
-        urgency: 'low' as const,
-        status: 'pending' as const,
-        deadline: null,
-        createdAt: new Date(),
-      }
-
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
-        ...mockTodo,
-        urgency: 'high',
-      })
-
-      const response = await request(app)
-        .patch('/api/todos/1')
-        .send({ urgency: 'high' })
-
-      expect(response.status).toBe(200)
-      expect(response.body.urgency).toBe('high')
-    })
-
     it('should update todo deadline', async () => {
       const mockTodo = {
         id: 1,
         emailId: 1,
         description: 'Test',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: null,
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -422,9 +559,10 @@ describe('TodoRoutes', () => {
         id: 1,
         emailId: 1,
         description: 'Test',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: null,
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -442,14 +580,67 @@ describe('TodoRoutes', () => {
       expect(response.body.status).toBe('completed')
     })
 
+    it('should update todo boardColumnId', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        boardColumnId: 2,
+      })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ boardColumnId: 2 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.boardColumnId).toBe(2)
+    })
+
+    it('should update todo position', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        position: 10,
+      })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ position: 10 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.position).toBe(10)
+    })
+
     it('should update multiple fields at once', async () => {
       const mockTodo = {
         id: 1,
         emailId: 1,
         description: 'Old',
-        urgency: 'low' as const,
         status: 'pending' as const,
         deadline: null,
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -457,8 +648,9 @@ describe('TodoRoutes', () => {
       vi.mocked(mockRepository.save).mockResolvedValue({
         ...mockTodo,
         description: 'New',
-        urgency: 'high',
         status: 'in_progress',
+        boardColumnId: 2,
+        position: 5,
         deadline: new Date('2024-12-31T23:59:59Z'),
       })
 
@@ -466,15 +658,17 @@ describe('TodoRoutes', () => {
         .patch('/api/todos/1')
         .send({
           description: 'New',
-          urgency: 'high',
           status: 'in_progress',
+          boardColumnId: 2,
+          position: 5,
           deadline: '2024-12-31T23:59:59Z'
         })
 
       expect(response.status).toBe(200)
       expect(response.body.description).toBe('New')
-      expect(response.body.urgency).toBe('high')
       expect(response.body.status).toBe('in_progress')
+      expect(response.body.boardColumnId).toBe(2)
+      expect(response.body.position).toBe(5)
     })
 
     it('should set deadline to null', async () => {
@@ -482,9 +676,10 @@ describe('TodoRoutes', () => {
         id: 1,
         emailId: 1,
         description: 'Test',
-        urgency: 'high' as const,
         status: 'pending' as const,
         deadline: new Date('2024-12-31T23:59:59Z'),
+        boardColumnId: 1,
+        position: 0,
         createdAt: new Date(),
       }
 
@@ -510,10 +705,10 @@ describe('TodoRoutes', () => {
       expect(response.status).toBe(400)
     })
 
-    it('should reject invalid urgency value', async () => {
+    it('should reject invalid status value', async () => {
       const response = await request(app)
         .patch('/api/todos/1')
-        .send({ urgency: 'critical' })
+        .send({ status: 'invalid' })
 
       expect(response.status).toBe(400)
     })

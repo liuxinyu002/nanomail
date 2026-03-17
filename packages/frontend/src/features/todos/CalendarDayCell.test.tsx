@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { CalendarDayCell, type CalendarDayCellProps } from './CalendarDayCell'
-import type { Urgency } from '@nanomail/shared'
 
 describe('CalendarDayCell', () => {
   const mockDate = new Date('2024-03-15T12:00:00.000Z')
@@ -12,7 +11,7 @@ describe('CalendarDayCell', () => {
     isCurrentMonth: true,
     isToday: false,
     todoCount: 0,
-    highestUrgency: null,
+    highestPriorityColumn: null,
     onClick: mockOnClick,
   }
 
@@ -83,35 +82,43 @@ describe('CalendarDayCell', () => {
     })
   })
 
-  describe('Urgency Color Indicator', () => {
-    it('should not render urgency indicator when highestUrgency is null', () => {
-      render(<CalendarDayCell {...defaultProps} highestUrgency={null} />)
+  describe('Column Color Indicator', () => {
+    it('should not render priority indicator when highestPriorityColumn is null', () => {
+      render(<CalendarDayCell {...defaultProps} highestPriorityColumn={null} />)
 
-      expect(screen.queryByTestId('urgency-indicator')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('priority-indicator')).not.toBeInTheDocument()
     })
 
-    it('should render red indicator for high urgency', () => {
-      render(<CalendarDayCell {...defaultProps} highestUrgency={'high' as Urgency} />)
+    it('should render red indicator for Todo column (2)', () => {
+      render(<CalendarDayCell {...defaultProps} highestPriorityColumn={2} />)
 
-      const indicator = screen.getByTestId('urgency-indicator')
+      const indicator = screen.getByTestId('priority-indicator')
       expect(indicator).toBeInTheDocument()
       expect(indicator).toHaveClass('bg-red-500')
     })
 
-    it('should render yellow indicator for medium urgency', () => {
-      render(<CalendarDayCell {...defaultProps} highestUrgency={'medium' as Urgency} />)
+    it('should render amber indicator for In Progress column (3)', () => {
+      render(<CalendarDayCell {...defaultProps} highestPriorityColumn={3} />)
 
-      const indicator = screen.getByTestId('urgency-indicator')
+      const indicator = screen.getByTestId('priority-indicator')
       expect(indicator).toBeInTheDocument()
-      expect(indicator).toHaveClass('bg-yellow-500')
+      expect(indicator).toHaveClass('bg-amber-500')
     })
 
-    it('should render blue indicator for low urgency', () => {
-      render(<CalendarDayCell {...defaultProps} highestUrgency={'low' as Urgency} />)
+    it('should render blue indicator for Inbox column (1)', () => {
+      render(<CalendarDayCell {...defaultProps} highestPriorityColumn={1} />)
 
-      const indicator = screen.getByTestId('urgency-indicator')
+      const indicator = screen.getByTestId('priority-indicator')
       expect(indicator).toBeInTheDocument()
       expect(indicator).toHaveClass('bg-blue-500')
+    })
+
+    it('should render green indicator for Done column (4)', () => {
+      render(<CalendarDayCell {...defaultProps} highestPriorityColumn={4} />)
+
+      const indicator = screen.getByTestId('priority-indicator')
+      expect(indicator).toBeInTheDocument()
+      expect(indicator).toHaveClass('bg-green-500')
     })
   })
 

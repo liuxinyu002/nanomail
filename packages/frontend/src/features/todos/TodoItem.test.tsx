@@ -39,9 +39,9 @@ describe('TodoItem', () => {
     id: 1,
     emailId: 100,
     description: 'Review the quarterly report',
-    urgency: 'high',
     status: 'pending',
     deadline: null,
+    boardColumnId: 2, // Todo column
     createdAt: '2024-01-15T10:00:00.000Z',
   }
 
@@ -60,26 +60,6 @@ describe('TodoItem', () => {
       render(<TodoItem {...defaultProps} />)
 
       expect(screen.getByText('Review the quarterly report')).toBeInTheDocument()
-    })
-
-    it('should render urgency badge for high priority', () => {
-      render(<TodoItem {...defaultProps} />)
-
-      expect(screen.getByText('high')).toBeInTheDocument()
-    })
-
-    it('should render urgency badge for medium priority', () => {
-      const mediumTodo = { ...mockTodo, urgency: 'medium' as const }
-      render(<TodoItem {...defaultProps} todo={mediumTodo} />)
-
-      expect(screen.getByText('medium')).toBeInTheDocument()
-    })
-
-    it('should render urgency badge for low priority', () => {
-      const lowTodo = { ...mockTodo, urgency: 'low' as const }
-      render(<TodoItem {...defaultProps} todo={lowTodo} />)
-
-      expect(screen.getByText('low')).toBeInTheDocument()
     })
 
     it('should render unchecked checkbox for pending todo', () => {
@@ -105,27 +85,35 @@ describe('TodoItem', () => {
       expect(description).toHaveClass('line-through')
     })
 
-    it('should have left border color based on urgency - red for high', () => {
+    it('should have left border color based on boardColumnId - red for Todo column (2)', () => {
       render(<TodoItem {...defaultProps} />)
 
       const container = screen.getByTestId('todo-item-container')
       expect(container).toHaveClass('border-l-red-500')
     })
 
-    it('should have left border color based on urgency - amber for medium', () => {
-      const mediumTodo = { ...mockTodo, urgency: 'medium' as const }
-      render(<TodoItem {...defaultProps} todo={mediumTodo} />)
+    it('should have left border color based on boardColumnId - amber for In Progress column (3)', () => {
+      const inProgressTodo = { ...mockTodo, boardColumnId: 3 }
+      render(<TodoItem {...defaultProps} todo={inProgressTodo} />)
 
       const container = screen.getByTestId('todo-item-container')
       expect(container).toHaveClass('border-l-amber-500')
     })
 
-    it('should have left border color based on urgency - blue for low', () => {
-      const lowTodo = { ...mockTodo, urgency: 'low' as const }
-      render(<TodoItem {...defaultProps} todo={lowTodo} />)
+    it('should have left border color based on boardColumnId - blue for Inbox column (1)', () => {
+      const inboxTodo = { ...mockTodo, boardColumnId: 1 }
+      render(<TodoItem {...defaultProps} todo={inboxTodo} />)
 
       const container = screen.getByTestId('todo-item-container')
       expect(container).toHaveClass('border-l-blue-500')
+    })
+
+    it('should have left border color based on boardColumnId - green for Done column (4)', () => {
+      const doneTodo = { ...mockTodo, boardColumnId: 4 }
+      render(<TodoItem {...defaultProps} todo={doneTodo} />)
+
+      const container = screen.getByTestId('todo-item-container')
+      expect(container).toHaveClass('border-l-green-500')
     })
   })
 

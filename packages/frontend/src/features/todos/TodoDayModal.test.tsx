@@ -20,28 +20,28 @@ describe('TodoDayModal', () => {
     {
       id: 1,
       emailId: 100,
-      description: 'Low priority task',
-      urgency: 'low',
+      description: 'Inbox task',
       status: 'pending',
       deadline: '2024-01-15T00:00:00.000Z',
+      boardColumnId: 1, // Inbox
       createdAt: '2024-01-10T00:00:00.000Z',
     },
     {
       id: 2,
       emailId: 100,
-      description: 'High priority task',
-      urgency: 'high',
+      description: 'Todo task',
       status: 'pending',
       deadline: '2024-01-15T00:00:00.000Z',
+      boardColumnId: 2, // Todo (high priority)
       createdAt: '2024-01-10T00:00:00.000Z',
     },
     {
       id: 3,
       emailId: 100,
-      description: 'Medium priority task',
-      urgency: 'medium',
+      description: 'In Progress task',
       status: 'pending',
       deadline: '2024-01-15T00:00:00.000Z',
+      boardColumnId: 3, // In Progress (medium priority)
       createdAt: '2024-01-10T00:00:00.000Z',
     },
   ]
@@ -119,7 +119,7 @@ describe('TodoDayModal', () => {
       expect(screen.getByText(/no tasks for this day/i)).toBeInTheDocument()
     })
 
-    it('displays all todos sorted by priority (high first)', () => {
+    it('displays all todos sorted by column priority (Todo first, then In Progress, then Inbox)', () => {
       renderWithQueryClient(
         <TodoDayModal
           open={true}
@@ -130,9 +130,9 @@ describe('TodoDayModal', () => {
       )
 
       const todoItems = screen.getAllByRole('listitem')
-      expect(todoItems[0]).toHaveTextContent('High priority task')
-      expect(todoItems[1]).toHaveTextContent('Medium priority task')
-      expect(todoItems[2]).toHaveTextContent('Low priority task')
+      expect(todoItems[0]).toHaveTextContent('Todo task')
+      expect(todoItems[1]).toHaveTextContent('In Progress task')
+      expect(todoItems[2]).toHaveTextContent('Inbox task')
     })
   })
 
@@ -486,7 +486,7 @@ describe('TodoDayModal', () => {
 
       // Should be back to list
       await waitFor(() => {
-        expect(screen.getByText('Low priority task')).toBeInTheDocument()
+        expect(screen.getByText('Inbox task')).toBeInTheDocument()
       })
     })
   })
@@ -570,7 +570,7 @@ describe('TodoDayModal', () => {
         />
       )
 
-      const description = screen.getByText('Low priority task')
+      const description = screen.getByText('Inbox task')
       expect(description).toHaveClass('line-through')
     })
   })
@@ -589,7 +589,7 @@ describe('TodoDayModal', () => {
         />
       )
 
-      await user.click(screen.getByText('Low priority task'))
+      await user.click(screen.getByText('Inbox task'))
       expect(mockOnTodoClick).toHaveBeenCalledWith(mockTodos[0])
     })
 
@@ -703,7 +703,7 @@ describe('TodoDayModal', () => {
       )
 
       // Verify initial state
-      expect(screen.getByText('Low priority task')).toBeInTheDocument()
+      expect(screen.getByText('Inbox task')).toBeInTheDocument()
 
       // Close modal
       const closeButton = screen.getByRole('button', { name: /close/i })
@@ -759,9 +759,9 @@ describe('TodoDayModal', () => {
         id: i + 1,
         emailId: 100,
         description: `Task ${i + 1}`,
-        urgency: 'medium' as const,
         status: 'pending' as const,
         deadline: '2024-01-15T00:00:00.000Z',
+        boardColumnId: 2,
         createdAt: '2024-01-10T00:00:00.000Z',
       }))
 

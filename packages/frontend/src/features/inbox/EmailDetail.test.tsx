@@ -27,8 +27,8 @@ describe('EmailDetail', () => {
   }
 
   const mockTodos = [
-    { id: 1, emailId: 1, description: 'Reply to the email', urgency: 'high' as const, status: 'pending' as const, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
-    { id: 2, emailId: 1, description: 'Schedule a meeting', urgency: 'medium' as const, status: 'pending' as const, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
+    { id: 1, emailId: 1, description: 'Reply to the email', status: 'pending' as const, boardColumnId: 2, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
+    { id: 2, emailId: 1, description: 'Schedule a meeting', status: 'pending' as const, boardColumnId: 3, deadline: null, createdAt: '2024-01-15T10:00:00.000Z' },
   ]
 
   beforeEach(() => {
@@ -141,7 +141,7 @@ describe('EmailDetail', () => {
       })
     })
 
-    it('should show urgency indicators', async () => {
+    it('should show column names for todos', async () => {
       mockGetTodos.mockResolvedValueOnce({ todos: mockTodos })
 
       render(<EmailDetail email={mockEmail} />)
@@ -151,8 +151,8 @@ describe('EmailDetail', () => {
       })
 
       await waitFor(() => {
-        expect(screen.getByText('high')).toBeInTheDocument()
-        expect(screen.getByText('medium')).toBeInTheDocument()
+        expect(screen.getByText('Todo')).toBeInTheDocument()
+        expect(screen.getByText('In Progress')).toBeInTheDocument()
       })
     })
   })

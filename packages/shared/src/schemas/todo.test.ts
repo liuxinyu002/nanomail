@@ -12,9 +12,9 @@ describe('Todo Schemas', () => {
       id: 1,
       emailId: 100,
       description: 'Test todo item',
-      urgency: 'high' as const,
       status: 'pending' as const,
       deadline: '2024-03-15T23:59:59.000Z',
+      boardColumnId: 1,
       createdAt: '2024-01-15T10:00:00Z'
     }
 
@@ -33,24 +33,29 @@ describe('Todo Schemas', () => {
       expect(result.createdAt).toBeInstanceOf(Date)
     })
 
-    it('should accept all valid urgency values', () => {
-      expect(TodoSchema.parse({ ...validTodo, urgency: 'high' }).urgency).toBe('high')
-      expect(TodoSchema.parse({ ...validTodo, urgency: 'medium' }).urgency).toBe('medium')
-      expect(TodoSchema.parse({ ...validTodo, urgency: 'low' }).urgency).toBe('low')
-    })
-
     it('should accept all valid status values', () => {
       expect(TodoSchema.parse({ ...validTodo, status: 'pending' }).status).toBe('pending')
       expect(TodoSchema.parse({ ...validTodo, status: 'in_progress' }).status).toBe('in_progress')
       expect(TodoSchema.parse({ ...validTodo, status: 'completed' }).status).toBe('completed')
     })
 
-    it('should reject invalid urgency', () => {
-      expect(() => TodoSchema.parse({ ...validTodo, urgency: 'critical' })).toThrow()
+    it('should have boardColumnId with default value', () => {
+      const result = TodoSchema.parse({ ...validTodo, boardColumnId: undefined })
+      expect(result.boardColumnId).toBe(1) // Default to Inbox
+    })
+
+    it('should accept optional position field', () => {
+      const result = TodoSchema.parse({ ...validTodo, position: 5 })
+      expect(result.position).toBe(5)
     })
 
     it('should reject invalid status', () => {
       expect(() => TodoSchema.parse({ ...validTodo, status: 'done' })).toThrow()
+    })
+
+    it('should reject invalid boardColumnId (non-positive)', () => {
+      expect(() => TodoSchema.parse({ ...validTodo, boardColumnId: 0 })).toThrow()
+      expect(() => TodoSchema.parse({ ...validTodo, boardColumnId: -1 })).toThrow()
     })
   })
 
@@ -58,9 +63,9 @@ describe('Todo Schemas', () => {
     const validCreate = {
       emailId: 100,
       description: 'Test todo item',
-      urgency: 'high' as const,
       status: 'pending' as const,
-      deadline: '2024-03-15T23:59:59.000Z'
+      deadline: '2024-03-15T23:59:59.000Z',
+      boardColumnId: 1
     }
 
     it('should parse valid create todo with deadline', () => {
@@ -81,6 +86,11 @@ describe('Todo Schemas', () => {
     it('should omit createdAt field', () => {
       const result = CreateTodoSchema.parse(validCreate)
       expect((result as Record<string, unknown>).createdAt).toBeUndefined()
+    })
+
+    it('should accept optional position field', () => {
+      const result = CreateTodoSchema.parse({ ...validCreate, position: 10 })
+      expect(result.position).toBe(10)
     })
   })
 
@@ -105,9 +115,14 @@ describe('Todo Schemas', () => {
       expect(result.description).toBe('Updated description')
     })
 
-    it('should allow updating urgency', () => {
-      const result = UpdateTodoSchema.parse({ urgency: 'low' })
-      expect(result.urgency).toBe('low')
+    it('should allow updating boardColumnId', () => {
+      const result = UpdateTodoSchema.parse({ boardColumnId: 2 })
+      expect(result.boardColumnId).toBe(2)
+    })
+
+    it('should allow updating position', () => {
+      const result = UpdateTodoSchema.parse({ position: 5 })
+      expect(result.position).toBe(5)
     })
 
     it('should NOT allow emailId in update (emailId is not updatable)', () => {
@@ -134,14 +149,16 @@ describe('Todo Schemas', () => {
     it('should allow updating multiple fields at once', () => {
       const result = UpdateTodoSchema.parse({
         description: 'New description',
-        urgency: 'high',
         status: 'in_progress',
-        deadline: '2024-05-01T12:00:00.000Z'
+        deadline: '2024-05-01T12:00:00.000Z',
+        boardColumnId: 3,
+        position: 10
       })
       expect(result.description).toBe('New description')
-      expect(result.urgency).toBe('high')
       expect(result.status).toBe('in_progress')
       expect(result.deadline).toBe('2024-05-01T12:00:00.000Z')
+      expect(result.boardColumnId).toBe(3)
+      expect(result.position).toBe(10)
     })
   })
 

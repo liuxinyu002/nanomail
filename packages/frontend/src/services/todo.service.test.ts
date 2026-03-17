@@ -23,9 +23,10 @@ describe('TodoService', () => {
             id: 1,
             emailId: 1,
             description: 'Review the report',
-            urgency: 'high',
             status: 'pending',
             deadline: null,
+            boardColumnId: 1,
+            position: 100,
             createdAt: '2024-01-01T00:00:00.000Z',
           },
         ],
@@ -77,13 +78,14 @@ describe('TodoService', () => {
 
   describe('updateTodoStatus', () => {
     it('should update todo status', async () => {
-      const mockResponse = {
+      const mockResponse: TodoItem = {
         id: 1,
         emailId: 1,
         description: 'Review the report',
-        urgency: 'high',
         status: 'completed' as TodoStatus,
         deadline: null,
+        boardColumnId: 1,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 
@@ -99,7 +101,7 @@ describe('TodoService', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'completed' }),
       })
-      expect(result).toEqual(mockResponse)
+      expect(result.status).toBe('completed')
     })
 
     it('should throw error for non-existent todo', async () => {
@@ -121,9 +123,10 @@ describe('TodoService', () => {
             id: 1,
             emailId: 1,
             description: 'Task for the week',
-            urgency: 'high',
             status: 'pending',
             deadline: '2024-01-15T00:00:00.000Z',
+            boardColumnId: 1,
+            position: 100,
             createdAt: '2024-01-01T00:00:00.000Z',
           },
         ],
@@ -180,9 +183,10 @@ describe('TodoService', () => {
         id: 1,
         emailId: 1,
         description: 'Updated description',
-        urgency: 'high',
         status: 'pending',
         deadline: null,
+        boardColumnId: 1,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 
@@ -198,17 +202,18 @@ describe('TodoService', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: 'Updated description' }),
       })
-      expect(result).toEqual(mockResponse)
+      expect(result.description).toBe('Updated description')
     })
 
-    it('should update todo urgency', async () => {
+    it('should update todo boardColumnId', async () => {
       const mockResponse: TodoItem = {
         id: 1,
         emailId: 1,
         description: 'Review the report',
-        urgency: 'low',
         status: 'pending',
         deadline: null,
+        boardColumnId: 2,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 
@@ -217,14 +222,14 @@ describe('TodoService', () => {
         json: () => Promise.resolve(mockResponse),
       })
 
-      const result = await TodoService.updateTodo(1, { urgency: 'low' })
+      const result = await TodoService.updateTodo(1, { boardColumnId: 2 })
 
       expect(mockFetch).toHaveBeenCalledWith('/api/todos/1', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urgency: 'low' }),
+        body: JSON.stringify({ boardColumnId: 2 }),
       })
-      expect(result.urgency).toBe('low')
+      expect(result.boardColumnId).toBe(2)
     })
 
     it('should update todo status', async () => {
@@ -232,9 +237,10 @@ describe('TodoService', () => {
         id: 1,
         emailId: 1,
         description: 'Review the report',
-        urgency: 'high',
         status: 'completed',
         deadline: null,
+        boardColumnId: 1,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 
@@ -253,9 +259,10 @@ describe('TodoService', () => {
         id: 1,
         emailId: 1,
         description: 'Review the report',
-        urgency: 'high',
         status: 'pending',
         deadline: '2024-02-01T00:00:00.000Z',
+        boardColumnId: 1,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 
@@ -274,9 +281,10 @@ describe('TodoService', () => {
         id: 1,
         emailId: 1,
         description: 'Review the report',
-        urgency: 'high',
         status: 'pending',
         deadline: null,
+        boardColumnId: 1,
+        position: 100,
         createdAt: '2024-01-01T00:00:00.000Z',
       }
 

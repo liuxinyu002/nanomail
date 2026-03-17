@@ -1,6 +1,5 @@
-import { memo } from 'react'
+import { memo, useCallback, KeyboardEvent } from 'react'
 import { format } from 'date-fns'
-import type { Urgency } from '@nanomail/shared'
 import { cn } from '@/lib/utils'
 
 export interface CalendarDayCellProps {
@@ -8,32 +7,23 @@ export interface CalendarDayCellProps {
   isCurrentMonth: boolean
   isToday: boolean
   todoCount: number
-  highestUrgency: Urgency | null
+  highestPriorityColumn: number | null
   onClick: (date: Date) => void
 }
 
-const urgencyColors: Record<Urgency, string> = {
-  high: 'bg-red-500',
-  medium: 'bg-yellow-500',
-  low: 'bg-blue-500',
+const columnColors: Record<number, string> = {
+  2: 'bg-red-500',
+  3: 'bg-amber-500',
+  1: 'bg-blue-500',
+  4: 'bg-green-500',
 }
 
-/**
- * CalendarDayCell - Single day cell in the calendar grid
- *
- * Renders a single day with:
- * - Day number
- * - Todo count badge (if any pending todos)
- * - Urgency color indicator (bottom bar)
- *
- * Uses React.memo for optimization to prevent unnecessary re-renders
- */
 export const CalendarDayCell = memo(function CalendarDayCell({
   date,
   isCurrentMonth,
   isToday,
   todoCount,
-  highestUrgency,
+  highestPriorityColumn,
   onClick,
 }: CalendarDayCellProps) {
   const dayNumber = format(date, 'd')
@@ -42,22 +32,33 @@ export const CalendarDayCell = memo(function CalendarDayCell({
     ? `${dayNumber}, ${todoCount} todo${todoCount > 1 ? 's' : ''}`
     : `${dayNumber}`
 
+  const handleClick = useCallback(() => {
+    onClick(date)
+  }, [onClick, date])
+
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick(date)
+    }
+  }, [onClick, date])
+
   return (
     <div
       data-testid="calendar-day-cell"
       role="button"
+      tabIndex={0}
       aria-label={ariaLabel}
-      onClick={() => onClick(date)}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={cn(
         'relative h-16 p-1 border cursor-pointer hover:bg-accent transition-colors',
         !isCurrentMonth && 'bg-muted/30 text-muted-foreground',
         isToday && 'ring-2 ring-primary'
       )}
     >
-      {/* Date number */}
       <span className="text-sm font-medium">{dayNumber}</span>
 
-      {/* Todo count badge */}
       {todoCount > 0 && (
         <span
           data-testid="todo-count-badge"
@@ -67,13 +68,12 @@ export const CalendarDayCell = memo(function CalendarDayCell({
         </span>
       )}
 
-      {/* Highest urgency color indicator */}
-      {highestUrgency && (
+      {highestPriorityColumn && (
         <div
-          data-testid="urgency-indicator"
+          data-testid="priority-indicator"
           className={cn(
             'absolute bottom-0 left-0 right-0 h-1',
-            urgencyColors[highestUrgency]
+            columnColors[highestPriorityColumn] || 'bg-gray-500'
           )}
         />
       )}

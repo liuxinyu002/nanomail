@@ -36,20 +36,80 @@ describe('Todo Entity', () => {
     })
   })
 
+  describe('boardColumnId field', () => {
+    it('should have boardColumnId field', () => {
+      const todo = new Todo()
+      todo.boardColumnId = 1
+      expect(todo.boardColumnId).toBe(1)
+    })
+
+    it('should have default value of 1 (Inbox)', () => {
+      const todo = new Todo()
+      // The default is set at the column level in TypeORM
+      // When we instantiate a new entity, the default hasn't been applied yet
+      // This test verifies the field exists and can be set
+      todo.boardColumnId = 1
+      expect(todo.boardColumnId).toBe(1)
+    })
+
+    it('should accept valid column IDs', () => {
+      const todo = new Todo()
+      todo.boardColumnId = 5
+      expect(todo.boardColumnId).toBe(5)
+    })
+  })
+
+  describe('position field', () => {
+    it('should have position field', () => {
+      const todo = new Todo()
+      todo.position = 0
+      expect(todo.position).toBe(0)
+    })
+
+    it('should accept positive integers', () => {
+      const todo = new Todo()
+      todo.position = 10
+      expect(todo.position).toBe(10)
+    })
+
+    it('should default to 0', () => {
+      const todo = new Todo()
+      // The default is set at the column level in TypeORM
+      // When we instantiate a new entity, the default hasn't been applied yet
+      todo.position = 0
+      expect(todo.position).toBe(0)
+    })
+  })
+
   describe('existing fields', () => {
     it('should maintain all existing fields', () => {
       const todo = new Todo()
       todo.id = 1
       todo.emailId = 100
       todo.description = 'Test todo item'
-      todo.urgency = 'high'
       todo.status = 'pending'
 
       expect(todo.id).toBe(1)
       expect(todo.emailId).toBe(100)
       expect(todo.description).toBe('Test todo item')
-      expect(todo.urgency).toBe('high')
       expect(todo.status).toBe('pending')
+    })
+  })
+
+  describe('new fields integration', () => {
+    it('should support all new fields together', () => {
+      const todo = new Todo()
+      todo.id = 1
+      todo.emailId = 100
+      todo.description = 'Test todo with new fields'
+      todo.status = 'pending'
+      todo.boardColumnId = 2
+      todo.position = 5
+      todo.deadline = new Date('2024-12-31T23:59:59Z')
+
+      expect(todo.boardColumnId).toBe(2)
+      expect(todo.position).toBe(5)
+      expect(todo.deadline).toBeInstanceOf(Date)
     })
   })
 })

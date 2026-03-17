@@ -7,10 +7,17 @@ import {
   type Relation
 } from 'typeorm'
 import { Email } from './Email.entity'
+import { BoardColumn } from './BoardColumn.entity'
 
-export type TodoUrgency = 'high' | 'medium' | 'low'
 export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 
+/**
+ * Todo Entity
+ *
+ * Note: urgency field is deprecated - task status is now determined by boardColumnId
+ * - boardColumnId: The column the todo belongs to (Inbox, Todo, In Progress, Done, etc.)
+ * - position: Order within the column for drag-and-drop sorting
+ */
 @Entity('todos')
 export class Todo {
   @PrimaryGeneratedColumn('increment')
@@ -27,13 +34,6 @@ export class Todo {
 
   @Column({
     type: 'text',
-    enum: ['high', 'medium', 'low'],
-    default: 'medium'
-  })
-  urgency!: TodoUrgency
-
-  @Column({
-    type: 'text',
     enum: ['pending', 'in_progress', 'completed'],
     default: 'pending'
   })
@@ -46,6 +46,24 @@ export class Todo {
    */
   @Column({ type: 'datetime', nullable: true })
   deadline!: Date | null
+
+  /**
+   * The board column this todo belongs to
+   * NOT nullable - all todos must belong to a column
+   * Default: 1 (Inbox)
+   */
+  @Column({ type: 'integer', default: 1 })
+  boardColumnId!: number
+
+  @ManyToOne(() => BoardColumn, (column) => column.todos)
+  boardColumn!: Relation<BoardColumn>
+
+  /**
+   * Position within the column for ordering
+   * Used for drag-and-drop sorting within a column
+   */
+  @Column({ type: 'integer', default: 0 })
+  position!: number
 
   @CreateDateColumn({ type: 'datetime' })
   createdAt!: Date

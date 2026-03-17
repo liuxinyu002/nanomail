@@ -1,50 +1,82 @@
-import { useState, useMemo, useCallback } from 'react'
-import { CheckSquare, Loader2, List, Calendar } from 'lucide-react'
-import { TodoColumn } from '@/features/todos/TodoColumn'
-import { TodoCalendar } from '@/features/todos/TodoCalendar'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useTodos } from '@/hooks'
+import { useState, useEffect } from 'react'
+import { CheckSquare, Loader2 } from 'lucide-react'
+import { useTodos, useBoardColumns } from '@/hooks'
 import { toast } from 'sonner'
+import { DndProvider } from '@/contexts/DndContext'
+import { ViewToggle, type ViewType } from '@/features/todos/ViewToggle'
+import { InboxPanel } from '@/features/todos/InboxPanel'
+import { PlannerPanel } from '@/features/todos/PlannerPanel'
+import { BoardPanel } from '@/features/todos/BoardPanel'
+import type { BoardColumn } from '@nanomail/shared'
+import type { DragEndEvent } from '@/contexts/DndContext'
 
-type ViewMode = 'list' | 'calendar'
-
-const COMPLETED_DISPLAY_LIMIT = 10
+const DEFAULT_COLUMNS: BoardColumn[] = [
+  { id: 1, name: 'Inbox', color: '#6B7280', order: 0, isSystem: true, createdAt: new Date() },
+  { id: 2, name: 'Todo', color: '#3B82F6', order: 1, isSystem: false, createdAt: new Date() },
+  { id: 3, name: 'In Progress', color: '#F59E0B', order: 2, isSystem: false, createdAt: new Date() },
+  { id: 4, name: 'Done', color: '#10B981', order: 3, isSystem: false, createdAt: new Date() },
+]
 
 export function TodosPage() {
-  const [completedLimit, setCompletedLimit] = useState(COMPLETED_DISPLAY_LIMIT)
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [activeViews, setActiveViews] = useState<ViewType[]>(['inbox', 'planner', 'board'])
 
-  // Use React Query hook for fetching todos
   const { data, isLoading, error } = useTodos()
+  const { data: columnsData, error: columnsError } = useBoardColumns()
   const todos = data?.todos ?? []
+  const columns = columnsData ?? DEFAULT_COLUMNS
 
-  // Show error toast if query fails
-  if (error) {
-    toast.error('Failed to load todos')
+  useEffect(() => {
+    if (error) {
+      toast.error('Failed to load todos')
+    }
+  }, [error])
+
+  useEffect(() => {
+    if (columnsError) {
+      toast.error('Failed to load board columns')
+    }
+  }, [columnsError])
+
+  // Debug: Log when drag ends - IMPORTANT: This is currently MISSING!
+  // The DndProvider requires onDragEnd callback to process the drop
+  const handleDragEnd = (event: DragEndEvent) => {
+    console.log('[DnD Debug] TodosPage - handleDragEnd called:', {
+      activeId: event.active.id,
+      activeData: event.active.data.current,
+      overId: event.over?.id,
+      overData: event.over?.data.current,
+    })
+
+    // TODO: Implement actual drag handling logic here
+    // - Extract todo id from event.active.data.current
+    // - Extract target zone info from event.over.data.current
+    // - Call mutation to update boardColumnId/position/deadline
+    if (!event.over) {
+      console.log('[DnD Debug] TodosPage - No drop target, drag cancelled')
+      return
+    }
+
+    console.log('[DnD Debug] TodosPage - Drop successful, but NO mutation logic implemented yet!')
   }
 
-  // Group todos by urgency and status
-  const { highPriority, mediumPriority, lowPriority, completed } = useMemo(() => {
-    const pending = todos.filter((t) => t.status !== 'completed')
-    const completedTodos = todos.filter((t) => t.status === 'completed')
+  const handleViewToggle = (view: ViewType) => {
+    setActiveViews(prev => {
+      const isActive = prev.includes(view)
+      if (isActive) {
+        if (prev.length === 1) {
+          return prev
+        }
+        return prev.filter(v => v !== view)
+      } else {
+        return [...prev, view]
+      }
+    })
+  }
 
-    return {
-      highPriority: pending.filter((t) => t.urgency === 'high'),
-      mediumPriority: pending.filter((t) => t.urgency === 'medium'),
-      lowPriority: pending.filter((t) => t.urgency === 'low'),
-      completed: completedTodos,
-    }
-  }, [todos])
+  const showInbox = activeViews.includes('inbox')
+  const showPlanner = activeViews.includes('planner')
+  const showBoard = activeViews.includes('board')
 
-  // Load more completed items
-  const handleLoadMoreCompleted = useCallback(() => {
-    setCompletedLimit((prev) => prev + COMPLETED_DISPLAY_LIMIT)
-  }, [])
-
-  const displayCompleted = completed.slice(0, completedLimit)
-  const hasMoreCompleted = completed.length > completedLimit
-
-  // Show empty state
   const isEmpty = todos.length === 0
 
   if (isLoading) {
@@ -62,71 +94,51 @@ export function TodosPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="flex flex-col h-full p-6 pb-20">
       <h1 className="text-2xl font-bold mb-4">To-Do</h1>
 
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <TabsList>
-          <TabsTrigger value="list" className="flex items-center gap-2">
-            <List className="h-4 w-4" />
-            List
-          </TabsTrigger>
-          <TabsTrigger value="calendar" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Calendar
-          </TabsTrigger>
-        </TabsList>
+      <DndProvider onDragEnd={handleDragEnd}>
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <CheckSquare className="h-12 w-12 text-muted-foreground mb-4" />
+            <h2 className="text-lg font-semibold mb-2">No Action Items</h2>
+            <p className="text-muted-foreground max-w-md">
+              Action items extracted from your emails will be displayed here.
+              Process some emails to see your to-dos.
+            </p>
+          </div>
+        ) : (
+          <div
+            data-testid="panels-container"
+            className="flex-1 flex gap-4 overflow-hidden"
+          >
+            {showInbox && (
+              <InboxPanel
+                className="flex-1 min-w-0"
+                todos={todos}
+              />
+            )}
+            {showPlanner && (
+              <PlannerPanel
+                className="flex-1 min-w-0"
+                todos={todos}
+              />
+            )}
+            {showBoard && (
+              <BoardPanel
+                className="flex-1 min-w-0"
+                columns={columns}
+                todos={todos}
+              />
+            )}
+          </div>
+        )}
 
-        <TabsContent value="list">
-          {isEmpty ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <CheckSquare className="h-12 w-12 text-muted-foreground mb-4" />
-              <h2 className="text-lg font-semibold mb-2">No Action Items</h2>
-              <p className="text-muted-foreground max-w-md">
-                Action items extracted from your emails will be displayed here.
-                Process some emails to see your to-dos.
-              </p>
-            </div>
-          ) : (
-            <div
-              data-testid="todos-grid"
-              className="grid grid-cols-1 md:grid-cols-4 gap-4"
-            >
-              <TodoColumn
-                title="High Priority"
-                todos={highPriority}
-                emptyMessage="No high priority tasks"
-                variant="high"
-              />
-              <TodoColumn
-                title="Medium Priority"
-                todos={mediumPriority}
-                emptyMessage="No medium priority tasks"
-                variant="medium"
-              />
-              <TodoColumn
-                title="Low Priority"
-                todos={lowPriority}
-                emptyMessage="No low priority tasks"
-                variant="low"
-              />
-              <TodoColumn
-                title="Completed"
-                todos={displayCompleted}
-                emptyMessage="No completed tasks"
-                variant="completed"
-                showLoadMore={hasMoreCompleted}
-                onLoadMore={handleLoadMoreCompleted}
-                showDelete={true}
-              />
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="calendar">
-          <TodoCalendar />
-        </TabsContent>
-      </Tabs>
+        <ViewToggle
+          activeViews={activeViews}
+          onToggle={handleViewToggle}
+        />
+      </DndProvider>
     </div>
   )
 }

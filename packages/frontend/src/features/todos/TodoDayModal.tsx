@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useDeleteTodoMutation } from '@/hooks/useTodoMutations'
 import { TodoEditForm } from './TodoEditForm'
-import type { TodoItem, Urgency } from '@/services'
+import type { TodoItem } from '@/services'
 
 // Width constants for expand/collapse
 const EXPANDED_WIDTH = 'max-w-xl' // 576px
@@ -28,6 +28,45 @@ const COMPACT_WIDTH = 'max-w-md' // 448px
 
 // Animation duration for close (must match CSS transition)
 const CLOSE_ANIMATION_DURATION = 200
+
+// Column priority order for sorting (higher number = higher priority)
+const COLUMN_PRIORITY: Record<number, number> = {
+  2: 3, // Todo (high priority)
+  3: 2, // In Progress (medium priority)
+  1: 1, // Inbox (low priority)
+  4: 0, // Done (lowest)
+}
+
+/**
+ * Get color class based on board column
+ */
+function getColumnColor(boardColumnId: number): string {
+  switch (boardColumnId) {
+    case 2: // Todo
+      return 'text-red-500'
+    case 3: // In Progress
+      return 'text-amber-500'
+    case 1: // Inbox
+      return 'text-blue-500'
+    case 4: // Done
+      return 'text-green-500'
+    default:
+      return 'text-muted-foreground'
+  }
+}
+
+/**
+ * Get column name for display
+ */
+function getColumnName(boardColumnId: number): string {
+  switch (boardColumnId) {
+    case 1: return 'Inbox'
+    case 2: return 'Todo'
+    case 3: return 'In Progress'
+    case 4: return 'Done'
+    default: return 'Unknown'
+  }
+}
 
 export interface TodoDayModalProps {
   open: boolean
@@ -117,31 +156,6 @@ function TodoItemMenu({
 }
 
 /**
- * Get color class for urgency badge
- *
- * Maps urgency levels to semantic color classes for visual distinction.
- *
- * @param urgency - The urgency level ('high', 'medium', 'low')
- * @returns Tailwind CSS color class string
- *
- * @example
- * getUrgencyColor('high') // returns 'text-red-500'
- * getUrgencyColor('medium') // returns 'text-yellow-600'
- */
-function getUrgencyColor(urgency: Urgency): string {
-  switch (urgency) {
-    case 'high':
-      return 'text-red-500'
-    case 'medium':
-      return 'text-yellow-600'
-    case 'low':
-      return 'text-blue-500'
-    default:
-      return 'text-muted-foreground'
-  }
-}
-
-/**
  * TodoDayModal - Modal for viewing and managing todos for a specific day
  *
  * Features:
@@ -188,10 +202,11 @@ export function TodoDayModal({
     }
   }, [])
 
-  // Sort todos by priority: high > medium > low
+  // Sort todos by column priority
   const sortedTodos = [...todos].sort((a, b) => {
-    const order: Record<Urgency, number> = { high: 3, medium: 2, low: 1 }
-    return order[b.urgency] - order[a.urgency]
+    const priorityA = COLUMN_PRIORITY[a.boardColumnId] ?? 0
+    const priorityB = COLUMN_PRIORITY[b.boardColumnId] ?? 0
+    return priorityB - priorityA
   })
 
   // Stable event handlers using useCallback
@@ -330,11 +345,11 @@ export function TodoDayModal({
                           </p>
                           <span
                             className={cn(
-                              'text-xs capitalize',
-                              getUrgencyColor(todo.urgency)
+                              'text-xs',
+                              getColumnColor(todo.boardColumnId)
                             )}
                           >
-                            {todo.urgency}
+                            {getColumnName(todo.boardColumnId)}
                           </span>
                         </div>
                         <TodoItemMenu

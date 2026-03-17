@@ -1,25 +1,22 @@
 import { z } from 'zod'
 
 /**
- * Schema for urgency levels in Todo items
- */
-export const UrgencySchema = z.enum(['high', 'medium', 'low'])
-
-/**
  * Schema for Todo status
  */
 export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed'])
 
 /**
  * Schema for Todo entity
+ * Note: urgency field is deprecated - status now determined by boardColumnId
  */
 export const TodoSchema = z.object({
   id: z.number().int().positive(),
   emailId: z.number().int().positive(),
   description: z.string().min(1).max(2000),
-  urgency: UrgencySchema,
   status: TodoStatusSchema,
   deadline: z.string().datetime().nullable(),
+  boardColumnId: z.number().int().positive().default(1), // Required, defaults to Inbox (id: 1)
+  position: z.number().int().optional(), // Position within column for ordering
   createdAt: z.coerce.date()
 })
 
@@ -38,9 +35,10 @@ export const CreateTodoSchema = TodoSchema.omit({
  */
 export const UpdateTodoSchema = z.object({
   description: z.string().min(1).max(2000).optional(),
-  urgency: UrgencySchema.optional(),
   deadline: z.string().datetime().nullable().optional(),
-  status: TodoStatusSchema.optional()
+  status: TodoStatusSchema.optional(),
+  boardColumnId: z.number().int().positive().optional(),
+  position: z.number().int().optional()
 }).strict()
 
 /**
@@ -52,7 +50,6 @@ export const TodoDateRangeQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 })
 
-export type Urgency = z.infer<typeof UrgencySchema>
 export type TodoStatus = z.infer<typeof TodoStatusSchema>
 export type Todo = z.infer<typeof TodoSchema>
 export type CreateTodo = z.infer<typeof CreateTodoSchema>

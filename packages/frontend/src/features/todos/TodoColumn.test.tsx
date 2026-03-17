@@ -18,42 +18,42 @@ describe('TodoColumn', () => {
     {
       id: 1,
       emailId: 1,
-      description: 'High priority task',
-      urgency: 'high',
+      description: 'Todo column task',
       status: 'pending',
+      boardColumnId: 2,
       deadline: null,
       createdAt: '2024-01-15T10:00:00.000Z',
     },
     {
       id: 2,
       emailId: 1,
-      description: 'Another high priority task',
-      urgency: 'high',
+      description: 'Another todo task',
       status: 'pending',
+      boardColumnId: 2,
       deadline: null,
       createdAt: '2024-01-15T11:00:00.000Z',
     },
   ]
 
   const defaultProps: TodoColumnProps = {
-    title: 'High Priority',
+    title: 'Todo',
     todos: mockTodos,
-    emptyMessage: 'No high priority tasks',
-    variant: 'high',
+    emptyMessage: 'No todo tasks',
+    variant: 'todo',
   }
 
   describe('Rendering', () => {
     it('should render column title', () => {
       render(<TodoColumn {...defaultProps} />)
 
-      expect(screen.getByText('High Priority')).toBeInTheDocument()
+      expect(screen.getByText('Todo')).toBeInTheDocument()
     })
 
     it('should render all todos in the column', () => {
       render(<TodoColumn {...defaultProps} />)
 
-      expect(screen.getByText('High priority task')).toBeInTheDocument()
-      expect(screen.getByText('Another high priority task')).toBeInTheDocument()
+      expect(screen.getByText('Todo column task')).toBeInTheDocument()
+      expect(screen.getByText('Another todo task')).toBeInTheDocument()
     })
 
     it('should render count badge', () => {
@@ -65,37 +65,36 @@ describe('TodoColumn', () => {
     it('should show empty message when no todos', () => {
       render(<TodoColumn {...defaultProps} todos={[]} />)
 
-      expect(screen.getByText('No high priority tasks')).toBeInTheDocument()
+      expect(screen.getByText('No todo tasks')).toBeInTheDocument()
     })
   })
 
-  describe('Priority Icons', () => {
-    it('should show AlertCircle icon for high priority', () => {
-      render(<TodoColumn {...defaultProps} variant="high" />)
+  describe('Column Icons', () => {
+    it('should render inbox variant correctly', () => {
+      render(<TodoColumn {...defaultProps} variant="inbox" title="Inbox" />)
 
-      // The icon should be present (lucide-react renders SVG)
-      const titleContainer = screen.getByText('High Priority').closest('div')
+      const titleContainer = screen.getByText('Inbox').closest('div')
       expect(titleContainer).toBeInTheDocument()
     })
 
-    it('should show Clock icon for medium priority', () => {
-      render(<TodoColumn {...defaultProps} variant="medium" title="Medium Priority" />)
+    it('should render todo variant correctly', () => {
+      render(<TodoColumn {...defaultProps} variant="todo" title="Todo" />)
 
-      const titleContainer = screen.getByText('Medium Priority').closest('div')
+      const titleContainer = screen.getByText('Todo').closest('div')
       expect(titleContainer).toBeInTheDocument()
     })
 
-    it('should show MinusCircle icon for low priority', () => {
-      render(<TodoColumn {...defaultProps} variant="low" title="Low Priority" />)
+    it('should render in-progress variant correctly', () => {
+      render(<TodoColumn {...defaultProps} variant="in-progress" title="In Progress" />)
 
-      const titleContainer = screen.getByText('Low Priority').closest('div')
+      const titleContainer = screen.getByText('In Progress').closest('div')
       expect(titleContainer).toBeInTheDocument()
     })
 
-    it('should show CheckCircle icon for completed column', () => {
-      render(<TodoColumn {...defaultProps} variant="completed" title="Completed" />)
+    it('should render done variant correctly', () => {
+      render(<TodoColumn {...defaultProps} variant="done" title="Done" />)
 
-      const titleContainer = screen.getByText('Completed').closest('div')
+      const titleContainer = screen.getByText('Done').closest('div')
       expect(titleContainer).toBeInTheDocument()
     })
   })

@@ -43,8 +43,8 @@ const mockTodo1: TodoItem = {
   id: 1,
   emailId: 100,
   description: 'Review the report',
-  urgency: 'high',
   status: 'pending',
+  boardColumnId: 2, // Todo
   deadline: '2024-03-20T00:00:00.000Z',
   createdAt: '2024-03-01T00:00:00.000Z',
 }
@@ -53,8 +53,8 @@ const mockTodo2: TodoItem = {
   id: 2,
   emailId: 101,
   description: 'Send email',
-  urgency: 'medium',
   status: 'in_progress',
+  boardColumnId: 3, // In Progress
   deadline: null,
   createdAt: '2024-03-02T00:00:00.000Z',
 }
@@ -63,8 +63,8 @@ const mockTodo3: TodoItem = {
   id: 3,
   emailId: 102,
   description: 'Call client',
-  urgency: 'low',
   status: 'completed',
+  boardColumnId: 4, // Done
   deadline: '2024-03-15T00:00:00.000Z',
   createdAt: '2024-03-03T00:00:00.000Z',
 }
@@ -126,7 +126,7 @@ describe('useTodoMutations', () => {
         resolveApi!({ ...mockTodo1, description: 'Updated description' })
       })
 
-      it('should update urgency optimistically', async () => {
+      it('should update boardColumnId optimistically', async () => {
         const initialData: TodosResponse = { todos: [mockTodo1] }
         queryClient.setQueryData(['todos', '2024-03-01', '2024-03-31'], initialData)
 
@@ -144,7 +144,7 @@ describe('useTodoMutations', () => {
         act(() => {
           result.current.mutate({
             id: 1,
-            data: { urgency: 'low' },
+            data: { boardColumnId: 3 },
           })
         })
 
@@ -154,11 +154,11 @@ describe('useTodoMutations', () => {
             '2024-03-01',
             '2024-03-31',
           ])
-          expect(cachedData?.todos[0].urgency).toBe('low')
+          expect(cachedData?.todos[0].boardColumnId).toBe(3)
         })
 
         expect(result.current.isPending).toBe(true)
-        resolveApi!({ ...mockTodo1, urgency: 'low' })
+        resolveApi!({ ...mockTodo1, boardColumnId: 3 })
       })
 
       it('should update status optimistically', async () => {
@@ -313,7 +313,7 @@ describe('useTodoMutations', () => {
             id: 1,
             data: {
               description: 'Changed',
-              urgency: 'low',
+              boardColumnId: 3,
               status: 'completed',
               deadline: null,
             },

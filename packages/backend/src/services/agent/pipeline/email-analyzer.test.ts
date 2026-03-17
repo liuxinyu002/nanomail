@@ -340,7 +340,7 @@ describe('EmailAnalyzer', () => {
       expect(mockTodoRepo.save).toHaveBeenCalledTimes(2)
     })
 
-    it('should map urgency correctly', async () => {
+    it('should map urgency to boardColumnId correctly', async () => {
       mockEmailRepo.update.mockResolvedValueOnce({ affected: 1 })
       mockTodoRepo.save.mockResolvedValueOnce({ id: 1 })
 
@@ -360,9 +360,12 @@ describe('EmailAnalyzer', () => {
 
       const savedTodos = mockTodoRepo.save.mock.calls.map((call: any[]) => call[0])
 
-      expect(savedTodos[0].urgency).toBe('high')
-      expect(savedTodos[1].urgency).toBe('medium')
-      expect(savedTodos[2].urgency).toBe('low')
+      // HIGH urgency -> boardColumnId: 2 (Todo)
+      expect(savedTodos[0].boardColumnId).toBe(2)
+      // MEDIUM urgency -> boardColumnId: 1 (Inbox)
+      expect(savedTodos[1].boardColumnId).toBe(1)
+      // LOW urgency -> boardColumnId: 1 (Inbox)
+      expect(savedTodos[2].boardColumnId).toBe(1)
     })
 
     it('should not create todos for SPAM classification', async () => {

@@ -8,7 +8,6 @@ import {
   isToday as isTodayFn,
   format,
 } from 'date-fns'
-import type { Urgency } from '@nanomail/shared'
 import { CalendarDayCell } from './CalendarDayCell'
 import type { TodoItem } from '@/services'
 
@@ -20,10 +19,12 @@ export interface TodoCalendarGridProps {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
-const URGENCY_ORDER: Record<Urgency, number> = {
-  high: 3,
-  medium: 2,
-  low: 1,
+// Column priority order for sorting (higher number = higher priority)
+const COLUMN_PRIORITY: Record<number, number> = {
+  2: 3, // Todo (high priority)
+  3: 2, // In Progress (medium priority)
+  1: 1, // Inbox (low priority)
+  4: 0, // Done (lowest)
 }
 
 /**
@@ -31,7 +32,7 @@ const URGENCY_ORDER: Record<Urgency, number> = {
  *
  * Calculates and displays:
  * - Weekday headers
- * - Day cells with todo counts and urgency indicators
+ * - Day cells with todo counts and column priority indicators
  */
 export function TodoCalendarGrid({
   currentMonth,
@@ -54,16 +55,16 @@ export function TodoCalendarGrid({
     })
   }
 
-  // Calculate highest urgency from pending todos
-  const getHighestUrgency = (dayTodos: TodoItem[]): Urgency | null => {
+  // Get highest priority column from pending todos
+  const getHighestPriorityColumn = (dayTodos: TodoItem[]): number | null => {
     const pendingTodos = dayTodos.filter(t => t.status !== 'completed')
     if (pendingTodos.length === 0) return null
 
-    return pendingTodos.reduce<Urgency>((highest, todo) => {
-      return URGENCY_ORDER[todo.urgency] > URGENCY_ORDER[highest]
-        ? todo.urgency
-        : highest
-    }, pendingTodos[0].urgency)
+    return pendingTodos.reduce<number>((highest, todo) => {
+      const todoPriority = COLUMN_PRIORITY[todo.boardColumnId] ?? 0
+      const highestPriority = COLUMN_PRIORITY[highest] ?? 0
+      return todoPriority > highestPriority ? todo.boardColumnId : highest
+    }, pendingTodos[0].boardColumnId)
   }
 
   return (
@@ -93,7 +94,7 @@ export function TodoCalendarGrid({
               isCurrentMonth={isSameMonth(day, currentMonth)}
               isToday={isTodayFn(day)}
               todoCount={pendingTodos.length}
-              highestUrgency={getHighestUrgency(dayTodos)}
+              highestPriorityColumn={getHighestPriorityColumn(dayTodos)}
               onClick={(date) => onDayClick(date, dayTodos)}
             />
           )

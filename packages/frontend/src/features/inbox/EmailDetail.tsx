@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { EmailClassification } from '@nanomail/shared'
 import { DeadlineDisplay } from '@/components/DeadlineDisplay'
+import { toast } from 'sonner'
 
 export interface EmailDetailProps {
   email: {
@@ -23,10 +24,29 @@ export interface EmailDetailProps {
   }
 }
 
-const urgencyColors: Record<string, string> = {
-  high: 'text-red-500',
-  medium: 'text-yellow-500',
-  low: 'text-green-500',
+function getColumnName(boardColumnId: number): string {
+  switch (boardColumnId) {
+    case 1: return 'Inbox'
+    case 2: return 'Todo'
+    case 3: return 'In Progress'
+    case 4: return 'Done'
+    default: return 'Unknown'
+  }
+}
+
+function getColumnColor(boardColumnId: number): string {
+  switch (boardColumnId) {
+    case 2:
+      return 'text-red-500'
+    case 3:
+      return 'text-amber-500'
+    case 1:
+      return 'text-blue-500'
+    case 4:
+      return 'text-green-500'
+    default:
+      return 'text-muted-foreground'
+  }
 }
 
 export function EmailDetail({ email }: EmailDetailProps) {
@@ -40,7 +60,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
       TodoService.getTodos({ emailId: email.id })
         .then((response) => setTodos(response.todos))
         .catch((error) => {
-          console.error('Failed to fetch todos:', error)
+          toast.error('Failed to fetch todos')
         })
         .finally(() => setLoading(false))
     }
@@ -58,7 +78,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
         prev.map((t) => (t.id === todo.id ? updated : t))
       )
     } catch (error) {
-      console.error('Failed to update todo:', error)
+      toast.error('Failed to update todo')
     }
   }
 
@@ -81,7 +101,6 @@ export function EmailDetail({ email }: EmailDetailProps) {
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-4 space-y-4">
-        {/* Summary */}
         <div className="p-4 bg-muted rounded-lg">
           <h4 className="text-sm font-medium mb-2">Summary</h4>
           <p className="text-sm">
@@ -89,7 +108,6 @@ export function EmailDetail({ email }: EmailDetailProps) {
           </p>
         </div>
 
-        {/* Action Items */}
         {loading ? (
           <div
             className="flex items-center justify-center py-4"
@@ -124,10 +142,10 @@ export function EmailDetail({ email }: EmailDetailProps) {
                       <span
                         className={cn(
                           'text-xs font-medium',
-                          urgencyColors[todo.urgency]
+                          getColumnColor(todo.boardColumnId)
                         )}
                       >
-                        {todo.urgency}
+                        {getColumnName(todo.boardColumnId)}
                       </span>
                       <DeadlineDisplay deadline={todo.deadline} />
                     </div>

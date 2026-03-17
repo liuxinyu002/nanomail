@@ -1,33 +1,35 @@
-import { AlertCircle, Clock, MinusCircle, CheckCircle } from 'lucide-react'
+import { Inbox, ListTodo, Clock, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import type { TodoItem as TodoItemType } from '@/services'
 import { TodoItem } from './TodoItem'
 
+export type ColumnVariant = 'inbox' | 'todo' | 'in-progress' | 'done'
+
 export interface TodoColumnProps {
   title: string
   todos: TodoItemType[]
   emptyMessage: string
-  variant: 'high' | 'medium' | 'low' | 'completed'
+  variant: ColumnVariant
   showLoadMore?: boolean
   onLoadMore?: () => void
   showDelete?: boolean
 }
 
-const variantConfig = {
-  high: {
-    icon: AlertCircle,
+const variantConfig: Record<ColumnVariant, { icon: typeof Inbox; iconColor: string }> = {
+  inbox: {
+    icon: Inbox,
+    iconColor: 'text-blue-500',
+  },
+  todo: {
+    icon: ListTodo,
     iconColor: 'text-red-500',
   },
-  medium: {
+  'in-progress': {
     icon: Clock,
     iconColor: 'text-amber-500',
   },
-  low: {
-    icon: MinusCircle,
-    iconColor: 'text-blue-500',
-  },
-  completed: {
+  done: {
     icon: CheckCircle,
     iconColor: 'text-green-500',
   },

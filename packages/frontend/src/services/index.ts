@@ -13,7 +13,13 @@ export {
   type TodoItem,
   type TodosResponse,
   type TodosQuery,
-  type Urgency,
   type TodoStatus,
   type UpdateTodo,
+  type UpdateTodoPosition,
 } from './todo.service'
+export {
+  BoardColumnService,
+  type BoardColumn,
+  type CreateBoardColumn,
+  type UpdateBoardColumn,
+} from './boardColumn.service'

@@ -12,7 +12,7 @@ import { EmailSyncService } from './services/EmailSyncService.js'
 import { SmtpService } from './services/SmtpService.js'
 import { JobService } from './services/JobService.js'
 import { AsyncSyncExecutor } from './services/AsyncSyncExecutor.js'
-import { createEmailRoutes, createTodoRoutes, createSettingsRoutes, createAgentRoutes } from './routes/index.js'
+import { createEmailRoutes, createTodoRoutes, createSettingsRoutes, createAgentRoutes, createBoardColumnRoutes } from './routes/index.js'
 import { LiteLLMProvider } from './services/llm/litellm-provider.js'
 import type { LLMConfig } from './services/llm/types.js'
 import { ToolRegistry } from './services/agent/tools/registry.js'
@@ -114,6 +114,7 @@ export async function createApp(): Promise<{
     smtpService
   ))
   app.use('/api/todos', createTodoRoutes(AppDataSource))
+  app.use('/api/board-columns', createBoardColumnRoutes(AppDataSource))
   app.use('/api/settings', createSettingsRoutes(settingsService, {
     onLLMConfigChanged: () => {
       configCache.timestamp = 0

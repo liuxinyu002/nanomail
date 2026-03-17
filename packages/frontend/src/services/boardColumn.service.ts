@@ -22,7 +22,8 @@ export const BoardColumnService = {
       throw new Error('Failed to fetch board columns')
     }
 
-    return response.json()
+    const data = await response.json()
+    return data.columns
   },
 
   /**

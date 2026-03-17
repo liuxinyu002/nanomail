@@ -68,7 +68,7 @@ describe('BoardColumnService', () => {
     it('should fetch all board columns', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockColumns),
+        json: () => Promise.resolve({ columns: mockColumns }),
       })
 
       const result = await BoardColumnService.getBoardColumns()
@@ -81,7 +81,7 @@ describe('BoardColumnService', () => {
     it('should return empty array when no columns exist', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([]),
+        json: () => Promise.resolve({ columns: [] }),
       })
 
       const result = await BoardColumnService.getBoardColumns()
@@ -93,7 +93,7 @@ describe('BoardColumnService', () => {
       const unorderedColumns = [...mockColumns].reverse()
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(unorderedColumns),
+        json: () => Promise.resolve({ columns: unorderedColumns }),
       })
 
       const result = await BoardColumnService.getBoardColumns()
@@ -462,9 +462,8 @@ describe('BoardColumnService', () => {
         json: () => Promise.resolve(null),
       })
 
-      const result = await BoardColumnService.getBoardColumns()
-
-      expect(result).toBeNull()
+      // Should throw or return undefined when trying to access .columns on null
+      await expect(BoardColumnService.getBoardColumns()).rejects.toThrow()
     })
 
     it('should handle malformed JSON response', async () => {

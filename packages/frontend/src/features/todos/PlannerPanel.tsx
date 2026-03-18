@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { startOfWeek } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { DayView, WeekView, PlannerViewToggle } from './planner'
 import type { Todo } from '@nanomail/shared'
@@ -9,8 +8,6 @@ export interface PlannerPanelProps {
   todos: Todo[]
   /** Callback fired when a todo is clicked */
   onTodoClick?: (todo: Todo) => void
-  /** Callback fired when a deadline is changed via drag */
-  onDeadlineChange?: (todoId: number, deadline: string | null) => void
   /** Additional CSS classes */
   className?: string
 }
@@ -22,9 +19,9 @@ export interface PlannerPanelProps {
  * - Shows only todos with deadline AND boardColumnId === 2
  * - Day view (default) and Week view toggle
  * - Current date passed to DayView
- * - Week start (Sunday) passed to WeekView
+ * - Selected date passed to WeekView (smart default applies within)
  */
-export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProps) {
+export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProps): JSX.Element {
   // View state: 'day' or 'week'
   const [view, setView] = useState<'day' | 'week'>('day')
 
@@ -36,13 +33,10 @@ export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProp
     return todos.filter(t => t.deadline !== null && t.boardColumnId === 2)
   }, [todos])
 
-  // Calculate week start (Sunday)
-  const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 0 }), [currentDate])
-
   return (
     <div
       data-testid="planner-panel"
-      className={cn('flex flex-col bg-background rounded-lg border', className)}
+      className={cn('flex flex-col h-full bg-background rounded-lg border', className)}
     >
       {/* Header */}
       <div
@@ -61,7 +55,7 @@ export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProp
       </div>
 
       {/* Calendar View */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {view === 'day' ? (
           <DayView
             date={currentDate}
@@ -70,7 +64,7 @@ export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProp
           />
         ) : (
           <WeekView
-            weekStart={weekStart}
+            selectedDate={currentDate}
             todos={scheduledTodos}
             onTodoClick={onTodoClick}
           />

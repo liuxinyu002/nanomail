@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { startOfWeek, addDays, format, isSameDay, parseISO } from 'date-fns'
 import { WeekView } from './WeekView'
@@ -29,189 +29,12 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
   }
 }
 
-describe('WeekView', () => {
-  // Week starting Sunday Jan 14, 2024 (Monday is Jan 15)
-  const weekStart = startOfWeek(new Date('2024-01-15'), { weekStartsOn: 0 }) // Sunday Jan 14
+describe('WeekView (Refactored - Single Day Mode)', () => {
+  // Reference date: Wednesday, March 18, 2026
+  const testDate = new Date(2026, 2, 18) // March 18, 2026 (Wednesday)
+  const weekStart = startOfWeek(testDate, { weekStartsOn: 0 }) // Sunday, March 15, 2026
 
-  describe('rendering', () => {
-    it('renders 7 day columns (Sunday to Saturday)', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Verify 7 day columns are rendered
-      const dayColumns = screen.getAllByTestId(/day-column/)
-      expect(dayColumns).toHaveLength(7)
-    })
-
-    it('renders TimeAxis on the left side', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      expect(screen.getByTestId('time-axis')).toBeInTheDocument()
-    })
-
-    it('renders correct day names in header (Sun-Sat)', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Check day names are displayed
-      expect(screen.getByText('Sun')).toBeInTheDocument()
-      expect(screen.getByText('Mon')).toBeInTheDocument()
-      expect(screen.getByText('Tue')).toBeInTheDocument()
-      expect(screen.getByText('Wed')).toBeInTheDocument()
-      expect(screen.getByText('Thu')).toBeInTheDocument()
-      expect(screen.getByText('Fri')).toBeInTheDocument()
-      expect(screen.getByText('Sat')).toBeInTheDocument()
-    })
-
-    it('renders correct dates in header', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Check dates are displayed (14, 15, 16, 17, 18, 19, 20)
-      expect(screen.getByText('14')).toBeInTheDocument()
-      expect(screen.getByText('15')).toBeInTheDocument()
-      expect(screen.getByText('16')).toBeInTheDocument()
-      expect(screen.getByText('17')).toBeInTheDocument()
-      expect(screen.getByText('18')).toBeInTheDocument()
-      expect(screen.getByText('19')).toBeInTheDocument()
-      expect(screen.getByText('20')).toBeInTheDocument()
-    })
-
-    it('renders 24 hour slots for each day column (7 * 24 = 168)', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Total hour slots should be 7 * 24 = 168
-      const hourSlots = screen.getAllByTestId(/hour-slot-\d+/)
-      expect(hourSlots).toHaveLength(168)
-    })
-
-    it('has data-testid attribute for each day column with date', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Check each day column has the correct date test id
-      for (let i = 0; i < 7; i++) {
-        const day = addDays(weekStart, i)
-        const dateKey = format(day, 'yyyy-MM-dd')
-        const dayColumn = screen.getByTestId(`day-column-${dateKey}`)
-        expect(dayColumn).toBeInTheDocument()
-      }
-    })
-  })
-
-  describe('todo display', () => {
-    it('displays todos in correct day and hour slots', () => {
-      // Monday Jan 15 at 10:00, Wednesday Jan 17 at 14:00
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'Monday morning task',
-          deadline: '2024-01-15T10:00:00', // Monday Jan 15, 10 AM
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'Wednesday afternoon task',
-          deadline: '2024-01-17T14:00:00', // Wednesday Jan 17, 2 PM
-        }),
-      ]
-
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Check Monday task appears in Monday column hour 10 slot
-      const mondayColumn = screen.getByTestId('day-column-2024-01-15')
-      const hour10Slot = within(mondayColumn).getByTestId('hour-slot-10')
-      expect(within(hour10Slot).getByText('Monday morning task')).toBeInTheDocument()
-
-      // Check Wednesday task appears in Wednesday column hour 14 slot
-      const wednesdayColumn = screen.getByTestId('day-column-2024-01-17')
-      const hour14Slot = within(wednesdayColumn).getByTestId('hour-slot-14')
-      expect(within(hour14Slot).getByText('Wednesday afternoon task')).toBeInTheDocument()
-    })
-
-    it('handles todos with null deadline - does not display them', () => {
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'Task with deadline',
-          deadline: '2024-01-15T10:00:00',
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'Task without deadline',
-          deadline: null,
-        }),
-      ]
-
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      expect(screen.getByText('Task with deadline')).toBeInTheDocument()
-      expect(screen.queryByText('Task without deadline')).not.toBeInTheDocument()
-    })
-
-    it('handles todos outside the week - does not display them', () => {
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'Task in week',
-          deadline: '2024-01-15T10:00:00', // Monday Jan 15
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'Task outside week',
-          deadline: '2024-01-22T10:00:00', // Next Monday
-        }),
-      ]
-
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      expect(screen.getByText('Task in week')).toBeInTheDocument()
-      expect(screen.queryByText('Task outside week')).not.toBeInTheDocument()
-    })
-
-    it('handles multiple todos in the same hour slot', () => {
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'First task at 10',
-          deadline: '2024-01-15T10:00:00',
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'Second task at 10',
-          deadline: '2024-01-15T10:30:00',
-        }),
-        createMockTodo({
-          id: 3,
-          description: 'Third task at 10',
-          deadline: '2024-01-15T10:45:00',
-        }),
-      ]
-
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      const mondayColumn = screen.getByTestId('day-column-2024-01-15')
-      const hour10Slot = within(mondayColumn).getByTestId('hour-slot-10')
-      expect(within(hour10Slot).getByText('First task at 10')).toBeInTheDocument()
-      expect(within(hour10Slot).getByText('Second task at 10')).toBeInTheDocument()
-      expect(within(hour10Slot).getByText('Third task at 10')).toBeInTheDocument()
-    })
-
-    it('handles empty todos array', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      // Should still render all 7 day columns and 168 hour slots
-      const dayColumns = screen.getAllByTestId(/day-column/)
-      expect(dayColumns).toHaveLength(7)
-
-      const hourSlots = screen.getAllByTestId(/hour-slot-\d+/)
-      expect(hourSlots).toHaveLength(168)
-    })
-  })
-
-  describe('current day highlighting', () => {
+  describe('smart default selection', () => {
     beforeEach(() => {
       vi.useFakeTimers()
     })
@@ -220,47 +43,369 @@ describe('WeekView', () => {
       vi.useRealTimers()
     })
 
-    it('highlights the current day column with blue background', () => {
-      // Set "today" to Monday Jan 15, 2024
-      const today = new Date(2024, 0, 15, 12, 0, 0) // Monday Jan 15
+    it('defaults to today when current week is displayed', async () => {
+      // Set "today" to Wednesday March 18, 2026
+      const today = new Date(2026, 2, 18, 12, 0, 0)
       vi.setSystemTime(today)
 
       const thisWeekStart = startOfWeek(today, { weekStartsOn: 0 })
       const todos: Todo[] = []
 
-      render(<WeekView weekStart={thisWeekStart} todos={todos} />)
+      render(<WeekView selectedDate={thisWeekStart} todos={todos} />)
 
-      // Monday column body should have lighter blue background (bg-blue-50/30)
-      const mondayColumn = screen.getByTestId('day-column-2024-01-15')
-      expect(mondayColumn).toHaveClass('bg-blue-50/30')
+      // Run all timers to allow useEffect to execute
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+
+      // WeekDateNav should highlight today (March 18)
+      // Wednesday is index 3 (Sun=0, Mon=1, Tue=2, Wed=3)
+      const todayButton = screen.getByTestId('date-item-3')
+      expect(todayButton).toHaveClass('bg-blue-600')
     })
 
-    it('does not highlight non-current days', () => {
-      const today = new Date(2024, 0, 15, 12, 0, 0) // Monday Jan 15
+    it('defaults to first day (Sunday) when non-current week is displayed', () => {
+      // Set "today" to March 18, 2026
+      const today = new Date(2026, 2, 18, 12, 0, 0)
       vi.setSystemTime(today)
 
-      const thisWeekStart = startOfWeek(today, { weekStartsOn: 0 })
+      // Use a different week (January 2026)
+      const differentWeekStart = new Date(2026, 0, 4) // January 4, 2026 (Sunday)
       const todos: Todo[] = []
 
-      render(<WeekView weekStart={thisWeekStart} todos={todos} />)
+      render(<WeekView selectedDate={differentWeekStart} todos={todos} />)
 
-      // Sunday (non-current) should NOT have blue background in body
-      const sundayColumn = screen.getByTestId('day-column-2024-01-14')
-      expect(sundayColumn).not.toHaveClass('bg-blue-50/30')
+      // Should select Sunday (index 0) since it's not the current week
+      const sundayButton = screen.getByTestId('date-item-0')
+      expect(sundayButton).toHaveClass('bg-blue-600')
+    })
+  })
+
+  describe('rendering', () => {
+    it('renders WeekDateNav component', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      expect(screen.getByTestId('week-date-nav')).toBeInTheDocument()
     })
 
-    it('highlights current day header with blue background', () => {
-      const today = new Date(2024, 0, 15, 12, 0, 0) // Monday Jan 15
-      vi.setSystemTime(today)
+    it('renders TimeAxis on the left side', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      const thisWeekStart = startOfWeek(today, { weekStartsOn: 0 })
+      expect(screen.getByTestId('time-axis')).toBeInTheDocument()
+    })
+
+    it('renders single day content area (not 7 columns)', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Should NOT have multiple day columns
+      const dayColumns = screen.queryAllByTestId(/day-column-/)
+      expect(dayColumns).toHaveLength(0)
+
+      // Should have a single day content area
+      const dayContent = screen.getByTestId('day-content')
+      expect(dayContent).toBeInTheDocument()
+    })
+
+    it('renders 24 hour slots for selected date', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Should have exactly 24 hour slots
+      const hourSlots = screen.getAllByTestId(/hour-slot-\d+/)
+      expect(hourSlots).toHaveLength(24)
+    })
+
+    it('displays date in the correct format in day content header', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Should display the selected date somewhere (format: "Wed 18")
+      expect(screen.getByText(/Wed/)).toBeInTheDocument()
+      expect(screen.getByText('18')).toBeInTheDocument()
+    })
+  })
+
+  describe('todo display', () => {
+    it('displays todos for the selected date only', () => {
+      const todos: Todo[] = [
+        createMockTodo({
+          id: 1,
+          description: 'Wednesday task',
+          deadline: '2026-03-18T10:00:00', // Wednesday March 18
+        }),
+        createMockTodo({
+          id: 2,
+          description: 'Thursday task',
+          deadline: '2026-03-19T10:00:00', // Thursday March 19
+        }),
+      ]
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Only Wednesday task should be visible
+      expect(screen.getByText('Wednesday task')).toBeInTheDocument()
+      expect(screen.queryByText('Thursday task')).not.toBeInTheDocument()
+    })
+
+    it('groups todos by hour in the single day view', () => {
+      const todos: Todo[] = [
+        createMockTodo({
+          id: 1,
+          description: 'Morning task',
+          deadline: '2026-03-18T09:00:00',
+        }),
+        createMockTodo({
+          id: 2,
+          description: 'Afternoon task',
+          deadline: '2026-03-18T14:00:00',
+        }),
+      ]
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      const dayContent = screen.getByTestId('day-content')
+      const hour9Slot = within(dayContent).getByTestId('hour-slot-9')
+      const hour14Slot = within(dayContent).getByTestId('hour-slot-14')
+
+      expect(within(hour9Slot).getByText('Morning task')).toBeInTheDocument()
+      expect(within(hour14Slot).getByText('Afternoon task')).toBeInTheDocument()
+    })
+
+    it('handles todos with null deadline - does not display them', () => {
+      const todos: Todo[] = [
+        createMockTodo({
+          id: 1,
+          description: 'Task with deadline',
+          deadline: '2026-03-18T10:00:00',
+        }),
+        createMockTodo({
+          id: 2,
+          description: 'Task without deadline',
+          deadline: null,
+        }),
+      ]
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      expect(screen.getByText('Task with deadline')).toBeInTheDocument()
+      expect(screen.queryByText('Task without deadline')).not.toBeInTheDocument()
+    })
+
+    it('handles empty todos array', () => {
+      const todos: Todo[] = []
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Should still render 24 hour slots
+      const hourSlots = screen.getAllByTestId(/hour-slot-\d+/)
+      expect(hourSlots).toHaveLength(24)
+    })
+  })
+
+  describe('date navigation', () => {
+    it('clicking a date in WeekDateNav updates the displayed content', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = [
+        createMockTodo({
+          id: 1,
+          description: 'Wednesday task',
+          deadline: '2026-03-18T10:00:00',
+        }),
+        createMockTodo({
+          id: 2,
+          description: 'Thursday task',
+          deadline: '2026-03-19T10:00:00',
+        }),
+      ]
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Initially shows Wednesday task
+      expect(screen.getByText('Wednesday task')).toBeInTheDocument()
+      expect(screen.queryByText('Thursday task')).not.toBeInTheDocument()
+
+      // Click on Thursday (index 4)
+      const thursdayButton = screen.getByTestId('date-item-4')
+      await user.click(thursdayButton)
+
+      // Now should show Thursday task
+      expect(screen.queryByText('Wednesday task')).not.toBeInTheDocument()
+      expect(screen.getByText('Thursday task')).toBeInTheDocument()
+    })
+
+    it('calls onDateChange when date is selected', async () => {
+      const user = userEvent.setup()
+      const onDateChange = vi.fn()
       const todos: Todo[] = []
 
-      render(<WeekView weekStart={thisWeekStart} todos={todos} />)
+      render(<WeekView selectedDate={testDate} todos={todos} onDateChange={onDateChange} />)
 
-      // Monday header should have blue background (bg-blue-50)
-      const mondayHeader = screen.getByTestId('day-header-2024-01-15')
-      expect(mondayHeader).toHaveClass('bg-blue-50')
+      // Click on Thursday (index 4, March 19)
+      const thursdayButton = screen.getByTestId('date-item-4')
+      await user.click(thursdayButton)
+
+      expect(onDateChange).toHaveBeenCalledTimes(1)
+      const calledDate = onDateChange.mock.calls[0][0]
+      expect(calledDate.getDate()).toBe(19)
+      expect(calledDate.getMonth()).toBe(2) // March
+      expect(calledDate.getFullYear()).toBe(2026)
+    })
+  })
+
+  describe('week navigation', () => {
+    it('clicking left arrow navigates to previous week', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Initially shows March 15-21
+      expect(screen.getByText('15')).toBeInTheDocument() // Sunday March 15
+
+      // Click left arrow
+      const leftArrow = screen.getByRole('button', { name: /上一周/i })
+      await user.click(leftArrow)
+
+      // Should show March 8-14 (previous week)
+      expect(screen.getByText('8')).toBeInTheDocument() // Sunday March 8
+    })
+
+    it('clicking right arrow navigates to next week', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Initially shows March 15-21
+      expect(screen.getByText('15')).toBeInTheDocument() // Sunday March 15
+
+      // Click right arrow
+      const rightArrow = screen.getByRole('button', { name: /下一周/i })
+      await user.click(rightArrow)
+
+      // Should show March 22-28 (next week)
+      expect(screen.getByText('22')).toBeInTheDocument() // Sunday March 22
+    })
+
+    it('navigating to previous week selects first day if not current week', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Click left arrow
+      const leftArrow = screen.getByRole('button', { name: /上一周/i })
+      await user.click(leftArrow)
+
+      // Sunday (index 0) should be selected
+      const sundayButton = screen.getByTestId('date-item-0')
+      expect(sundayButton).toHaveClass('bg-blue-600')
+    })
+
+    it('navigating weeks calls onDateChange with new selected date', async () => {
+      const user = userEvent.setup()
+      const onDateChange = vi.fn()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} onDateChange={onDateChange} />)
+
+      // Click right arrow
+      const rightArrow = screen.getByRole('button', { name: /下一周/i })
+      await user.click(rightArrow)
+
+      expect(onDateChange).toHaveBeenCalledTimes(1)
+      // Should select first day of next week (March 22, 2026)
+      const calledDate = onDateChange.mock.calls[0][0]
+      expect(calledDate.getDate()).toBe(22)
+    })
+  })
+
+  describe('slide animation direction', () => {
+    it('switching to a later date applies slide-left animation', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Click on Thursday (later than Wednesday)
+      const thursdayButton = screen.getByTestId('date-item-4')
+      await user.click(thursdayButton)
+
+      // Day content should have slide-left animation class
+      const dayContent = screen.getByTestId('day-content')
+      expect(dayContent).toHaveClass('animate-slide-left')
+    })
+
+    it('switching to an earlier date applies slide-right animation', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Click on Monday (earlier than Wednesday)
+      const mondayButton = screen.getByTestId('date-item-1')
+      await user.click(mondayButton)
+
+      // Day content should have slide-right animation class
+      const dayContent = screen.getByTestId('day-content')
+      expect(dayContent).toHaveClass('animate-slide-right')
+    })
+
+    it('navigating to next week applies slide-left animation', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Click right arrow (next week)
+      const rightArrow = screen.getByRole('button', { name: /下一周/i })
+      await user.click(rightArrow)
+
+      // Day content should have slide-left animation class
+      const dayContent = screen.getByTestId('day-content')
+      expect(dayContent).toHaveClass('animate-slide-left')
+    })
+
+    it('navigating to previous week applies slide-right animation', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Click left arrow (previous week)
+      const leftArrow = screen.getByRole('button', { name: /上一周/i })
+      await user.click(leftArrow)
+
+      // Day content should have slide-right animation class
+      const dayContent = screen.getByTestId('day-content')
+      expect(dayContent).toHaveClass('animate-slide-right')
+    })
+  })
+
+  describe('React key triggers animation', () => {
+    it('day content key changes when date changes', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      render(<WeekView selectedDate={testDate} todos={todos} />)
+
+      // Get initial key
+      const initialDayContent = screen.getByTestId('day-content')
+      const initialKey = initialDayContent.getAttribute('data-key')
+
+      // Click on Thursday
+      const thursdayButton = screen.getByTestId('date-item-4')
+      await user.click(thursdayButton)
+
+      // Get new key
+      const newDayContent = screen.getByTestId('day-content')
+      const newKey = newDayContent.getAttribute('data-key')
+
+      // Keys should be different
+      expect(newKey).not.toBe(initialKey)
+      expect(newKey).toBe('2026-03-19')
     })
   })
 
@@ -270,11 +415,11 @@ describe('WeekView', () => {
       const mockTodo = createMockTodo({
         id: 1,
         description: 'Clickable todo',
-        deadline: '2024-01-15T10:00:00',
+        deadline: '2026-03-18T10:00:00',
       })
       const onTodoClick = vi.fn()
 
-      render(<WeekView weekStart={weekStart} todos={[mockTodo]} onTodoClick={onTodoClick} />)
+      render(<WeekView selectedDate={testDate} todos={[mockTodo]} onTodoClick={onTodoClick} />)
 
       const todoCard = screen.getByTestId('planner-todo-card-1')
       await user.click(todoCard)
@@ -286,71 +431,53 @@ describe('WeekView', () => {
   describe('styling and layout', () => {
     it('applies custom className', () => {
       const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} className="custom-class" />)
+      render(<WeekView selectedDate={testDate} todos={todos} className="custom-class" />)
 
       const weekView = screen.getByTestId('week-view')
       expect(weekView).toHaveClass('custom-class')
     })
 
-    it('has min-w-[140px] on each day column', () => {
+    it('has proper flex layout structure', () => {
       const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
+      render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      const dayColumns = screen.getAllByTestId(/day-column-/)
-      dayColumns.forEach((column) => {
-        expect(column).toHaveClass('min-w-[140px]')
-      })
-    })
-
-    it('has sticky header row', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      const header = screen.getByTestId('week-header')
-      expect(header).toHaveClass('sticky')
-      expect(header).toHaveClass('top-0')
-    })
-
-    it('has horizontal scroll container for day columns', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      const scrollContainer = screen.getByTestId('week-grid')
-      expect(scrollContainer).toHaveClass('overflow-x-auto')
-    })
-
-    it('each hour slot has correct height of 60px', () => {
-      const todos: Todo[] = []
-      render(<WeekView weekStart={weekStart} todos={todos} />)
-
-      const hourSlots = screen.getAllByTestId(/hour-slot-\d+/)
-      hourSlots.forEach((slot) => {
-        expect(slot).toHaveClass('h-[60px]')
-      })
+      const weekView = screen.getByTestId('week-view')
+      expect(weekView).toHaveClass('flex')
+      expect(weekView).toHaveClass('flex-col')
     })
   })
 
   describe('edge cases', () => {
-    it('handles week crossing month boundary', () => {
-      // Week starting Sunday March 31, 2024
-      const weekStart = startOfWeek(new Date('2024-03-31'), { weekStartsOn: 0 })
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'March task',
-          deadline: '2024-03-31T10:00:00',
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'April task',
-          deadline: '2024-04-02T14:00:00',
-        }),
-      ]
+    it('handles week crossing month boundary', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
 
-      render(<WeekView weekStart={weekStart} todos={todos} />)
+      // Start with last week of March 2026: March 29 - April 4
+      const march29 = new Date(2026, 2, 29)
+      const weekStart = startOfWeek(march29, { weekStartsOn: 0 })
 
-      expect(screen.getByText('March task')).toBeInTheDocument()
-      expect(screen.getByText('April task')).toBeInTheDocument()
+      render(<WeekView selectedDate={march29} todos={todos} />)
+
+      // Should display dates from both months
+      expect(screen.getByText('29')).toBeInTheDocument() // March 29
+      expect(screen.getByText('31')).toBeInTheDocument() // March 31
+      expect(screen.getByText('1')).toBeInTheDocument() // April 1
+    })
+
+    it('handles week crossing year boundary', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = []
+
+      // Last week of December 2025: Dec 28 - Jan 3
+      const dec28 = new Date(2025, 11, 28)
+      const weekStart = startOfWeek(dec28, { weekStartsOn: 0 })
+
+      render(<WeekView selectedDate={dec28} todos={todos} />)
+
+      // Should display dates from both years
+      expect(screen.getByText('28')).toBeInTheDocument() // Dec 28
+      expect(screen.getByText('31')).toBeInTheDocument() // Dec 31
+      expect(screen.getByText('1')).toBeInTheDocument() // Jan 1
     })
 
     it('handles midnight (hour 0) and late night (hour 23) correctly', () => {
@@ -358,58 +485,66 @@ describe('WeekView', () => {
         createMockTodo({
           id: 1,
           description: 'Midnight task',
-          deadline: '2024-01-15T00:00:00',
+          deadline: '2026-03-18T00:00:00',
         }),
         createMockTodo({
           id: 2,
           description: 'Late night task',
-          deadline: '2024-01-15T23:00:00',
+          deadline: '2026-03-18T23:00:00',
         }),
       ]
 
-      render(<WeekView weekStart={weekStart} todos={todos} />)
+      render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      const mondayColumn = screen.getByTestId('day-column-2024-01-15')
-      const hour0Slot = within(mondayColumn).getByTestId('hour-slot-0')
-      const hour23Slot = within(mondayColumn).getByTestId('hour-slot-23')
+      const dayContent = screen.getByTestId('day-content')
+      const hour0Slot = within(dayContent).getByTestId('hour-slot-0')
+      const hour23Slot = within(dayContent).getByTestId('hour-slot-23')
 
       expect(within(hour0Slot).getByText('Midnight task')).toBeInTheDocument()
       expect(within(hour23Slot).getByText('Late night task')).toBeInTheDocument()
     })
 
-    it('handles weekStart that is not a Sunday', () => {
-      // Pass a Wednesday as weekStart - should still work with 7 days
-      const wednesdayStart = new Date('2024-01-17')
+    it('handles selectedDate prop change within same week', () => {
       const todos: Todo[] = []
+      const { rerender } = render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      render(<WeekView weekStart={wednesdayStart} todos={todos} />)
+      // Initially shows March 18
+      expect(screen.getByText('18')).toBeInTheDocument()
 
-      // Should still render 7 day columns
-      const dayColumns = screen.getAllByTestId(/day-column/)
-      expect(dayColumns).toHaveLength(7)
+      // Rerender with different date in same week
+      const newDate = new Date(2026, 2, 19) // March 19
+      rerender(<WeekView selectedDate={newDate} todos={todos} />)
+
+      // WeekDateNav should update to show March 19 selected
+      const thursdayButton = screen.getByTestId('date-item-4')
+      expect(thursdayButton).toHaveClass('bg-blue-600')
     })
 
-    it('handles todos at exactly week boundary (Sunday 00:00 and Saturday 23:59)', () => {
-      const todos: Todo[] = [
-        createMockTodo({
-          id: 1,
-          description: 'Sunday midnight',
-          deadline: '2024-01-14T00:00:00',
-        }),
-        createMockTodo({
-          id: 2,
-          description: 'Saturday late night',
-          deadline: '2024-01-20T23:00:00',
-        }),
-      ]
+    it('handles selectedDate prop change to different week', async () => {
+      vi.useFakeTimers()
+      const today = new Date(2026, 2, 18, 12, 0, 0)
+      vi.setSystemTime(today)
 
-      render(<WeekView weekStart={weekStart} todos={todos} />)
+      const todos: Todo[] = []
+      const { rerender } = render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      const sundayColumn = screen.getByTestId('day-column-2024-01-14')
-      const saturdayColumn = screen.getByTestId('day-column-2024-01-20')
+      // Initially shows March 15-21 week
+      expect(screen.getByText('15')).toBeInTheDocument()
 
-      expect(within(sundayColumn).getByText('Sunday midnight')).toBeInTheDocument()
-      expect(within(saturdayColumn).getByText('Saturday late night')).toBeInTheDocument()
+      // Rerender with date in different week (January 2026)
+      const newDate = new Date(2026, 0, 8) // January 8, 2026 (Thursday)
+      rerender(<WeekView selectedDate={newDate} todos={todos} />)
+
+      // Run timers to allow useEffect
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+
+      // Should show January dates (4-10)
+      expect(screen.getByText('4')).toBeInTheDocument() // January 4 (Sunday)
+      expect(screen.getByText('8')).toBeInTheDocument() // January 8 (Thursday)
+
+      vi.useRealTimers()
     })
   })
 })

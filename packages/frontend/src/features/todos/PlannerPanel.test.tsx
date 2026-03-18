@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PlannerPanel, type PlannerPanelProps } from './PlannerPanel'
 import type { Todo } from '@nanomail/shared'
@@ -31,33 +31,22 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
 describe('PlannerPanel', () => {
   // Mock current date for consistent tests
   const mockCurrentDate = new Date(2024, 0, 15) // January 15, 2024
-  let originalDate: typeof Date
-
-  beforeEach(() => {
-    originalDate = global.Date
-    // Mock Date constructor to return consistent date
-    const MockDate = class extends Date {
-      constructor(dateString?: string | number | Date) {
-        super(dateString ?? mockCurrentDate)
-      }
-      static now() {
-        return mockCurrentDate.getTime()
-      }
-    }
-    global.Date = MockDate as typeof Date
-  })
-
-  afterEach(() => {
-    global.Date = originalDate
-  })
 
   const defaultProps: PlannerPanelProps = {
     todos: [],
     onTodoClick: vi.fn(),
-    onDeadlineChange: vi.fn(),
   }
 
   describe('rendering', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(mockCurrentDate)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
     it('renders the panel with header', () => {
       render(<PlannerPanel {...defaultProps} />)
 
@@ -102,6 +91,15 @@ describe('PlannerPanel', () => {
   })
 
   describe('todo filtering', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(mockCurrentDate)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
     it('shows count of scheduled todos (todos with deadline AND boardColumnId === 2)', () => {
       const todos: Todo[] = [
         createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
@@ -145,6 +143,7 @@ describe('PlannerPanel', () => {
   })
 
   describe('view switching', () => {
+    // Don't use fake timers for interaction tests
     it('switches to WeekView when week button is clicked', async () => {
       const user = userEvent.setup()
       render(<PlannerPanel {...defaultProps} />)
@@ -152,8 +151,9 @@ describe('PlannerPanel', () => {
       // Initially DayView
       expect(screen.getByTestId('day-view')).toBeInTheDocument()
 
-      // Click week button
-      const weekButton = screen.getByRole('button', { name: /周/i })
+      // Click week button in the view toggle (not WeekDateNav)
+      const viewToggle = screen.getByTestId('planner-view-toggle')
+      const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
       // Should now show WeekView
@@ -166,12 +166,13 @@ describe('PlannerPanel', () => {
       render(<PlannerPanel {...defaultProps} />)
 
       // Switch to WeekView
-      const weekButton = screen.getByRole('button', { name: /周/i })
+      const viewToggle = screen.getByTestId('planner-view-toggle')
+      const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
       expect(screen.getByTestId('week-view')).toBeInTheDocument()
 
-      // Switch back to DayView
-      const dayButton = screen.getByRole('button', { name: /日/i })
+      // Switch back to DayView - click the day button in view toggle
+      const dayButton = within(viewToggle).getByRole('button', { name: /日/i })
       await user.click(dayButton)
       expect(screen.getByTestId('day-view')).toBeInTheDocument()
     })
@@ -189,7 +190,8 @@ describe('PlannerPanel', () => {
       expect(countElement).toHaveTextContent('2 scheduled')
 
       // Switch to WeekView
-      const weekButton = screen.getByRole('button', { name: /周/i })
+      const viewToggle = screen.getByTestId('planner-view-toggle')
+      const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
       // Count should still be 2
@@ -212,26 +214,31 @@ describe('PlannerPanel', () => {
       render(<PlannerPanel {...defaultProps} />)
 
       // Switch to WeekView
-      const weekButton = screen.getByRole('button', { name: /周/i })
+      const viewToggle = screen.getByTestId('planner-view-toggle')
+      const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
       // WeekView should be rendered
       const weekView = screen.getByTestId('week-view')
       expect(weekView).toBeInTheDocument()
 
-      // The week header should contain day headers
-      const weekHeader = screen.getByTestId('week-header')
-      expect(weekHeader).toBeInTheDocument()
+      // WeekDateNav should be present
+      const weekDateNav = screen.getByTestId('week-date-nav')
+      expect(weekDateNav).toBeInTheDocument()
     })
   })
 
   describe('interactions', () => {
     it('calls onTodoClick when a todo card is clicked in DayView', async () => {
       const user = userEvent.setup()
+      // Note: DayView shows today's content. Create todo with today's deadline.
+      // This test focuses on click interaction, not date handling.
+      const today = new Date()
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const mockTodo = createMockTodo({
         id: 1,
         description: 'Clickable todo',
-        deadline: '2024-01-15T10:00:00',
+        deadline: `${todayStr}T10:00:00`,
         boardColumnId: 2,
       })
       const onTodoClick = vi.fn()
@@ -245,19 +252,25 @@ describe('PlannerPanel', () => {
 
     it('calls onTodoClick when a todo card is clicked in WeekView', async () => {
       const user = userEvent.setup()
+      // Note: WeekView defaults to showing today. Create todo with today's deadline.
+      // This test focuses on click interaction, not date handling.
+      const today = new Date()
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const mockTodo = createMockTodo({
         id: 1,
         description: 'Clickable todo',
-        deadline: '2024-01-15T10:00:00', // Same date as mocked current date
+        deadline: `${todayStr}T10:00:00`,
         boardColumnId: 2,
       })
       const onTodoClick = vi.fn()
       render(<PlannerPanel {...defaultProps} todos={[mockTodo]} onTodoClick={onTodoClick} />)
 
       // Switch to WeekView
-      const weekButton = screen.getByRole('button', { name: /周/i })
+      const viewToggle = screen.getByTestId('planner-view-toggle')
+      const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
+      // The todo should be visible since WeekView shows today by default
       const todoCard = screen.getByTestId('planner-todo-card-1')
       await user.click(todoCard)
 

@@ -88,6 +88,19 @@ describe('Planner Module Exports', () => {
         expect(WeekView).toBeDefined()
       })
     })
+
+    describe('WeekDateNav Export', () => {
+      it('should export WeekDateNav component', async () => {
+        const { WeekDateNav } = await import('./index')
+        expect(WeekDateNav).toBeDefined()
+        expect(typeof WeekDateNav).toBe('function')
+      })
+
+      it('should export WeekDateNavProps type', async () => {
+        const { WeekDateNav } = await import('./WeekDateNav')
+        expect(WeekDateNav).toBeDefined()
+      })
+    })
   })
 
   describe('Module Structure', () => {
@@ -105,6 +118,7 @@ describe('Planner Module Exports', () => {
 
       // Phase 3
       expect(module.WeekView).toBeDefined()
+      expect(module.WeekDateNav).toBeDefined()
 
       // Type exports (verified at compile time)
       expect(module.TimeAxisProps).toBeUndefined() // Types are erased at runtime
@@ -113,6 +127,7 @@ describe('Planner Module Exports', () => {
       expect(module.HourSlotProps).toBeUndefined()
       expect(module.PlannerTodoCardProps).toBeUndefined()
       expect(module.WeekViewProps).toBeUndefined()
+      expect(module.WeekDateNavProps).toBeUndefined()
     })
   })
 })

@@ -28,6 +28,7 @@ export { PlannerTodoCard, type PlannerTodoCardProps } from './PlannerTodoCard'
 
 // Phase 3 Components
 export { WeekView, type WeekViewProps } from './WeekView'
+export { WeekDateNav, type WeekDateNavProps } from './WeekDateNav'
 
 // Phase 4 Components
 export { PlannerViewToggle, type PlannerViewToggleProps } from './PlannerViewToggle'

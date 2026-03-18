@@ -161,6 +161,120 @@ describe('DraggableTodoItem', () => {
       const dragHandle = screen.getByTestId('drag-handle')
       expect(dragHandle).toHaveClass('cursor-grab')
     })
+
+    it('should have active:cursor-grabbing class on drag handle', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveClass('active:cursor-grabbing')
+    })
+
+    it('should have touch-none class on drag handle for touch devices', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveClass('touch-none')
+    })
+  })
+
+  describe('Phase 5: Drag Handle Hover Visibility', () => {
+    it('should have group class on container for hover effect', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      expect(container).toHaveClass('group')
+    })
+
+    it('should have opacity-0 class on drag handle by default (hidden)', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveClass('opacity-0')
+    })
+
+    it('should have group-hover:opacity-100 class on drag handle (visible on hover)', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveClass('group-hover:opacity-100')
+    })
+
+    it('should have transition-opacity for smooth appearance', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveClass('transition-opacity')
+    })
+  })
+
+  describe('Phase 5: Drag Attributes Only on Handle', () => {
+    it('should have role="button" on drag handle, not container', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveAttribute('role', 'button')
+    })
+
+    it('should NOT have role="button" on container', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      expect(container).not.toHaveAttribute('role', 'button')
+    })
+
+    it('should have tabIndex on drag handle for keyboard accessibility', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveAttribute('tabIndex', '0')
+    })
+
+    it('should NOT have tabIndex on container', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      expect(container).not.toHaveAttribute('tabIndex')
+    })
   })
 
   describe('Drag State Styling', () => {
@@ -230,26 +344,26 @@ describe('DraggableTodoItem', () => {
   })
 
   describe('Accessibility', () => {
-    it('should have role button on draggable element', () => {
+    it('should have role button on drag handle for keyboard users', () => {
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      const container = screen.getByTestId('draggable-todo-item')
-      expect(container).toHaveAttribute('role', 'button')
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveAttribute('role', 'button')
     })
 
-    it('should be focusable', () => {
+    it('should be focusable via drag handle', () => {
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      const container = screen.getByTestId('draggable-todo-item')
-      expect(container).toHaveAttribute('tabIndex', '0')
+      const dragHandle = screen.getByTestId('drag-handle')
+      expect(dragHandle).toHaveAttribute('tabIndex', '0')
     })
   })
 

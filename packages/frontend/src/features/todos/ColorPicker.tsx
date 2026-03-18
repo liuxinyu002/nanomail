@@ -1,23 +1,5 @@
 import { cn } from '@/lib/utils'
-
-/**
- * Preset colors for column backgrounds
- *
- * Each color has:
- * - name: Display name for accessibility
- * - hex: The actual color value (used for background)
- * - tailwind: Tailwind class for reference
- */
-export const PRESET_COLORS = [
-  { name: 'Gray', hex: '#E5E7EB', tailwind: 'bg-gray-200' },
-  { name: 'Blue', hex: '#DBEAFE', tailwind: 'bg-blue-100' },
-  { name: 'Green', hex: '#D1FAE5', tailwind: 'bg-green-100' },
-  { name: 'Yellow', hex: '#FEF3C7', tailwind: 'bg-yellow-100' },
-  { name: 'Purple', hex: '#EDE9FE', tailwind: 'bg-purple-100' },
-  { name: 'Pink', hex: '#FCE7F3', tailwind: 'bg-pink-100' },
-] as const
-
-export type PresetColor = (typeof PRESET_COLORS)[number]
+import { MACARON_COLOR_OPTIONS } from '@/constants/colors'
 
 export interface ColorPickerProps {
   /** Currently selected color (hex value) or null for no selection */
@@ -29,10 +11,10 @@ export interface ColorPickerProps {
 }
 
 /**
- * ColorPicker - A color picker component with preset colors
+ * ColorPicker - A color picker component with macaron/pastel colors
  *
  * Features:
- * - 6 preset colors displayed in a grid
+ * - 6 macaron colors displayed in a grid
  * - Click to select a color
  * - Click selected color to deselect (set to null)
  * - Visual feedback with ring effect on selected color
@@ -59,7 +41,7 @@ export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
         className
       )}
     >
-      {PRESET_COLORS.map((color) => {
+      {MACARON_COLOR_OPTIONS.map((color) => {
         const isSelected = normalizedValue === color.hex.toUpperCase()
 
         return (

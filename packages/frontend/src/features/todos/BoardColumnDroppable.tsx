@@ -5,13 +5,7 @@ import type { TodoItem } from '@/services'
 import { cn } from '@/lib/utils'
 import { DraggableTodoItem } from './DraggableTodoItem'
 import { ColumnHeader } from './ColumnHeader'
-
-const VALID_HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/
-
-function isValidHexColor(color: string | null | undefined): boolean {
-  if (!color) return false
-  return VALID_HEX_COLOR_REGEX.test(color)
-}
+import { EmptyState } from './EmptyState'
 
 export interface BoardColumnDroppableProps {
   /** The column to display */
@@ -36,6 +30,7 @@ export interface BoardColumnDroppableProps {
  * - Inline renaming via double-click
  * - Sortable container using SortableContext
  * - Visual feedback on drag-over
+ * - Fixed neutral background (#F7F8FA) for clean appearance
  */
 export function BoardColumnDroppable({
   column,
@@ -54,20 +49,19 @@ export function BoardColumnDroppable({
   })
 
   const todoIds = todos.map(t => t.id)
-
-  // Check if column has a valid hex color
-  const hasValidColor = isValidHexColor(column.color)
+  const isEmpty = todos.length === 0
+  const showEmptyState = isEmpty && !isOver
+  const showDropIndicator = isOver && isEmpty
 
   return (
     <div
       data-testid="board-column-droppable"
       className={cn(
-        'flex flex-col rounded-lg',
+        'flex flex-col rounded-lg p-3',
         'border border-gray-200',
-        !hasValidColor && 'bg-gray-50',
         className
       )}
-      style={hasValidColor ? { backgroundColor: column.color! } : undefined}
+      style={{ backgroundColor: '#F7F8FA' }}
     >
       {/* Column Header */}
       <ColumnHeader
@@ -83,18 +77,38 @@ export function BoardColumnDroppable({
         ref={setNodeRef}
         data-testid="droppable-zone"
         className={cn(
-          'flex-1 p-2 min-h-[200px]',
+          'flex-1 min-h-[200px]',
           'transition-colors duration-200',
           isOver && 'bg-blue-50'
         )}
       >
-        <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-2">
-            {todos.map(todo => (
-              <DraggableTodoItem key={todo.id} todo={todo} />
-            ))}
+        {/* Empty State OR Cards */}
+        {showEmptyState ? (
+          <EmptyState
+            message={`No tasks in ${column.name}`}
+            className="min-h-[160px]"
+          />
+        ) : (
+          <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2">
+              {todos.map(todo => (
+                <DraggableTodoItem key={todo.id} todo={todo} />
+              ))}
+            </div>
+          </SortableContext>
+        )}
+
+        {/* Drop Indicator when dragging over empty column */}
+        {showDropIndicator && (
+          <div
+            data-testid="drop-indicator"
+            className="border-2 border-dashed border-blue-500 rounded-md p-4 mt-2"
+          >
+            <p className="text-blue-500 text-sm text-center">
+              Drop here
+            </p>
           </div>
-        </SortableContext>
+        )}
       </div>
     </div>
   )

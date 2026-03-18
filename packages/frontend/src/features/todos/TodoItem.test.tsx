@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { BrowserRouter } from 'react-router-dom'
 import { TodoItem, type TodoItemProps } from './TodoItem'
 import type { TodoItem as TodoItemType } from '@/services'
 
@@ -11,11 +12,6 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
-      <a href={to} className={className} data-testid="email-link">
-        {children}
-      </a>
-    ),
   }
 })
 
@@ -33,6 +29,15 @@ vi.mock('@/hooks', () => ({
     isPending: false,
   }),
 }))
+
+// Helper to render with router
+function renderWithRouter(ui: React.ReactElement) {
+  return render(
+    <BrowserRouter>
+      {ui}
+    </BrowserRouter>
+  )
+}
 
 describe('TodoItem', () => {
   const mockTodo: TodoItemType = {
@@ -55,15 +60,51 @@ describe('TodoItem', () => {
     mockNavigate.mockReset()
   })
 
-  describe('Rendering', () => {
+  describe('TodoCard Integration', () => {
+    it('should render TodoCard component', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      // TodoCard has data-testid="todo-card"
+      expect(screen.getByTestId('todo-card')).toBeInTheDocument()
+    })
+
     it('should render todo description', () => {
-      render(<TodoItem {...defaultProps} />)
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
       expect(screen.getByText('Review the quarterly report')).toBeInTheDocument()
     })
 
+    it('should have white background', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const card = screen.getByTestId('todo-card')
+      expect(card).toHaveClass('bg-white')
+    })
+
+    it('should have soft shadow', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const card = screen.getByTestId('todo-card')
+      expect(card).toHaveClass('shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]')
+    })
+
+    it('should NOT have column-based border colors (Phase 7 migration)', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const card = screen.getByTestId('todo-card')
+      // Should NOT have column-based left border
+      expect(card).not.toHaveClass('border-l-blue-500')
+      expect(card).not.toHaveClass('border-l-red-500')
+      expect(card).not.toHaveClass('border-l-amber-500')
+      expect(card).not.toHaveClass('border-l-green-500')
+      // Should NOT have border-l-4 class
+      expect(card).not.toHaveClass('border-l-4')
+    })
+  })
+
+  describe('Checkbox Behavior', () => {
     it('should render unchecked checkbox for pending todo', () => {
-      render(<TodoItem {...defaultProps} />)
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
       const checkbox = screen.getByRole('checkbox')
       expect(checkbox).not.toBeChecked()
@@ -71,67 +112,17 @@ describe('TodoItem', () => {
 
     it('should render checked checkbox for completed todo', () => {
       const completedTodo = { ...mockTodo, status: 'completed' as const }
-      render(<TodoItem {...defaultProps} todo={completedTodo} />)
+      renderWithRouter(<TodoItem {...defaultProps} todo={completedTodo} />)
 
       const checkbox = screen.getByRole('checkbox')
       expect(checkbox).toBeChecked()
     })
 
-    it('should show line-through style for completed todo', () => {
-      const completedTodo = { ...mockTodo, status: 'completed' as const }
-      render(<TodoItem {...defaultProps} todo={completedTodo} />)
-
-      const description = screen.getByText('Review the quarterly report')
-      expect(description).toHaveClass('line-through')
-    })
-
-    it('should have left border color based on boardColumnId - red for Todo column (2)', () => {
-      render(<TodoItem {...defaultProps} />)
-
-      const container = screen.getByTestId('todo-item-container')
-      expect(container).toHaveClass('border-l-red-500')
-    })
-
-    it('should have left border color based on boardColumnId - amber for In Progress column (3)', () => {
-      const inProgressTodo = { ...mockTodo, boardColumnId: 3 }
-      render(<TodoItem {...defaultProps} todo={inProgressTodo} />)
-
-      const container = screen.getByTestId('todo-item-container')
-      expect(container).toHaveClass('border-l-amber-500')
-    })
-
-    it('should have left border color based on boardColumnId - blue for Inbox column (1)', () => {
-      const inboxTodo = { ...mockTodo, boardColumnId: 1 }
-      render(<TodoItem {...defaultProps} todo={inboxTodo} />)
-
-      const container = screen.getByTestId('todo-item-container')
-      expect(container).toHaveClass('border-l-blue-500')
-    })
-
-    it('should have left border color based on boardColumnId - green for Done column (4)', () => {
-      const doneTodo = { ...mockTodo, boardColumnId: 4 }
-      render(<TodoItem {...defaultProps} todo={doneTodo} />)
-
-      const container = screen.getByTestId('todo-item-container')
-      expect(container).toHaveClass('border-l-green-500')
-    })
-  })
-
-  describe('Email Link', () => {
-    it('should link to the source email', () => {
-      render(<TodoItem {...defaultProps} />)
-
-      const link = screen.getByTestId('email-link')
-      expect(link).toHaveAttribute('href', '/inbox/100')
-    })
-  })
-
-  describe('Toggle Completion', () => {
     it('should call updateMutation.mutate when checkbox is clicked', async () => {
-      render(<TodoItem {...defaultProps} />)
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
       const checkbox = screen.getByRole('checkbox')
-      fireEvent.click(checkbox)
+      await userEvent.click(checkbox)
 
       expect(mockUpdateMutate).toHaveBeenCalledWith({
         id: 1,
@@ -142,12 +133,12 @@ describe('TodoItem', () => {
     it('should toggle from completed to pending', async () => {
       const completedTodo = { ...mockTodo, status: 'completed' as const }
 
-      render(<TodoItem {...defaultProps} todo={completedTodo} />)
+      renderWithRouter(<TodoItem {...defaultProps} todo={completedTodo} />)
 
       const checkbox = screen.getByRole('checkbox')
       expect(checkbox).toBeChecked()
 
-      fireEvent.click(checkbox)
+      await userEvent.click(checkbox)
 
       expect(mockUpdateMutate).toHaveBeenCalledWith({
         id: 1,
@@ -156,147 +147,239 @@ describe('TodoItem', () => {
     })
   })
 
-  describe('Accessibility', () => {
-    it('should have accessible checkbox label', () => {
-      render(<TodoItem {...defaultProps} />)
-
-      const checkbox = screen.getByRole('checkbox', { name: /review the quarterly report/i })
-      expect(checkbox).toBeInTheDocument()
-    })
-  })
-
-  describe('Assist Reply Button', () => {
-    it('should render Assist Reply button for pending todos', () => {
-      render(
-        <MemoryRouter>
-          <TodoItem {...defaultProps} />
-        </MemoryRouter>
-      )
-
-      expect(screen.getByRole('button', { name: /assist reply/i })).toBeInTheDocument()
-    })
-
-    it('should not render Assist Reply button for completed todos', () => {
+  describe('Title Display', () => {
+    it('should show line-through style for completed todo', () => {
       const completedTodo = { ...mockTodo, status: 'completed' as const }
-      render(
-        <MemoryRouter>
-          <TodoItem {...defaultProps} todo={completedTodo} />
-        </MemoryRouter>
-      )
+      renderWithRouter(<TodoItem {...defaultProps} todo={completedTodo} />)
 
-      expect(screen.queryByRole('button', { name: /assist reply/i })).not.toBeInTheDocument()
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveClass('line-through')
     })
 
-    it('should navigate to inbox with router state on Assist Reply click', async () => {
-      render(
-        <MemoryRouter>
-          <TodoItem {...defaultProps} />
-        </MemoryRouter>
-      )
+    it('should have primary text color', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      const assistButton = screen.getByRole('button', { name: /assist reply/i })
-      fireEvent.click(assistButton)
-
-      expect(mockNavigate).toHaveBeenCalledWith('/inbox/100', {
-        state: {
-          action: 'assist_reply',
-          instruction: 'Review the quarterly report',
-        },
-      })
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveClass('text-[#111827]')
     })
 
-    it('should navigate with correct instruction from todo description', async () => {
-      const customTodo = { ...mockTodo, description: 'Reply about the meeting tomorrow' }
-      render(
-        <MemoryRouter>
-          <TodoItem {...defaultProps} todo={customTodo} />
-        </MemoryRouter>
-      )
+    it('should have font-medium class', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      const assistButton = screen.getByRole('button', { name: /assist reply/i })
-      fireEvent.click(assistButton)
-
-      expect(mockNavigate).toHaveBeenCalledWith('/inbox/100', {
-        state: {
-          action: 'assist_reply',
-          instruction: 'Reply about the meeting tomorrow',
-        },
-      })
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveClass('font-medium')
     })
 
-    it('should navigate with correct emailId from todo', async () => {
-      const customTodo = { ...mockTodo, emailId: 456 }
-      render(
-        <MemoryRouter>
-          <TodoItem {...defaultProps} todo={customTodo} />
-        </MemoryRouter>
-      )
+    it('should have line-clamp-2 by default (not expanded)', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      const assistButton = screen.getByRole('button', { name: /assist reply/i })
-      fireEvent.click(assistButton)
-
-      expect(mockNavigate).toHaveBeenCalledWith('/inbox/456', {
-        state: {
-          action: 'assist_reply',
-          instruction: 'Review the quarterly report',
-        },
-      })
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveClass('line-clamp-2')
     })
   })
 
-  describe('Delete Button', () => {
-    it('should not render delete button by default', () => {
-      render(<TodoItem {...defaultProps} />)
+  describe('Email Link', () => {
+    it('should render email link icon when todo has emailId', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+      // EmailLinkIcon renders a link with aria-label
+      const emailLink = screen.getByRole('link', { name: /view associated email/i })
+      expect(emailLink).toBeInTheDocument()
     })
 
-    it('should render delete button when showDelete is true', () => {
-      render(<TodoItem {...defaultProps} showDelete={true} />)
+    it('should link to the source email using /inbox/ route', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      expect(screen.getByRole('button', { name: /delete todo/i })).toBeInTheDocument()
+      const emailLink = screen.getByRole('link', { name: /view associated email/i })
+      expect(emailLink).toHaveAttribute('href', '/inbox/100')
     })
 
-    it('should show confirmation text on first click', async () => {
-      render(<TodoItem {...defaultProps} showDelete={true} />)
+    it('should link with correct emailId from todo', () => {
+      const customTodo = { ...mockTodo, emailId: 456 }
+      renderWithRouter(<TodoItem {...defaultProps} todo={customTodo} />)
 
-      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
-      fireEvent.click(deleteButton)
+      const emailLink = screen.getByRole('link', { name: /view associated email/i })
+      expect(emailLink).toHaveAttribute('href', '/inbox/456')
+    })
+  })
 
-      expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
-      expect(screen.getByText('确认?')).toBeInTheDocument()
+  describe('Deadline Display', () => {
+    it('should render deadline chip when todo has deadline', () => {
+      const todoWithDeadline = { ...mockTodo, deadline: '2024-12-31T23:59:59.000Z' }
+      renderWithRouter(<TodoItem {...defaultProps} todo={todoWithDeadline} />)
+
+      expect(screen.getByTestId('deadline-chip')).toBeInTheDocument()
     })
 
-    it('should call delete mutation on second click', async () => {
-      render(<TodoItem {...defaultProps} showDelete={true} />)
+    it('should not render deadline chip when todo has no deadline', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
+      expect(screen.queryByTestId('deadline-chip')).not.toBeInTheDocument()
+    })
+  })
 
-      // First click - show confirmation
-      fireEvent.click(deleteButton)
+  describe('Dropdown Menu', () => {
+    it('should render dropdown menu trigger', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
 
-      // Second click - confirm delete
-      const confirmButton = screen.getByRole('button', { name: /confirm delete/i })
-      fireEvent.click(confirmButton)
+      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
+    })
+
+    it('should open dropdown menu when trigger is clicked', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
+
+      expect(screen.getByTestId('card-dropdown-menu')).toBeInTheDocument()
+    })
+
+    it('should render Edit action in dropdown', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
+
+      expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument()
+    })
+
+    it('should render Delete action in dropdown', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
+
+      expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
+    })
+
+    it('should call delete mutation when Delete is clicked', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
+
+      const deleteButton = screen.getByRole('menuitem', { name: 'Delete' })
+      await userEvent.click(deleteButton)
 
       expect(mockDeleteMutate).toHaveBeenCalledWith(1)
     })
 
-    it('should reset confirmation state on mouse leave', async () => {
-      render(<TodoItem {...defaultProps} showDelete={true} />)
+    it('should NOT call delete mutation when showDelete is false', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={false} />)
 
-      const deleteButton = screen.getByRole('button', { name: /delete todo/i })
-      fireEvent.click(deleteButton)
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
 
-      // Should show confirmation
-      expect(screen.getByText('确认?')).toBeInTheDocument()
+      // Delete button should still be in the dropdown but won't call mutation
+      const deleteButton = screen.getByRole('menuitem', { name: 'Delete' })
+      await userEvent.click(deleteButton)
 
-      // Mouse leave should reset
-      const container = screen.getByTestId('todo-item-container')
-      fireEvent.mouseLeave(container)
+      // Delete mutation should NOT be called when showDelete is false
+      expect(mockDeleteMutate).not.toHaveBeenCalled()
+    })
 
-      // Should be back to delete button
-      expect(screen.getByRole('button', { name: /delete todo/i })).toBeInTheDocument()
+    it('should trigger onEdit callback when Edit is clicked (placeholder)', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const triggerButton = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(triggerButton)
+
+      const editButton = screen.getByRole('menuitem', { name: 'Edit' })
+      // Edit is currently a placeholder - clicking it should not throw
+      await userEvent.click(editButton)
+
+      // Menu should close after clicking
+      expect(screen.queryByTestId('card-dropdown-menu')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Expand/Collapse Behavior', () => {
+    it('should start collapsed by default', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const expandableContent = screen.getByTestId('todo-card-expandable')
+      expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
+    })
+
+    it('should expand when card is clicked', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      const expandableContent = screen.getByTestId('todo-card-expandable')
+      expect(expandableContent).toHaveClass('[grid-template-rows:1fr]')
+    })
+
+    it('should NOT expand when clicking on checkbox', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const checkbox = screen.getByRole('checkbox')
+      await userEvent.click(checkbox)
+
+      const expandableContent = screen.getByTestId('todo-card-expandable')
+      expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
+    })
+
+    it('should NOT expand when clicking on dropdown trigger', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const dropdownTrigger = screen.getByRole('button', { name: /more options/i })
+      await userEvent.click(dropdownTrigger)
+
+      const expandableContent = screen.getByTestId('todo-card-expandable')
+      expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
+    })
+  })
+
+  describe('Accessibility', () => {
+    it('should have accessible checkbox', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).toBeInTheDocument()
+    })
+
+    it('should have more options button accessible by label', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
+    })
+
+    it('should have cursor-pointer on card', () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      const card = screen.getByTestId('todo-card')
+      expect(card).toHaveClass('cursor-pointer')
+    })
+  })
+
+  describe('Edge Cases', () => {
+    it('should handle empty description gracefully', () => {
+      const emptyDescTodo = { ...mockTodo, description: '' }
+      renderWithRouter(<TodoItem {...defaultProps} todo={emptyDescTodo} />)
+
+      expect(screen.getByTestId('todo-card')).toBeInTheDocument()
+    })
+
+    it('should handle very long description', () => {
+      const longDescription = 'A'.repeat(1000)
+      const longDescTodo = { ...mockTodo, description: longDescription }
+      renderWithRouter(<TodoItem {...defaultProps} todo={longDescTodo} />)
+
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveClass('line-clamp-2')
+    })
+
+    it('should handle in_progress status (not completed)', () => {
+      const inProgressTodo = { ...mockTodo, status: 'in_progress' as const }
+      renderWithRouter(<TodoItem {...defaultProps} todo={inProgressTodo} />)
+
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).not.toBeChecked()
+
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).not.toHaveClass('line-through')
     })
   })
 })

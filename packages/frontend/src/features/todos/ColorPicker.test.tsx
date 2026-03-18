@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ColorPicker, type ColorPickerProps, PRESET_COLORS } from './ColorPicker'
+import { ColorPicker, type ColorPickerProps } from './ColorPicker'
+import { MACARON_COLOR_OPTIONS } from '@/constants/colors'
 
 describe('ColorPicker', () => {
   const defaultProps: ColorPickerProps = {
@@ -13,26 +14,42 @@ describe('ColorPicker', () => {
     vi.clearAllMocks()
   })
 
-  describe('Preset Colors Configuration', () => {
-    it('should export PRESET_COLORS with 6 colors', () => {
-      expect(PRESET_COLORS).toHaveLength(6)
+  describe('Macaron Color Configuration', () => {
+    it('should render 6 macaron color options', () => {
+      render(<ColorPicker {...defaultProps} />)
+
+      const colorButtons = screen.getAllByRole('button')
+      expect(colorButtons).toHaveLength(6)
     })
 
-    it('should have correct color values', () => {
-      const expectedColors = [
-        { name: 'Gray', hex: '#E5E7EB', tailwind: 'bg-gray-200' },
-        { name: 'Blue', hex: '#DBEAFE', tailwind: 'bg-blue-100' },
-        { name: 'Green', hex: '#D1FAE5', tailwind: 'bg-green-100' },
-        { name: 'Yellow', hex: '#FEF3C7', tailwind: 'bg-yellow-100' },
-        { name: 'Purple', hex: '#EDE9FE', tailwind: 'bg-purple-100' },
-        { name: 'Pink', hex: '#FCE7F3', tailwind: 'bg-pink-100' },
-      ]
+    it('should have correct macaron color hex values', () => {
+      render(<ColorPicker {...defaultProps} />)
 
-      expectedColors.forEach((expected, index) => {
-        expect(PRESET_COLORS[index].name).toBe(expected.name)
-        expect(PRESET_COLORS[index].hex).toBe(expected.hex)
-        expect(PRESET_COLORS[index].tailwind).toBe(expected.tailwind)
-      })
+      // Verify the macaron colors are rendered
+      const redButton = screen.getByRole('button', { name: 'Pastel Red' })
+      expect(redButton).toHaveStyle({ backgroundColor: '#FFB5BA' })
+
+      const orangeButton = screen.getByRole('button', { name: 'Pastel Orange' })
+      expect(orangeButton).toHaveStyle({ backgroundColor: '#FFD8A8' })
+
+      const yellowButton = screen.getByRole('button', { name: 'Pastel Yellow' })
+      expect(yellowButton).toHaveStyle({ backgroundColor: '#FFF4B8' })
+
+      const greenButton = screen.getByRole('button', { name: 'Pastel Green' })
+      expect(greenButton).toHaveStyle({ backgroundColor: '#B8E6C1' })
+
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
+      expect(blueButton).toHaveStyle({ backgroundColor: '#B8D4FF' })
+
+      const purpleButton = screen.getByRole('button', { name: 'Pastel Purple' })
+      expect(purpleButton).toHaveStyle({ backgroundColor: '#D4B8FF' })
+    })
+
+    it('should use MACARON_COLOR_OPTIONS from constants', () => {
+      // Verify MACARON_COLOR_OPTIONS has expected structure
+      expect(MACARON_COLOR_OPTIONS).toHaveLength(6)
+      expect(MACARON_COLOR_OPTIONS[0].name).toBe('Pastel Red')
+      expect(MACARON_COLOR_OPTIONS[0].hex).toBe('#FFB5BA')
     })
   })
 
@@ -44,25 +61,25 @@ describe('ColorPicker', () => {
       expect(colorButtons).toHaveLength(6)
     })
 
-    it('should render color buttons with accessible labels', () => {
+    it('should render color buttons with accessible labels (macaron palette)', () => {
       render(<ColorPicker {...defaultProps} />)
 
-      expect(screen.getByRole('button', { name: 'Gray' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Blue' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Green' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Yellow' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Purple' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Pink' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Red' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Orange' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Yellow' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Green' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Blue' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Purple' })).toBeInTheDocument()
     })
 
-    it('should have correct background colors on buttons', () => {
+    it('should have correct background colors on buttons (macaron palette)', () => {
       render(<ColorPicker {...defaultProps} />)
 
-      const grayButton = screen.getByRole('button', { name: 'Gray' })
-      expect(grayButton).toHaveStyle({ backgroundColor: '#E5E7EB' })
+      const redButton = screen.getByRole('button', { name: 'Pastel Red' })
+      expect(redButton).toHaveStyle({ backgroundColor: '#FFB5BA' })
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
-      expect(blueButton).toHaveStyle({ backgroundColor: '#DBEAFE' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
+      expect(blueButton).toHaveStyle({ backgroundColor: '#B8D4FF' })
     })
 
     it('should render in a grid layout', () => {
@@ -85,35 +102,35 @@ describe('ColorPicker', () => {
     })
 
     it('should highlight selected color with ring effect', () => {
-      render(<ColorPicker {...defaultProps} value="#DBEAFE" />)
+      render(<ColorPicker {...defaultProps} value="#B8D4FF" />)
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       expect(blueButton).toHaveClass('ring-2')
       expect(blueButton).toHaveClass('ring-blue-500')
     })
 
     it('should have aria-pressed true for selected color', () => {
-      render(<ColorPicker {...defaultProps} value="#D1FAE5" />)
+      render(<ColorPicker {...defaultProps} value="#B8E6C1" />)
 
-      const greenButton = screen.getByRole('button', { name: 'Green' })
+      const greenButton = screen.getByRole('button', { name: 'Pastel Green' })
       expect(greenButton).toHaveAttribute('aria-pressed', 'true')
     })
 
     it('should have aria-pressed false for non-selected colors', () => {
-      render(<ColorPicker {...defaultProps} value="#DBEAFE" />)
+      render(<ColorPicker {...defaultProps} value="#B8D4FF" />)
 
-      const grayButton = screen.getByRole('button', { name: 'Gray' })
-      expect(grayButton).toHaveAttribute('aria-pressed', 'false')
+      const redButton = screen.getByRole('button', { name: 'Pastel Red' })
+      expect(redButton).toHaveAttribute('aria-pressed', 'false')
 
-      const greenButton = screen.getByRole('button', { name: 'Green' })
+      const greenButton = screen.getByRole('button', { name: 'Pastel Green' })
       expect(greenButton).toHaveAttribute('aria-pressed', 'false')
     })
 
     it('should select correct color when value matches a preset', () => {
-      render(<ColorPicker {...defaultProps} value="#FCE7F3" />)
+      render(<ColorPicker {...defaultProps} value="#D4B8FF" />)
 
-      const pinkButton = screen.getByRole('button', { name: 'Pink' })
-      expect(pinkButton).toHaveClass('ring-2')
+      const purpleButton = screen.getByRole('button', { name: 'Pastel Purple' })
+      expect(purpleButton).toHaveClass('ring-2')
     })
 
     it('should show no selection for non-preset color', () => {
@@ -131,17 +148,17 @@ describe('ColorPicker', () => {
       const onChange = vi.fn()
       render(<ColorPicker {...defaultProps} onChange={onChange} />)
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       await userEvent.click(blueButton)
 
-      expect(onChange).toHaveBeenCalledWith('#DBEAFE')
+      expect(onChange).toHaveBeenCalledWith('#B8D4FF')
     })
 
     it('should call onChange with null when clicking selected color (deselect)', async () => {
       const onChange = vi.fn()
-      render(<ColorPicker {...defaultProps} value="#DBEAFE" onChange={onChange} />)
+      render(<ColorPicker {...defaultProps} value="#B8D4FF" onChange={onChange} />)
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       await userEvent.click(blueButton)
 
       expect(onChange).toHaveBeenCalledWith(null)
@@ -149,19 +166,19 @@ describe('ColorPicker', () => {
 
     it('should call onChange with new color when clicking different color', async () => {
       const onChange = vi.fn()
-      render(<ColorPicker {...defaultProps} value="#DBEAFE" onChange={onChange} />)
+      render(<ColorPicker {...defaultProps} value="#B8D4FF" onChange={onChange} />)
 
-      const greenButton = screen.getByRole('button', { name: 'Green' })
+      const greenButton = screen.getByRole('button', { name: 'Pastel Green' })
       await userEvent.click(greenButton)
 
-      expect(onChange).toHaveBeenCalledWith('#D1FAE5')
+      expect(onChange).toHaveBeenCalledWith('#B8E6C1')
     })
 
     it('should call onChange exactly once per click', async () => {
       const onChange = vi.fn()
       render(<ColorPicker {...defaultProps} onChange={onChange} />)
 
-      const yellowButton = screen.getByRole('button', { name: 'Yellow' })
+      const yellowButton = screen.getByRole('button', { name: 'Pastel Yellow' })
       await userEvent.click(yellowButton)
 
       expect(onChange).toHaveBeenCalledTimes(1)
@@ -224,17 +241,17 @@ describe('ColorPicker', () => {
       expect(buttons).toHaveLength(6)
     })
 
-    it('should have aria-label for each color button', () => {
+    it('should have aria-label for each color button (macaron palette)', () => {
       render(<ColorPicker {...defaultProps} />)
 
-      const colorNames = ['Gray', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink']
+      const colorNames = ['Pastel Red', 'Pastel Orange', 'Pastel Yellow', 'Pastel Green', 'Pastel Blue', 'Pastel Purple']
       colorNames.forEach(name => {
         expect(screen.getByRole('button', { name })).toBeInTheDocument()
       })
     })
 
     it('should have aria-pressed attribute on all buttons', () => {
-      render(<ColorPicker {...defaultProps} value="#E5E7EB" />)
+      render(<ColorPicker {...defaultProps} value="#FFB5BA" />)
 
       const buttons = screen.getAllByRole('button')
       buttons.forEach(button => {
@@ -272,10 +289,10 @@ describe('ColorPicker', () => {
     })
 
     it('should handle case-insensitive hex comparison', () => {
-      // #dbEaFe should match #DBEAFE
-      render(<ColorPicker {...defaultProps} value="#dbEaFe" />)
+      // #b8d4fF should match #B8D4FF
+      render(<ColorPicker {...defaultProps} value="#b8d4fF" />)
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       expect(blueButton).toHaveClass('ring-2')
     })
 
@@ -283,7 +300,7 @@ describe('ColorPicker', () => {
       const onChange = vi.fn()
       render(<ColorPicker {...defaultProps} onChange={onChange} />)
 
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
 
       await userEvent.click(blueButton)
       await userEvent.click(blueButton)

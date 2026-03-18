@@ -32,19 +32,25 @@ export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
       style={style}
       data-testid="draggable-todo-item"
       className={cn(
-        'flex items-center gap-2 transition-opacity',
+        'group flex items-center gap-2 transition-opacity',
         isDragging && 'opacity-50'
       )}
-      {...attributes}
     >
-      {/* Drag Handle */}
-      <div
+      {/* Drag Handle - ONLY this area triggers drag */}
+      <button
         data-testid="drag-handle"
-        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+        type="button"
+        className={cn(
+          'cursor-grab active:cursor-grabbing p-1',
+          'text-muted-foreground hover:text-foreground',
+          'opacity-0 group-hover:opacity-100 transition-opacity',
+          'touch-none'
+        )}
+        {...attributes}
         {...listeners}
       >
         <GripVertical className="h-5 w-5" />
-      </div>
+      </button>
 
       {/* Todo Item */}
       <div className="flex-1">

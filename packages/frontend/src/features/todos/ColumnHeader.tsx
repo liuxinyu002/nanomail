@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ColorPicker } from './ColorPicker'
+import { MACARON_COLORS } from '@/constants/colors'
 
 export interface ColumnHeaderProps {
   /** The column to display */
@@ -44,9 +45,16 @@ function isValidHexColor(color: string | null | undefined): boolean {
   return VALID_HEX_COLOR_REGEX.test(color)
 }
 
-function getSafeColor(color: string | null | undefined): string | undefined {
-  if (!isValidHexColor(color)) return undefined
-  return color ?? undefined
+/**
+ * Get the display color for the status dot.
+ * Returns the column color if valid, otherwise returns the fallback color (MACARON_COLORS[0]).
+ */
+function getDisplayColor(color: string | null | undefined): string {
+  if (isValidHexColor(color)) {
+    return color!
+  }
+  // Fallback to first macaron color (Pastel Red)
+  return MACARON_COLORS[0]
 }
 
 /**
@@ -79,7 +87,8 @@ export function ColumnHeader({
   const isEditing = isEditingExternal ?? isEditingInternal
   const isControlled = isEditingExternal !== undefined
 
-  const safeColor = getSafeColor(column.color)
+  // Always show status dot with fallback color
+  const displayColor = getDisplayColor(column.color)
 
   // Handle starting edit mode
   const handleStartEdit = useCallback(() => {
@@ -153,13 +162,12 @@ export function ColumnHeader({
     >
       {/* Left side: color indicator and name */}
       <div className="flex items-center gap-2">
-        {safeColor && (
-          <div
-            data-testid="column-color-indicator"
-            className="w-3 h-3 rounded-full flex-shrink-0"
-            style={{ backgroundColor: safeColor }}
-          />
-        )}
+        {/* Status dot - always visible with fallback color */}
+        <div
+          data-testid="column-color-indicator"
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={{ backgroundColor: displayColor }}
+        />
         {isEditing ? (
           <input
             ref={inputRef}

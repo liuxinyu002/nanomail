@@ -5,11 +5,9 @@ import type { BoardColumn } from '@nanomail/shared'
 import type { TodoItem } from '@/services'
 
 // Mock @dnd-kit/core
+const mockUseDroppable = vi.fn()
 vi.mock('@dnd-kit/core', () => ({
-  useDroppable: vi.fn(() => ({
-    setNodeRef: vi.fn(),
-    isOver: false,
-  })),
+  useDroppable: (...args: unknown[]) => mockUseDroppable(...args),
 }))
 
 // Mock @dnd-kit/sortable
@@ -57,6 +55,11 @@ describe('BoardColumnDroppable', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default mock implementation - not being dragged over
+    mockUseDroppable.mockReturnValue({
+      setNodeRef: vi.fn(),
+      isOver: false,
+    })
   })
 
   describe('Rendering', () => {
@@ -87,85 +90,52 @@ describe('BoardColumnDroppable', () => {
     })
   })
 
-  describe('Background Color', () => {
-    it('should apply default gray background when column has no color', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
-
-      const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveClass('bg-gray-50')
-    })
-
-    it('should apply column color as background when color is set', () => {
+  describe('Background Color - Purified Column', () => {
+    it('should always use fixed neutral background #F7F8FA regardless of column color', () => {
       render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} />)
 
       const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveStyle({ backgroundColor: '#DBEAFE' })
+      // Column should use fixed background color, not dynamic color
+      expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
     })
 
-    it('should not apply bg-gray-50 when custom color is set', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#D1FAE5' }} />)
+    it('should use fixed background #F7F8FA when column has no color', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
 
       const column = screen.getByTestId('board-column-droppable')
-      expect(column).not.toHaveClass('bg-gray-50')
+      expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
     })
 
-    it('should apply different colors correctly', () => {
-      const { rerender } = render(
-        <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#FEF3C7' }} />
-      )
+    it('should not apply dynamic column color to background', () => {
+      const colors = ['#FFB5BA', '#FFD8A8', '#B8E6C1', '#B8D4FF', '#D4B8FF']
 
-      let column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveStyle({ backgroundColor: '#FEF3C7' })
-
-      // Rerender with different color
-      rerender(
-        <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#EDE9FE' }} />
-      )
-
-      column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveStyle({ backgroundColor: '#EDE9FE' })
-    })
-
-    it('should handle preset colors from ColorPicker', () => {
-      const presetColors = [
-        '#E5E7EB', // Gray
-        '#DBEAFE', // Blue
-        '#D1FAE5', // Green
-        '#FEF3C7', // Yellow
-        '#EDE9FE', // Purple
-        '#FCE7F3', // Pink
-      ]
-
-      presetColors.forEach(color => {
+      colors.forEach(color => {
         const { unmount } = render(
           <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color }} />
         )
 
         const column = screen.getByTestId('board-column-droppable')
-        expect(column).toHaveStyle({ backgroundColor: color })
+        // Should always be #F7F8FA, not the column's color
+        expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
+        expect(column).not.toHaveStyle({ backgroundColor: color })
         unmount()
       })
     })
 
-    it('should fallback to gray for invalid hex colors', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: 'invalid' }} />)
+    it('should not have bg-gray-50 class (uses inline style instead)', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
 
       const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveClass('bg-gray-50')
+      expect(column).not.toHaveClass('bg-gray-50')
     })
+  })
 
-    it('should fallback to gray for colors without # prefix', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: 'DBEAFE' }} />)
-
-      const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveClass('bg-gray-50')
-    })
-
-    it('should fallback to gray for 3-character hex colors', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#ABC' }} />)
+  describe('Column Padding', () => {
+    it('should have p-3 padding on the column container', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
 
       const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveClass('bg-gray-50')
+      expect(column).toHaveClass('p-3')
     })
   })
 
@@ -184,6 +154,75 @@ describe('BoardColumnDroppable', () => {
       expect(column).toHaveClass('mt-4')
       expect(column).toHaveClass('rounded-xl')
       expect(column).toHaveClass('flex')
+    })
+  })
+
+  describe('Empty State', () => {
+    it('should show EmptyState when column is empty and not being dragged over', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} />)
+
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+    })
+
+    it('should show EmptyState with column name in message', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} column={{ ...mockColumn, name: 'In Progress' }} />)
+
+      expect(screen.getByText(/No tasks in In Progress/)).toBeInTheDocument()
+    })
+
+    it('should NOT show EmptyState when column has todos', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={mockTodos} />)
+
+      expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
+    })
+
+    it('should NOT show EmptyState when being dragged over (isOver=true)', () => {
+      // Override mock for this test to simulate drag over
+      mockUseDroppable.mockReturnValueOnce({
+        setNodeRef: vi.fn(),
+        isOver: true,
+      })
+
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} />)
+
+      expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
+    })
+
+    it('should show drop indicator when being dragged over empty column', () => {
+      mockUseDroppable.mockReturnValueOnce({
+        setNodeRef: vi.fn(),
+        isOver: true,
+      })
+
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} />)
+
+      // Should show drop indicator
+      expect(screen.getByTestId('drop-indicator')).toBeInTheDocument()
+    })
+
+    it('should NOT show drop indicator when not being dragged over', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} />)
+
+      expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument()
+    })
+
+    it('should NOT show drop indicator when column has todos (even if being dragged over)', () => {
+      mockUseDroppable.mockReturnValueOnce({
+        setNodeRef: vi.fn(),
+        isOver: true,
+      })
+
+      render(<BoardColumnDroppable {...defaultProps} todos={mockTodos} />)
+
+      expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument()
+    })
+
+    it('should render todo items when column is not empty', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={mockTodos} />)
+
+      expect(screen.getByTestId('todo-item-1')).toBeInTheDocument()
+      expect(screen.getByTestId('todo-item-2')).toBeInTheDocument()
+      expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
     })
   })
 })

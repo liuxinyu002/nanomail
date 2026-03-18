@@ -77,25 +77,7 @@ describe('ColumnHeader', () => {
     vi.clearAllMocks()
   })
 
-  describe('Rendering', () => {
-    it('should render column name', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      expect(screen.getByText('Todo')).toBeInTheDocument()
-    })
-
-    it('should render item count', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      expect(screen.getByText('5')).toBeInTheDocument()
-    })
-
-    it('should render item count with accessible label', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      expect(screen.getByLabelText('5 items')).toBeInTheDocument()
-    })
-
+  describe('Status Dot - Always Visible', () => {
     it('should render color indicator when column has color', () => {
       render(<ColumnHeader {...defaultProps} />)
 
@@ -104,28 +86,107 @@ describe('ColumnHeader', () => {
       expect(colorIndicator).toHaveStyle({ backgroundColor: '#3B82F6' })
     })
 
-    it('should not render color indicator when column has no color', () => {
+    it('should ALWAYS render color indicator even when column has no color (with fallback)', () => {
       render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
 
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      // Status dot should always be visible for visual consistency
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toBeInTheDocument()
     })
 
-    it('should not render color indicator for invalid hex color', () => {
+    it('should use MACARON_COLORS[0] (#FFB5BA) as fallback when column has no color', () => {
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
+    })
+
+    it('should use MACARON_COLORS[0] as fallback for invalid hex color', () => {
       render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: 'invalid' }} />)
 
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toBeInTheDocument()
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
     })
 
-    it('should render zero count correctly', () => {
-      render(<ColumnHeader {...defaultProps} itemCount={0} />)
+    it('should use MACARON_COLORS[0] as fallback for colors without # prefix', () => {
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: 'ABCDEF' }} />)
 
-      expect(screen.getByText('0')).toBeInTheDocument()
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
     })
 
-    it('should render large count correctly', () => {
-      render(<ColumnHeader {...defaultProps} itemCount={999} />)
+    it('should use MACARON_COLORS[0] as fallback for 3-character hex colors', () => {
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#ABC' }} />)
 
-      expect(screen.getByText('999')).toBeInTheDocument()
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
+    })
+  })
+
+  describe('Status Dot - Size and Position', () => {
+    it('should have smaller dot size (w-2 h-2) instead of w-3 h-3', () => {
+      render(<ColumnHeader {...defaultProps} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveClass('w-2')
+      expect(colorIndicator).toHaveClass('h-2')
+    })
+
+    it('should have rounded-full class', () => {
+      render(<ColumnHeader {...defaultProps} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveClass('rounded-full')
+    })
+
+    it('should have flex-shrink-0 class to prevent shrinking', () => {
+      render(<ColumnHeader {...defaultProps} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveClass('flex-shrink-0')
+    })
+
+    it('should be positioned on LEFT of column name', () => {
+      render(<ColumnHeader {...defaultProps} />)
+
+      // The color indicator should come before the column name in DOM order
+      const leftSection = screen.getByTestId('column-header').querySelector('.flex.items-center.gap-2')
+      expect(leftSection).toBeInTheDocument()
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      const columnName = screen.getByRole('heading', { name: 'Todo' })
+
+      // Check DOM order: color indicator should be before column name
+      expect(leftSection?.children[0]).toBe(colorIndicator)
+      expect(leftSection?.children[1]).toContainElement(columnName)
+    })
+  })
+
+  describe('Color Validation', () => {
+    it('should accept valid 6-character hex colors', () => {
+      const columnWithColor = { ...mockColumn, color: '#ABCDEF' }
+      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#ABCDEF' })
+    })
+
+    it('should accept lowercase hex colors', () => {
+      const columnWithColor = { ...mockColumn, color: '#abcdef' }
+      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toBeInTheDocument()
+    })
+
+    it('should use column color when valid, not fallback', () => {
+      const columnWithColor = { ...mockColumn, color: '#B8D4FF' } // Pastel Blue
+      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+
+      const colorIndicator = screen.getByTestId('column-color-indicator')
+      expect(colorIndicator).toHaveStyle({ backgroundColor: '#B8D4FF' })
+      expect(colorIndicator).not.toHaveStyle({ backgroundColor: '#FFB5BA' })
     })
   })
 
@@ -539,42 +600,35 @@ describe('ColumnHeader', () => {
     })
   })
 
-  describe('Color Validation', () => {
-    it('should accept valid 6-character hex colors', () => {
-      const columnWithColor = { ...mockColumn, color: '#ABCDEF' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+  describe('Basic Rendering', () => {
+    it('should render column name', () => {
+      render(<ColumnHeader {...defaultProps} />)
 
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#ABCDEF' })
+      expect(screen.getByText('Todo')).toBeInTheDocument()
     })
 
-    it('should accept lowercase hex colors', () => {
-      const columnWithColor = { ...mockColumn, color: '#abcdef' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+    it('should render item count', () => {
+      render(<ColumnHeader {...defaultProps} />)
 
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
+      expect(screen.getByText('5')).toBeInTheDocument()
     })
 
-    it('should reject 3-character hex colors', () => {
-      const columnWithColor = { ...mockColumn, color: '#ABC' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+    it('should render item count with accessible label', () => {
+      render(<ColumnHeader {...defaultProps} />)
 
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('5 items')).toBeInTheDocument()
     })
 
-    it('should reject colors without # prefix', () => {
-      const columnWithColor = { ...mockColumn, color: 'ABCDEF' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+    it('should render zero count correctly', () => {
+      render(<ColumnHeader {...defaultProps} itemCount={0} />)
 
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      expect(screen.getByText('0')).toBeInTheDocument()
     })
 
-    it('should reject non-hex strings', () => {
-      const columnWithColor = { ...mockColumn, color: 'blue' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
+    it('should render large count correctly', () => {
+      render(<ColumnHeader {...defaultProps} itemCount={999} />)
 
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      expect(screen.getByText('999')).toBeInTheDocument()
     })
   })
 
@@ -589,13 +643,13 @@ describe('ColumnHeader', () => {
     })
 
     it('should pass current column color to ColorPicker', async () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} />)
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8D4FF' }} />)
 
       const colorButton = screen.getByRole('button', { name: 'Change Color' })
       await userEvent.click(colorButton)
 
-      // Blue color should be selected in the picker
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      // Pastel Blue color should be selected in the picker
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       expect(blueButton).toHaveAttribute('aria-pressed', 'true')
     })
 
@@ -607,7 +661,7 @@ describe('ColumnHeader', () => {
 
       // No color should be selected
       const colorButtons = screen.getAllByRole('button').filter(btn =>
-        btn.getAttribute('aria-label') && ['Gray', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink'].includes(btn.getAttribute('aria-label')!)
+        btn.getAttribute('aria-label') && ['Pastel Red', 'Pastel Orange', 'Pastel Yellow', 'Pastel Green', 'Pastel Blue', 'Pastel Purple'].includes(btn.getAttribute('aria-label')!)
       )
       colorButtons.forEach(btn => {
         expect(btn).toHaveAttribute('aria-pressed', 'false')
@@ -621,22 +675,22 @@ describe('ColumnHeader', () => {
       const colorButton = screen.getByRole('button', { name: 'Change Color' })
       await userEvent.click(colorButton)
 
-      // Click on Green color
-      const greenButton = screen.getByRole('button', { name: 'Green' })
+      // Click on Pastel Green color
+      const greenButton = screen.getByRole('button', { name: 'Pastel Green' })
       await userEvent.click(greenButton)
 
-      expect(onColorChange).toHaveBeenCalledWith('#D1FAE5')
+      expect(onColorChange).toHaveBeenCalledWith('#B8E6C1')
     })
 
     it('should call onColorChange with null when deselecting color', async () => {
       const onColorChange = vi.fn()
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} onColorChange={onColorChange} />)
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8D4FF' }} onColorChange={onColorChange} />)
 
       const colorButton = screen.getByRole('button', { name: 'Change Color' })
       await userEvent.click(colorButton)
 
-      // Click on the already selected Blue color to deselect
-      const blueButton = screen.getByRole('button', { name: 'Blue' })
+      // Click on the already selected Pastel Blue color to deselect
+      const blueButton = screen.getByRole('button', { name: 'Pastel Blue' })
       await userEvent.click(blueButton)
 
       expect(onColorChange).toHaveBeenCalledWith(null)
@@ -644,30 +698,30 @@ describe('ColumnHeader', () => {
 
     it('should allow changing to a different color', async () => {
       const onColorChange = vi.fn()
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} onColorChange={onColorChange} />)
+      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8D4FF' }} onColorChange={onColorChange} />)
 
       const colorButton = screen.getByRole('button', { name: 'Change Color' })
       await userEvent.click(colorButton)
 
-      // Click on Pink color
-      const pinkButton = screen.getByRole('button', { name: 'Pink' })
-      await userEvent.click(pinkButton)
+      // Click on Pastel Purple color
+      const purpleButton = screen.getByRole('button', { name: 'Pastel Purple' })
+      await userEvent.click(purpleButton)
 
-      expect(onColorChange).toHaveBeenCalledWith('#FCE7F3')
+      expect(onColorChange).toHaveBeenCalledWith('#D4B8FF')
     })
 
-    it('should render ColorPicker with all 6 preset colors', async () => {
+    it('should render ColorPicker with all 6 macaron colors', async () => {
       render(<ColumnHeader {...defaultProps} />)
 
       const colorButton = screen.getByRole('button', { name: 'Change Color' })
       await userEvent.click(colorButton)
 
-      expect(screen.getByRole('button', { name: 'Gray' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Blue' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Green' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Yellow' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Purple' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Pink' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Red' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Orange' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Yellow' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Green' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Blue' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Purple' })).toBeInTheDocument()
     })
   })
 

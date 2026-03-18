@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { addDays, format, isSameDay, isToday, parseISO, startOfWeek } from 'date-fns'
+import { zhCN } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { TimeAxis } from './TimeAxis'
 import { HourSlot } from './HourSlot'
 import { WeekDateNav } from './WeekDateNav'
+import { CurrentTimeIndicator } from './CurrentTimeIndicator'
 import type { Todo } from '@nanomail/shared'
 
 export interface WeekViewProps {
@@ -45,7 +47,6 @@ function getSmartDefaultDate(weekStart: Date): Date {
  * - Top date navigation bar (WeekDateNav)
  * - Shows 1 day content by default, click date to switch
  * - Smart default selection (current week → today, non-current week → first day)
- * - Slide animation when switching dates
  * - TimeAxis on the left side
  * - 24 HourSlots
  */
@@ -67,14 +68,32 @@ export function WeekView({
   // This ensures fake timers work correctly in tests
   const [currentSelectedDate, setCurrentSelectedDate] = useState<Date>(selectedDate)
 
-  // Animation direction state
-  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left')
-
   // Track whether initialization has occurred (for applying smart default)
   const isInitializedRef = useRef(false)
 
   // Track previous prop value for change detection
   const prevSelectedDateRef = useRef<Date>(selectedDate)
+
+  // Container ref for scroll and CurrentTimeIndicator
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to current time - 2 hours when showing today
+  useEffect(() => {
+    if (!containerRef.current) return
+    if (!isToday(currentSelectedDate)) return
+
+    const now = new Date()
+    const currentHour = now.getHours()
+    const targetHour = Math.max(0, currentHour - 2)
+
+    const targetSlot = containerRef.current.querySelector(
+      `[data-testid="hour-slot-${targetHour}"]`
+    )
+
+    if (targetSlot) {
+      targetSlot.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [currentSelectedDate])
 
   /**
    * Initialize and handle prop changes.
@@ -145,23 +164,14 @@ export function WeekView({
     const defaultDate = getSmartDefaultDate(newWeekStart)
     setCurrentSelectedDate(defaultDate)
 
-    // Set slide direction: prev week → content slides in from right, next week → from left
-    setSlideDirection(direction === 'prev' ? 'right' : 'left')
-
     onDateChange?.(defaultDate)
   }
 
   // Date selection handler
   const handleDateSelect = (newDate: Date) => {
-    // Set slide direction: later date → content slides in from left, earlier date → from right
-    const direction = newDate > currentSelectedDate ? 'left' : 'right'
-    setSlideDirection(direction)
     setCurrentSelectedDate(newDate)
     onDateChange?.(newDate)
   }
-
-  // Get date key (used for React key to trigger animation)
-  const dateKey = format(currentSelectedDate, 'yyyy-MM-dd')
 
   return (
     <div data-testid="week-view" className={cn('flex flex-col h-full', className)}>
@@ -177,7 +187,7 @@ export function WeekView({
       {/* Date title */}
       <div className="text-center py-2 border-b bg-gray-50">
         <span className="text-sm font-medium">
-          {format(currentSelectedDate, 'EEE')} {format(currentSelectedDate, 'd')}
+          {format(currentSelectedDate, 'M月d日', { locale: zhCN })}
         </span>
       </div>
 
@@ -188,16 +198,17 @@ export function WeekView({
           <TimeAxis />
         </div>
 
-        {/* Single day content area - uses React key to trigger animation */}
+        {/* Single day content area */}
         <div
-          key={dateKey}
           data-testid="day-content"
-          data-key={dateKey}
-          className={cn(
-            'flex-1 relative',
-            slideDirection === 'left' ? 'animate-slide-left' : 'animate-slide-right'
-          )}
+          ref={containerRef}
+          className="flex-1 relative"
         >
+          {/* Current time indicator - only show for today */}
+          {isToday(currentSelectedDate) && (
+            <CurrentTimeIndicator containerRef={containerRef} />
+          )}
+
           {Array.from({ length: 24 }).map((_, hour) => (
             <HourSlot
               key={hour}

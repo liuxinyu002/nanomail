@@ -35,15 +35,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
   const weekStart = startOfWeek(testDate, { weekStartsOn: 0 }) // Sunday, March 15, 2026
 
   describe('smart default selection', () => {
-    beforeEach(() => {
+    it('defaults to today when current week is displayed', () => {
       vi.useFakeTimers()
-    })
-
-    afterEach(() => {
-      vi.useRealTimers()
-    })
-
-    it('defaults to today when current week is displayed', async () => {
       // Set "today" to Wednesday March 18, 2026
       const today = new Date(2026, 2, 18, 12, 0, 0)
       vi.setSystemTime(today)
@@ -53,18 +46,16 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
 
       render(<WeekView selectedDate={thisWeekStart} todos={todos} />)
 
-      // Run all timers to allow useEffect to execute
-      await act(async () => {
-        await vi.runAllTimersAsync()
-      })
-
       // WeekDateNav should highlight today (March 18)
       // Wednesday is index 3 (Sun=0, Mon=1, Tue=2, Wed=3)
       const todayButton = screen.getByTestId('date-item-3')
       expect(todayButton).toHaveClass('bg-blue-600')
+
+      vi.useRealTimers()
     })
 
     it('defaults to first day (Sunday) when non-current week is displayed', () => {
+      vi.useFakeTimers()
       // Set "today" to March 18, 2026
       const today = new Date(2026, 2, 18, 12, 0, 0)
       vi.setSystemTime(today)
@@ -78,6 +69,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
       // Should select Sunday (index 0) since it's not the current week
       const sundayButton = screen.getByTestId('date-item-0')
       expect(sundayButton).toHaveClass('bg-blue-600')
+
+      vi.useRealTimers()
     })
   })
 
@@ -122,9 +115,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
       const todos: Todo[] = []
       render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      // Should display the selected date somewhere (format: "Wed 18")
-      expect(screen.getByText(/Wed/)).toBeInTheDocument()
-      expect(screen.getByText('18')).toBeInTheDocument()
+      // Should display the selected date in Chinese format (e.g., "3月18日")
+      expect(screen.getByText(/3月18日/)).toBeInTheDocument()
     })
   })
 
@@ -322,93 +314,6 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
     })
   })
 
-  describe('slide animation direction', () => {
-    it('switching to a later date applies slide-left animation', async () => {
-      const user = userEvent.setup()
-      const todos: Todo[] = []
-
-      render(<WeekView selectedDate={testDate} todos={todos} />)
-
-      // Click on Thursday (later than Wednesday)
-      const thursdayButton = screen.getByTestId('date-item-4')
-      await user.click(thursdayButton)
-
-      // Day content should have slide-left animation class
-      const dayContent = screen.getByTestId('day-content')
-      expect(dayContent).toHaveClass('animate-slide-left')
-    })
-
-    it('switching to an earlier date applies slide-right animation', async () => {
-      const user = userEvent.setup()
-      const todos: Todo[] = []
-
-      render(<WeekView selectedDate={testDate} todos={todos} />)
-
-      // Click on Monday (earlier than Wednesday)
-      const mondayButton = screen.getByTestId('date-item-1')
-      await user.click(mondayButton)
-
-      // Day content should have slide-right animation class
-      const dayContent = screen.getByTestId('day-content')
-      expect(dayContent).toHaveClass('animate-slide-right')
-    })
-
-    it('navigating to next week applies slide-left animation', async () => {
-      const user = userEvent.setup()
-      const todos: Todo[] = []
-
-      render(<WeekView selectedDate={testDate} todos={todos} />)
-
-      // Click right arrow (next week)
-      const rightArrow = screen.getByRole('button', { name: /下一周/i })
-      await user.click(rightArrow)
-
-      // Day content should have slide-left animation class
-      const dayContent = screen.getByTestId('day-content')
-      expect(dayContent).toHaveClass('animate-slide-left')
-    })
-
-    it('navigating to previous week applies slide-right animation', async () => {
-      const user = userEvent.setup()
-      const todos: Todo[] = []
-
-      render(<WeekView selectedDate={testDate} todos={todos} />)
-
-      // Click left arrow (previous week)
-      const leftArrow = screen.getByRole('button', { name: /上一周/i })
-      await user.click(leftArrow)
-
-      // Day content should have slide-right animation class
-      const dayContent = screen.getByTestId('day-content')
-      expect(dayContent).toHaveClass('animate-slide-right')
-    })
-  })
-
-  describe('React key triggers animation', () => {
-    it('day content key changes when date changes', async () => {
-      const user = userEvent.setup()
-      const todos: Todo[] = []
-
-      render(<WeekView selectedDate={testDate} todos={todos} />)
-
-      // Get initial key
-      const initialDayContent = screen.getByTestId('day-content')
-      const initialKey = initialDayContent.getAttribute('data-key')
-
-      // Click on Thursday
-      const thursdayButton = screen.getByTestId('date-item-4')
-      await user.click(thursdayButton)
-
-      // Get new key
-      const newDayContent = screen.getByTestId('day-content')
-      const newKey = newDayContent.getAttribute('data-key')
-
-      // Keys should be different
-      expect(newKey).not.toBe(initialKey)
-      expect(newKey).toBe('2026-03-19')
-    })
-  })
-
   describe('interactions', () => {
     it('calls onTodoClick when todo card is clicked', async () => {
       const user = userEvent.setup()
@@ -444,6 +349,99 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
       const weekView = screen.getByTestId('week-view')
       expect(weekView).toHaveClass('flex')
       expect(weekView).toHaveClass('flex-col')
+    })
+  })
+
+  describe('auto-scroll', () => {
+    let originalScrollIntoView: typeof Element.prototype.scrollIntoView
+
+    beforeEach(() => {
+      originalScrollIntoView = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = vi.fn()
+    })
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView
+      vi.useRealTimers()
+    })
+
+    it('scrolls to current time - 2 hours when showing today', () => {
+      vi.useFakeTimers()
+      // Set "today" to March 18, 2026 at 10 AM
+      const now = new Date(2026, 2, 18, 10, 0, 0)
+      vi.setSystemTime(now)
+
+      const today = new Date(2026, 2, 18)
+      render(<WeekView selectedDate={today} todos={[]} />)
+
+      // Should scroll to hour 8 (10 - 2 = 8)
+      const hour8Slot = screen.getByTestId('hour-slot-8')
+      expect(hour8Slot.scrollIntoView).toHaveBeenCalled()
+    })
+
+    it('does not scroll when showing non-today date', () => {
+      vi.useFakeTimers()
+      // Set "today" to March 18, 2026 at 10 AM
+      const now = new Date(2026, 2, 18, 10, 0, 0)
+      vi.setSystemTime(now)
+
+      // Use a different week where smart default won't return today
+      const differentWeekStart = new Date(2026, 0, 4) // January 4, 2026 (Sunday)
+      render(<WeekView selectedDate={differentWeekStart} todos={[]} />)
+
+      // Should not scroll for non-today
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+    })
+
+    it('scrolls when switching to today from non-today', async () => {
+      vi.useFakeTimers()
+      const now = new Date(2026, 2, 18, 10, 0, 0)
+      vi.setSystemTime(now)
+
+      // Start with a different week (January 2026)
+      const differentWeekStart = new Date(2026, 0, 4) // January 4, 2026 (Sunday)
+      render(<WeekView selectedDate={differentWeekStart} todos={[]} />)
+
+      // No scroll on non-today week
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+
+      // Navigate to current week by changing selectedDate prop
+      const currentWeekStart = new Date(2026, 2, 15) // March 15, 2026 (Sunday)
+      const { rerender } = render(
+        <WeekView selectedDate={differentWeekStart} todos={[]} />
+      )
+      rerender(<WeekView selectedDate={currentWeekStart} todos={[]} />)
+
+      // Smart default selects today (March 18), which should trigger scroll
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    })
+  })
+
+  describe('CurrentTimeIndicator', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('renders when showing today', () => {
+      vi.useFakeTimers()
+      const today = new Date(2026, 2, 18)
+      vi.setSystemTime(today)
+
+      render(<WeekView selectedDate={today} todos={[]} />)
+
+      expect(screen.getByTestId('current-time-indicator')).toBeInTheDocument()
+    })
+
+    it('does not render when showing non-today date', () => {
+      vi.useFakeTimers()
+      const yesterday = new Date(2026, 2, 17)
+      vi.setSystemTime(new Date(2026, 2, 18))
+
+      // Use a different week where smart default won't return today
+      const differentWeekStart = new Date(2026, 0, 4) // January 4, 2026 (Sunday)
+      render(<WeekView selectedDate={differentWeekStart} todos={[]} />)
+
+      expect(screen.queryByTestId('current-time-indicator')).not.toBeInTheDocument()
     })
   })
 

@@ -172,26 +172,26 @@ describe('TodosPage (Refactored)', () => {
       expect(screen.getByTestId('loading-todos')).toBeInTheDocument()
     })
 
-    it('should render page with title', async () => {
+    it('should render page without title', async () => {
       mockTodosData = { todos: mockTodos }
 
       render(<TodosPage />)
 
       await waitFor(() => {
-        expect(screen.getByRole('heading', { name: /to-do/i })).toBeInTheDocument()
+        expect(screen.queryByRole('heading', { name: /to-do/i })).not.toBeInTheDocument()
       })
     })
   })
 
   describe('Three-Panel Layout', () => {
-    it('should render all three panels by default', async () => {
+    it('should render inbox and board panels by default (planner hidden)', async () => {
       mockTodosData = { todos: mockTodos }
 
       render(<TodosPage />)
 
       await waitFor(() => {
         expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
-        expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
+        expect(screen.queryByTestId('planner-panel')).not.toBeInTheDocument()
         expect(screen.getByTestId('board-panel')).toBeInTheDocument()
       })
     })
@@ -230,10 +230,31 @@ describe('TodosPage (Refactored)', () => {
   })
 
   describe('ViewToggle Integration', () => {
-    it('should show all panels when all views are active', async () => {
+    it('should show inbox and board panels by default (planner hidden)', async () => {
       mockTodosData = { todos: mockTodos }
 
       render(<TodosPage />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
+        expect(screen.queryByTestId('planner-panel')).not.toBeInTheDocument()
+        expect(screen.getByTestId('board-panel')).toBeInTheDocument()
+      })
+    })
+
+    it('should show planner when Planner is toggled on', async () => {
+      const user = userEvent.setup()
+      mockTodosData = { todos: mockTodos }
+
+      render(<TodosPage />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('view-toggle')).toBeInTheDocument()
+      })
+
+      // Toggle on Planner
+      const plannerButton = screen.getByRole('button', { name: 'Planner' })
+      await user.click(plannerButton)
 
       await waitFor(() => {
         expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
@@ -242,7 +263,7 @@ describe('TodosPage (Refactored)', () => {
       })
     })
 
-    it('should hide Inbox panel when Inbox is toggled off', async () => {
+    it('should hide Inbox panel when Inbox is togg off', async () => {
       const user = userEvent.setup()
       mockTodosData = { todos: mockTodos }
 
@@ -258,27 +279,6 @@ describe('TodosPage (Refactored)', () => {
 
       await waitFor(() => {
         expect(screen.queryByTestId('inbox-panel')).not.toBeInTheDocument()
-        expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
-        expect(screen.getByTestId('board-panel')).toBeInTheDocument()
-      })
-    })
-
-    it('should hide Planner panel when Planner is toggled off', async () => {
-      const user = userEvent.setup()
-      mockTodosData = { todos: mockTodos }
-
-      render(<TodosPage />)
-
-      await waitFor(() => {
-        expect(screen.getByTestId('view-toggle')).toBeInTheDocument()
-      })
-
-      // Toggle off Planner
-      const plannerButton = screen.getByRole('button', { name: 'Planner' })
-      await user.click(plannerButton)
-
-      await waitFor(() => {
-        expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
         expect(screen.queryByTestId('planner-panel')).not.toBeInTheDocument()
         expect(screen.getByTestId('board-panel')).toBeInTheDocument()
       })
@@ -300,7 +300,7 @@ describe('TodosPage (Refactored)', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
-        expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
+        expect(screen.queryByTestId('planner-panel')).not.toBeInTheDocument()
         expect(screen.queryByTestId('board-panel')).not.toBeInTheDocument()
       })
     })
@@ -315,14 +315,12 @@ describe('TodosPage (Refactored)', () => {
         expect(screen.getByTestId('view-toggle')).toBeInTheDocument()
       })
 
-      // First, toggle off two views to leave only one active
+      // Toggle off Inbox to leave only Board active
       await user.click(screen.getByRole('button', { name: 'Inbox' }))
-      await user.click(screen.getByRole('button', { name: 'Planner' }))
 
       await waitFor(() => {
         expect(screen.getByTestId('board-panel')).toBeInTheDocument()
         expect(screen.queryByTestId('inbox-panel')).not.toBeInTheDocument()
-        expect(screen.queryByTestId('planner-panel')).not.toBeInTheDocument()
       })
 
       // Try to toggle off the last view (Board)

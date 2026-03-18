@@ -19,7 +19,7 @@ const DEFAULT_COLUMNS: BoardColumn[] = [
 ]
 
 export function TodosPage() {
-  const [activeViews, setActiveViews] = useState<ViewType[]>(['inbox', 'planner', 'board'])
+  const [activeViews, setActiveViews] = useState<ViewType[]>(['inbox', 'board'])
 
   const { data, isLoading, error } = useTodos()
   const { data: columnsData, error: columnsError } = useBoardColumns()
@@ -232,7 +232,6 @@ export function TodosPage() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">To-Do</h1>
         <div
           className="flex items-center justify-center py-12"
           data-testid="loading-todos"
@@ -244,9 +243,7 @@ export function TodosPage() {
   }
 
   return (
-    <div className="flex flex-col h-full p-6 pb-20">
-      <h1 className="text-2xl font-bold mb-4">To-Do</h1>
-
+    <div className="flex flex-col h-full p-6">
       <DndProvider onDragEnd={handleDragEnd}>
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">

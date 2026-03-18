@@ -195,7 +195,7 @@ describe('BoardColumnService', () => {
 
       await expect(
         BoardColumnService.createBoardColumn(invalidData)
-      ).rejects.toThrow('Failed to create board column')
+      ).rejects.toThrow('Failed to create column')
     })
 
     it('should throw error for duplicate column name', async () => {
@@ -213,7 +213,7 @@ describe('BoardColumnService', () => {
 
       await expect(
         BoardColumnService.createBoardColumn(duplicateData)
-      ).rejects.toThrow('Failed to create board column')
+      ).rejects.toThrow('Failed to create column')
     })
 
     it('should throw error on server error', async () => {
@@ -230,7 +230,7 @@ describe('BoardColumnService', () => {
 
       await expect(
         BoardColumnService.createBoardColumn(newColumnData)
-      ).rejects.toThrow('Failed to create board column')
+      ).rejects.toThrow('Failed to create column')
     })
   })
 
@@ -337,7 +337,7 @@ describe('BoardColumnService', () => {
 
       await expect(
         BoardColumnService.updateBoardColumn(999, updateData)
-      ).rejects.toThrow('Failed to update board column')
+      ).rejects.toThrow('Failed to update column')
     })
 
     it('should allow updating system column name (if backend allows)', async () => {
@@ -371,22 +371,36 @@ describe('BoardColumnService', () => {
 
       await expect(
         BoardColumnService.updateBoardColumn(1, updateData)
-      ).rejects.toThrow('Failed to update board column')
+      ).rejects.toThrow('Failed to update column')
     })
   })
 
   describe('deleteBoardColumn', () => {
-    it('should delete a non-system column', async () => {
+    it('should delete a non-system column and return moved tasks count', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        status: 204,
+        status: 200,
+        json: () => Promise.resolve({ message: 'Column deleted', movedTasks: 3 }),
       })
 
-      await BoardColumnService.deleteBoardColumn(2)
+      const result = await BoardColumnService.deleteBoardColumn(2)
 
       expect(mockFetch).toHaveBeenCalledWith('/api/board-columns/2', {
         method: 'DELETE',
       })
+      expect(result.movedTasks).toBe(3)
+    })
+
+    it('should return movedTasks: 0 when column has no todos', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ message: 'Column deleted', movedTasks: 0 }),
+      })
+
+      const result = await BoardColumnService.deleteBoardColumn(5)
+
+      expect(result.movedTasks).toBe(0)
     })
 
     it('should throw error when trying to delete system column', async () => {
@@ -437,7 +451,7 @@ describe('BoardColumnService', () => {
       })
 
       await expect(BoardColumnService.deleteBoardColumn(2)).rejects.toThrow(
-        'Failed to delete board column'
+        'Failed to delete column'
       )
     })
 
@@ -450,7 +464,7 @@ describe('BoardColumnService', () => {
       })
 
       await expect(BoardColumnService.deleteBoardColumn(2)).rejects.toThrow(
-        'Failed to delete board column'
+        'Failed to delete column'
       )
     })
   })

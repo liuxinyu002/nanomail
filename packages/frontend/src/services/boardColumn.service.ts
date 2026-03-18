@@ -37,7 +37,17 @@ export const BoardColumnService = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create board column')
+      // Try to get error message from response
+      let errorMessage = 'Failed to create board column'
+      try {
+        const errorData = await response.json()
+        if (errorData?.error) {
+          errorMessage = `Failed to create column "${data.name}": ${errorData.error}`
+        }
+      } catch {
+        errorMessage = `Failed to create column "${data.name}" (status ${response.status})`
+      }
+      throw new Error(errorMessage)
     }
 
     return response.json()
@@ -54,7 +64,17 @@ export const BoardColumnService = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update board column')
+      // Try to get error message from response
+      let errorMessage = 'Failed to update board column'
+      try {
+        const errorData = await response.json()
+        if (errorData?.error) {
+          errorMessage = `Failed to update column (ID: ${id}): ${errorData.error}`
+        }
+      } catch {
+        errorMessage = `Failed to update column (ID: ${id}, status ${response.status})`
+      }
+      throw new Error(errorMessage)
     }
 
     return response.json()
@@ -63,24 +83,28 @@ export const BoardColumnService = {
   /**
    * Delete a board column
    * Note: System columns (isSystem: true) cannot be deleted - backend will reject
+   *
+   * @returns Object with message and count of moved tasks
    */
-  async deleteBoardColumn(id: number): Promise<void> {
+  async deleteBoardColumn(id: number): Promise<{ message: string; movedTasks: number }> {
     const response = await fetch(`/api/board-columns/${id}`, {
       method: 'DELETE',
     })
 
     if (!response.ok) {
       // Try to get error message from response
-      let errorMessage = 'Failed to delete board column'
+      let errorMessage = 'Failed to delete column'
       try {
         const errorData = await response.json()
         if (errorData?.error) {
-          errorMessage = errorData.error
+          errorMessage = `Failed to delete column (ID: ${id}): ${errorData.error}`
         }
       } catch {
-        // Ignore JSON parse errors, use default message
+        errorMessage = `Failed to delete column (ID: ${id}, status ${response.status})`
       }
       throw new Error(errorMessage)
     }
+
+    return response.json()
   },
 }

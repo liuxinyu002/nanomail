@@ -55,6 +55,18 @@ vi.mock('@/hooks', () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  useCreateBoardColumnMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useDeleteBoardColumnMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUpdateBoardColumnMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }))
 
 // Mock panel components
@@ -71,8 +83,8 @@ vi.mock('@/features/todos/PlannerPanel', () => ({
 }))
 
 vi.mock('@/features/todos/BoardPanel', () => ({
-  BoardPanel: ({ className }: { className?: string }) => (
-    <div data-testid="board-panel" className={className}>Board Panel</div>
+  BoardPanel: ({ className, onCreateColumn, onDeleteColumn, onUpdateColumn }: { className?: string; onCreateColumn?: (name: string, order: number) => void; onDeleteColumn?: (columnId: number) => void; onUpdateColumn?: (columnId: number, data: { name?: string; color?: string | null }) => void }) => (
+    <div data-testid="board-panel" className={className} data-has-on-create={!!onCreateColumn} data-has-on-delete={!!onDeleteColumn} data-has-on-update={!!onUpdateColumn}>Board Panel</div>
   ),
 }))
 
@@ -89,6 +101,15 @@ vi.mock('@/features/todos/ViewToggle', () => ({
       <button onClick={() => onToggle('board')} data-active={activeViews.includes('board')}>
         Board
       </button>
+    </div>
+  ),
+}))
+
+// Mock ResizablePanels
+vi.mock('@/features/todos/ResizablePanels', () => ({
+  ResizablePanels: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div data-testid="resizable-panels" className={className}>
+      {children}
     </div>
   ),
 }))
@@ -185,14 +206,25 @@ describe('TodosPage (Refactored)', () => {
       })
     })
 
-    it('should render panels in a horizontal flex layout', async () => {
+    it('should render panels in a container with overflow hidden', async () => {
       mockTodosData = { todos: mockTodos }
 
       render(<TodosPage />)
 
       await waitFor(() => {
         const panelContainer = screen.getByTestId('panels-container')
-        expect(panelContainer).toHaveClass('flex')
+        expect(panelContainer).toHaveClass('flex-1')
+        expect(panelContainer).toHaveClass('overflow-hidden')
+      })
+    })
+
+    it('should render ResizablePanels component', async () => {
+      mockTodosData = { todos: mockTodos }
+
+      render(<TodosPage />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('resizable-panels')).toBeInTheDocument()
       })
     })
   })

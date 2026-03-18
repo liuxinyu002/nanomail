@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { DndProvider } from '@/contexts/DndContext'
 import { BoardPanel, type BoardPanelProps } from './BoardPanel'
 import type { BoardColumn } from '@nanomail/shared'
@@ -65,7 +66,6 @@ describe('BoardPanel', () => {
   const defaultProps: BoardPanelProps = {
     columns: defaultColumns,
     todos: [],
-    onColumnChange: vi.fn(),
   }
 
   describe('Rendering', () => {
@@ -208,7 +208,7 @@ describe('BoardPanel', () => {
   })
 
   describe('Empty State', () => {
-    it('should display empty state when no columns except Inbox exist', () => {
+    it('should show New List button when no columns except Inbox exist', () => {
       const columnsOnlyInbox: BoardColumn[] = [defaultColumns[0]] // Only Inbox
 
       render(
@@ -217,7 +217,8 @@ describe('BoardPanel', () => {
         </DndProvider>
       )
 
-      expect(screen.getByText(/no columns configured/i)).toBeInTheDocument()
+      // Should show New List button instead of empty state
+      expect(screen.getByRole('button', { name: /new list/i })).toBeInTheDocument()
     })
 
     it('should display columns even when no todos exist', () => {
@@ -342,14 +343,15 @@ describe('BoardPanel', () => {
   })
 
   describe('Edge Cases', () => {
-    it('should handle empty columns array', () => {
+    it('should show New List button when columns array is empty', () => {
       render(
         <DndProvider>
           <BoardPanel {...defaultProps} columns={[]} />
         </DndProvider>
       )
 
-      expect(screen.getByText(/no columns configured/i)).toBeInTheDocument()
+      // Should show New List button instead of empty state
+      expect(screen.getByRole('button', { name: /new list/i })).toBeInTheDocument()
     })
 
     it('should handle todos with non-existent column IDs gracefully', () => {
@@ -385,6 +387,95 @@ describe('BoardPanel', () => {
       const count4 = parseInt(screen.getByTestId('column-todo-count-4').textContent || '0')
 
       expect(count2 + count3 + count4).toBe(100)
+    })
+  })
+
+  describe('New List Button Integration', () => {
+    it('should render New List button at the end of columns', () => {
+      render(
+        <DndProvider>
+          <BoardPanel {...defaultProps} />
+        </DndProvider>
+      )
+
+      expect(screen.getByRole('button', { name: /new list/i })).toBeInTheDocument()
+    })
+
+    it('should render New List button as the last item in columns container', () => {
+      render(
+        <DndProvider>
+          <BoardPanel {...defaultProps} />
+        </DndProvider>
+      )
+
+      const columnsContainer = screen.getByTestId('columns-container')
+      const children = Array.from(columnsContainer.children)
+      const lastChild = children[children.length - 1]
+
+      // The last child should contain the New List button
+      expect(lastChild).toHaveTextContent('New List')
+    })
+
+    it('should call onCreateColumn with correct order when creating new column', async () => {
+      const onCreateColumn = vi.fn()
+      render(
+        <DndProvider>
+          <BoardPanel {...defaultProps} onCreateColumn={onCreateColumn} />
+        </DndProvider>
+      )
+
+      // Click the New List button
+      const newButton = screen.getByRole('button', { name: /new list/i })
+      await userEvent.click(newButton)
+
+      // Type a name and press Enter
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'New Column')
+      await userEvent.keyboard('{Enter}')
+
+      // Should be called with name and correct order (max order + 1)
+      // Default columns have orders: Inbox(0), Todo(1), InProgress(2), Done(3)
+      // Excluding Inbox, max order is 3, so new order should be 4
+      expect(onCreateColumn).toHaveBeenCalledWith('New Column', 4)
+    })
+
+    it('should calculate correct order when columns have non-sequential orders', async () => {
+      const columnsWithGaps: BoardColumn[] = [
+        defaultColumns[0], // Inbox, order 0
+        { ...defaultColumns[1], order: 5 }, // Todo, order 5
+        { ...defaultColumns[2], order: 10 }, // In Progress, order 10
+      ]
+
+      const onCreateColumn = vi.fn()
+      render(
+        <DndProvider>
+          <BoardPanel {...defaultProps} columns={columnsWithGaps} onCreateColumn={onCreateColumn} />
+        </DndProvider>
+      )
+
+      // Click the New List button
+      const newButton = screen.getByRole('button', { name: /new list/i })
+      await userEvent.click(newButton)
+
+      // Type a name and press Enter
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'Another Column')
+      await userEvent.keyboard('{Enter}')
+
+      // Max order is 10, so new order should be 11
+      expect(onCreateColumn).toHaveBeenCalledWith('Another Column', 11)
+    })
+
+    it('should have New List button with fixed width class', () => {
+      render(
+        <DndProvider>
+          <BoardPanel {...defaultProps} />
+        </DndProvider>
+      )
+
+      const newButton = screen.getByRole('button', { name: /new list/i })
+      expect(newButton).toHaveClass('w-[280px]')
+      expect(newButton).toHaveClass('flex-shrink-0')
     })
   })
 })

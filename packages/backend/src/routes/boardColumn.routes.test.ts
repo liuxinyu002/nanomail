@@ -2,13 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import { createBoardColumnRoutes } from './boardColumn.routes'
-import type { DataSource, Repository } from 'typeorm'
+import type { DataSource, Repository, QueryRunner } from 'typeorm'
 import { BoardColumn } from '../entities/BoardColumn.entity'
+import { Todo } from '../entities/Todo.entity'
 
 describe('BoardColumnRoutes', () => {
   let app: express.Application
   let mockDataSource: DataSource
   let mockRepository: Repository<BoardColumn>
+  let mockTodoRepository: Repository<Todo>
+  let mockQueryRunner: QueryRunner
 
   beforeEach(() => {
     // Create mock repository
@@ -21,9 +24,42 @@ describe('BoardColumnRoutes', () => {
       count: vi.fn(),
     } as unknown as Repository<BoardColumn>
 
+    // Create mock todo repository
+    mockTodoRepository = {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      save: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      create: vi.fn(),
+      count: vi.fn(),
+      createQueryBuilder: vi.fn(),
+    } as unknown as Repository<Todo>
+
+    // Create mock query runner for transactions
+    mockQueryRunner = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      startTransaction: vi.fn().mockResolvedValue(undefined),
+      commitTransaction: vi.fn().mockResolvedValue(undefined),
+      rollbackTransaction: vi.fn().mockResolvedValue(undefined),
+      release: vi.fn().mockResolvedValue(undefined),
+      manager: {
+        getRepository: vi.fn((entity) => {
+          if (entity === BoardColumn) return mockRepository
+          if (entity === Todo) return mockTodoRepository
+          return mockRepository
+        }),
+      },
+    } as unknown as QueryRunner
+
     // Create mock data source
     mockDataSource = {
-      getRepository: vi.fn().mockReturnValue(mockRepository),
+      getRepository: vi.fn((entity) => {
+        if (entity === BoardColumn) return mockRepository
+        if (entity === Todo) return mockTodoRepository
+        return mockRepository
+      }),
+      createQueryRunner: vi.fn().mockReturnValue(mockQueryRunner),
       isInitialized: true,
     } as unknown as DataSource
 
@@ -237,12 +273,16 @@ describe('BoardColumnRoutes', () => {
         createdAt: new Date(),
       }
 
+      // Column lookup happens inside transaction via queryRunner.manager.getRepository
       vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+      vi.mocked(mockTodoRepository.update).mockResolvedValue({ affected: 0, raw: {} })
       vi.mocked(mockRepository.delete).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app).delete('/api/board-columns/5')
 
-      expect(response.status).toBe(204)
+      expect(response.status).toBe(200)
+      expect(response.body).toHaveProperty('message')
+      expect(response.body.movedTasks).toBe(0)
     })
 
     it('should reject deletion of system column (Inbox)', async () => {
@@ -275,6 +315,137 @@ describe('BoardColumnRoutes', () => {
       const response = await request(app).delete('/api/board-columns/invalid')
 
       expect(response.status).toBe(400)
+    })
+
+    // New tests for todo migration feature
+    describe('Todo Migration to Inbox', () => {
+      it('should migrate todos to Inbox before deleting column', async () => {
+        const existingColumn = {
+          id: 5,
+          name: 'Custom Column',
+          color: '#000000',
+          order: 4,
+          isSystem: 0,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+        vi.mocked(mockTodoRepository.update).mockResolvedValue({ affected: 3, raw: {} })
+        vi.mocked(mockRepository.delete).mockResolvedValue({ affected: 1, raw: {} })
+
+        const response = await request(app).delete('/api/board-columns/5')
+
+        expect(response.status).toBe(200)
+        expect(response.body).toHaveProperty('message')
+        expect(response.body.movedTasks).toBe(3)
+        expect(mockTodoRepository.update).toHaveBeenCalledWith(
+          { boardColumnId: 5 },
+          { boardColumnId: 1 }
+        )
+      })
+
+      it('should return movedTasks: 0 when column has no todos', async () => {
+        const existingColumn = {
+          id: 5,
+          name: 'Empty Column',
+          color: '#000000',
+          order: 4,
+          isSystem: 0,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+        vi.mocked(mockTodoRepository.update).mockResolvedValue({ affected: 0, raw: {} })
+        vi.mocked(mockRepository.delete).mockResolvedValue({ affected: 1, raw: {} })
+
+        const response = await request(app).delete('/api/board-columns/5')
+
+        expect(response.status).toBe(200)
+        expect(response.body.movedTasks).toBe(0)
+      })
+
+      it('should use transaction for atomic operation', async () => {
+        const existingColumn = {
+          id: 5,
+          name: 'Custom Column',
+          color: '#000000',
+          order: 4,
+          isSystem: 0,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+        vi.mocked(mockTodoRepository.update).mockResolvedValue({ affected: 2, raw: {} })
+        vi.mocked(mockRepository.delete).mockResolvedValue({ affected: 1, raw: {} })
+
+        await request(app).delete('/api/board-columns/5')
+
+        expect(mockQueryRunner.startTransaction).toHaveBeenCalled()
+        expect(mockQueryRunner.commitTransaction).toHaveBeenCalled()
+        expect(mockQueryRunner.release).toHaveBeenCalled()
+      })
+
+      it('should rollback transaction on error', async () => {
+        const existingColumn = {
+          id: 5,
+          name: 'Custom Column',
+          color: '#000000',
+          order: 4,
+          isSystem: 0,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+        vi.mocked(mockTodoRepository.update).mockRejectedValue(new Error('Database error'))
+
+        const response = await request(app).delete('/api/board-columns/5')
+
+        expect(response.status).toBe(500)
+        expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled()
+        expect(mockQueryRunner.release).toHaveBeenCalled()
+      })
+
+      it('should rollback if column deletion fails', async () => {
+        const existingColumn = {
+          id: 5,
+          name: 'Custom Column',
+          color: '#000000',
+          order: 4,
+          isSystem: 0,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(existingColumn as BoardColumn)
+        vi.mocked(mockTodoRepository.update).mockResolvedValue({ affected: 2, raw: {} })
+        vi.mocked(mockRepository.delete).mockRejectedValue(new Error('Delete failed'))
+
+        const response = await request(app).delete('/api/board-columns/5')
+
+        expect(response.status).toBe(500)
+        expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled()
+      })
+
+      it('should rollback when deleting system column (column lookup inside transaction)', async () => {
+        const systemColumn = {
+          id: 1,
+          name: 'Inbox',
+          color: '#6366f1',
+          order: 0,
+          isSystem: 1,
+          createdAt: new Date(),
+        }
+
+        vi.mocked(mockRepository.findOne).mockResolvedValue(systemColumn as BoardColumn)
+
+        const response = await request(app).delete('/api/board-columns/1')
+
+        expect(response.status).toBe(403)
+        // Transaction is started before column lookup now (to prevent race condition)
+        expect(mockQueryRunner.startTransaction).toHaveBeenCalled()
+        // Should rollback since we return 403
+        expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled()
+        expect(mockTodoRepository.update).not.toHaveBeenCalled()
+      })
     })
   })
 })

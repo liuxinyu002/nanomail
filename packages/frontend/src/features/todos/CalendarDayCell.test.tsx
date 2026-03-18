@@ -89,12 +89,12 @@ describe('CalendarDayCell', () => {
       expect(screen.queryByTestId('priority-indicator')).not.toBeInTheDocument()
     })
 
-    it('should render red indicator for Todo column (2)', () => {
+    it('should render blue indicator for Todo column (2)', () => {
       render(<CalendarDayCell {...defaultProps} highestPriorityColumn={2} />)
 
       const indicator = screen.getByTestId('priority-indicator')
       expect(indicator).toBeInTheDocument()
-      expect(indicator).toHaveClass('bg-red-500')
+      expect(indicator).toHaveClass('bg-blue-500')
     })
 
     it('should render amber indicator for In Progress column (3)', () => {
@@ -105,12 +105,12 @@ describe('CalendarDayCell', () => {
       expect(indicator).toHaveClass('bg-amber-500')
     })
 
-    it('should render blue indicator for Inbox column (1)', () => {
+    it('should render gray indicator for Inbox column (1)', () => {
       render(<CalendarDayCell {...defaultProps} highestPriorityColumn={1} />)
 
       const indicator = screen.getByTestId('priority-indicator')
       expect(indicator).toBeInTheDocument()
-      expect(indicator).toHaveClass('bg-blue-500')
+      expect(indicator).toHaveClass('bg-gray-500')
     })
 
     it('should render green indicator for Done column (4)', () => {

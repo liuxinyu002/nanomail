@@ -1,7 +1,11 @@
 import { Router } from 'express'
 import type { DataSource } from 'typeorm'
 import { BoardColumn } from '../entities/BoardColumn.entity'
-import { CreateBoardColumnSchema, UpdateBoardColumnSchema } from '@nanomail/shared'
+import { Todo } from '../entities/Todo.entity'
+import { CreateBoardColumnSchema, UpdateBoardColumnSchema, BoardColumnIds } from '@nanomail/shared'
+import { createLogger } from '../config/logger.js'
+
+const log = createLogger('boardColumn.routes')
 
 /**
  * BoardColumns response
@@ -46,12 +50,14 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
    */
   router.get('/', async (req, res, next) => {
     try {
+      log.debug('Fetching all board columns')
       const columns = await columnRepository.find({
         order: { order: 'ASC' }
       })
 
       res.json({ columns: columns.map(formatBoardColumn) })
     } catch (error) {
+      log.error({ err: error }, 'Failed to fetch board columns')
       next(error)
     }
   })
@@ -67,8 +73,10 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
    */
   router.post('/', async (req, res, next) => {
     try {
+      log.debug({ body: req.body }, 'Creating board column')
       const validationResult = CreateBoardColumnSchema.safeParse(req.body)
       if (!validationResult.success) {
+        log.warn({ errors: validationResult.error.errors }, 'Invalid request body for creating column')
         return res.status(400).json({
           error: 'Invalid request body',
           details: validationResult.error.errors,
@@ -85,8 +93,10 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
       })
 
       const savedColumn = await columnRepository.save(column)
+      log.info({ columnId: savedColumn.id, name: savedColumn.name }, 'Board column created')
       res.status(201).json(formatBoardColumn(savedColumn))
     } catch (error) {
+      log.error({ err: error }, 'Failed to create board column')
       next(error)
     }
   })
@@ -105,12 +115,16 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
   router.patch('/:id', async (req, res, next) => {
     try {
       const id = parseInt(req.params.id, 10)
+      log.debug({ columnId: id, body: req.body }, 'Updating board column')
+
       if (isNaN(id)) {
+        log.warn({ param: req.params.id }, 'Invalid column ID provided')
         return res.status(400).json({ error: 'Invalid column ID' })
       }
 
       const validationResult = UpdateBoardColumnSchema.safeParse(req.body)
       if (!validationResult.success) {
+        log.warn({ columnId: id, errors: validationResult.error.errors }, 'Invalid request body for updating column')
         return res.status(400).json({
           error: 'Invalid request body',
           details: validationResult.error.errors,
@@ -119,6 +133,7 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
 
       const column = await columnRepository.findOne({ where: { id } })
       if (!column) {
+        log.warn({ columnId: id }, 'Column not found for update')
         return res.status(404).json({ error: 'Column not found' })
       }
 
@@ -136,8 +151,10 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
       }
 
       const savedColumn = await columnRepository.save(column)
+      log.info({ columnId: savedColumn.id, name: savedColumn.name }, 'Board column updated')
       res.json(formatBoardColumn(savedColumn))
     } catch (error) {
+      log.error({ err: error }, 'Failed to update board column')
       next(error)
     }
   })
@@ -145,33 +162,73 @@ export function createBoardColumnRoutes(dataSource: DataSource): Router {
   /**
    * @route DELETE /api/board-columns/:id
    * @description Delete a board column. System columns cannot be deleted.
+   * All todos in the column will be moved to Inbox (id=1).
    * @param {number} id - Column ID
-   * @returns {void} 204 No Content on success
+   * @returns {Object} { message: string, movedTasks: number }
    * @throws {400} Invalid column ID
    * @throws {403} Cannot delete system column
    * @throws {404} Column not found
    */
   router.delete('/:id', async (req, res, next) => {
+    const queryRunner = dataSource.createQueryRunner()
+
     try {
       const id = parseInt(req.params.id, 10)
+      log.debug({ columnId: id }, 'Deleting board column')
+
       if (isNaN(id)) {
+        log.warn({ param: req.params.id }, 'Invalid column ID provided for deletion')
         return res.status(400).json({ error: 'Invalid column ID' })
       }
 
-      const column = await columnRepository.findOne({ where: { id } })
-      if (!column) {
-        return res.status(404).json({ error: 'Column not found' })
-      }
+      // Start transaction FIRST to prevent race condition
+      await queryRunner.connect()
+      await queryRunner.startTransaction()
 
-      // Prevent deletion of system columns (Inbox)
-      if (column.isSystem === 1) {
-        return res.status(403).json({ error: 'Cannot delete system column' })
-      }
+      try {
+        // Fetch column INSIDE transaction to prevent race condition
+        const column = await queryRunner.manager.getRepository(BoardColumn).findOne({ where: { id } })
+        if (!column) {
+          log.warn({ columnId: id }, 'Column not found for deletion')
+          await queryRunner.rollbackTransaction()
+          return res.status(404).json({ error: 'Column not found' })
+        }
 
-      await columnRepository.delete(id)
-      res.status(204).send()
+        // Prevent deletion of system columns (Inbox)
+        if (column.isSystem === 1) {
+          log.warn({ columnId: id, name: column.name }, 'Attempted to delete system column')
+          await queryRunner.rollbackTransaction()
+          return res.status(403).json({ error: 'Cannot delete system column' })
+        }
+
+        // Migrate all todos from this column to Inbox
+        const todoRepository = queryRunner.manager.getRepository(Todo)
+        const updateResult = await todoRepository.update(
+          { boardColumnId: id },
+          { boardColumnId: BoardColumnIds.INBOX }
+        )
+
+        // Delete the column
+        await queryRunner.manager.getRepository(BoardColumn).delete(id)
+
+        // Commit transaction
+        await queryRunner.commitTransaction()
+
+        log.info({ columnId: id, name: column.name, movedTasks: updateResult.affected ?? 0 }, 'Board column deleted')
+        res.status(200).json({
+          message: `Column "${column.name}" deleted successfully`,
+          movedTasks: updateResult.affected ?? 0,
+        })
+      } catch (error) {
+        // Rollback on error
+        await queryRunner.rollbackTransaction()
+        throw error
+      }
     } catch (error) {
+      log.error({ err: error }, 'Failed to delete board column')
       next(error)
+    } finally {
+      await queryRunner.release()
     }
   })
 

@@ -1,16 +1,21 @@
-import { useMemo } from 'react'
-import type { BoardColumn } from '@nanomail/shared'
+import { useMemo, useCallback } from 'react'
+import { BoardColumnIds, type BoardColumn } from '@nanomail/shared'
 import type { TodoItem } from '@/services'
 import { cn } from '@/lib/utils'
 import { BoardColumnDroppable } from './BoardColumnDroppable'
+import { NewListButton } from './NewListButton'
 
 export interface BoardPanelProps {
   /** All board columns */
   columns: BoardColumn[]
   /** All todos (will be filtered by column) */
   todos: TodoItem[]
-  /** Callback fired when a todo is moved between columns */
-  onColumnChange?: (todoId: number, columnId: number, position?: number) => void
+  /** Callback fired when a new column is created */
+  onCreateColumn?: (name: string, order: number) => void
+  /** Callback fired when a column is deleted */
+  onDeleteColumn?: (columnId: number) => void
+  /** Callback fired when a column is updated (name, color, etc.) */
+  onUpdateColumn?: (columnId: number, data: { name?: string; color?: string | null }) => void
   /** Additional CSS classes */
   className?: string
 }
@@ -18,19 +23,20 @@ export interface BoardPanelProps {
 /**
  * BoardPanel - Kanban-style board for managing todos
  *
- * Critical: This component displays ONLY columns 2-4, EXCLUDING the Inbox (column 1).
- * This ensures data is mutually exclusive with InboxPanel which displays column 1.
+ * Critical: This component displays ONLY columns 2-4, EXCLUDING the Inbox.
+ * This ensures data is mutually exclusive with InboxPanel which displays Inbox column.
  *
  * Features:
- * - Displays columns 2-4 (Todo, In Progress, Done)
+ * - Displays non-Inbox columns (Todo, In Progress, Done, and custom columns)
  * - Each column is a sortable droppable zone
  * - Updates boardColumnId and position on drop
+ * - New List button for creating new columns
  */
-export function BoardPanel({ columns, todos, className }: BoardPanelProps) {
-  // Filter out Inbox column (id === 1) - Critical for mutual exclusivity
+export function BoardPanel({ columns, todos, onCreateColumn, onDeleteColumn, onUpdateColumn, className }: BoardPanelProps) {
+  // Filter out Inbox column - Critical for mutual exclusivity
   const displayColumns = useMemo(() => {
     return columns
-      .filter(c => c.id !== 1)
+      .filter(c => c.id !== BoardColumnIds.INBOX)
       .sort((a, b) => a.order - b.order)
   }, [columns])
 
@@ -40,6 +46,24 @@ export function BoardPanel({ columns, todos, className }: BoardPanelProps) {
       return todos.filter(t => t.boardColumnId === columnId)
     }
   }, [todos])
+
+  // Calculate the next order for a new column
+  const getNextOrder = useCallback(() => {
+    if (displayColumns.length === 0) return 0
+    const maxOrder = displayColumns.reduce((max, col) => Math.max(max, col.order), 0)
+    return maxOrder + 1
+  }, [displayColumns])
+
+  // Handle creating a new column
+  const handleCreateColumn = useCallback((name: string) => {
+    const nextOrder = getNextOrder()
+    onCreateColumn?.(name, nextOrder)
+  }, [getNextOrder, onCreateColumn])
+
+  // Handle deleting a column
+  const handleDeleteColumn = useCallback((columnId: number) => {
+    onDeleteColumn?.(columnId)
+  }, [onDeleteColumn])
 
   const isEmpty = displayColumns.length === 0
 
@@ -65,8 +89,9 @@ export function BoardPanel({ columns, todos, className }: BoardPanelProps) {
       {/* Columns */}
       <div className="flex-1 overflow-auto p-4">
         {isEmpty ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">No columns configured</p>
+          <div className="flex gap-4 h-full">
+            {/* Show only the New List button when no columns exist */}
+            <NewListButton onCreateColumn={handleCreateColumn} />
           </div>
         ) : (
           <div
@@ -79,8 +104,13 @@ export function BoardPanel({ columns, todos, className }: BoardPanelProps) {
                 column={column}
                 todos={getColumnTodos(column.id)}
                 className="flex-1 min-w-[250px] max-w-[350px]"
+                onRename={(name) => onUpdateColumn?.(column.id, { name })}
+                onColorChange={(color) => onUpdateColumn?.(column.id, { color })}
+                onDelete={() => handleDeleteColumn(column.id)}
               />
             ))}
+            {/* New List button as "virtual column" at the end */}
+            <NewListButton onCreateColumn={handleCreateColumn} />
           </div>
         )}
       </div>

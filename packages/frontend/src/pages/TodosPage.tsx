@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CheckSquare, Loader2 } from 'lucide-react'
-import { useTodos, useBoardColumns, useUpdateTodoMutation } from '@/hooks'
+import { useTodos, useBoardColumns, useUpdateTodoMutation, useCreateBoardColumnMutation, useDeleteBoardColumnMutation, useUpdateBoardColumnMutation } from '@/hooks'
 import { toast } from 'sonner'
 import { DndProvider } from '@/contexts/DndContext'
 import { ViewToggle, type ViewType } from '@/features/todos/ViewToggle'
 import { InboxPanel } from '@/features/todos/InboxPanel'
 import { PlannerPanel } from '@/features/todos/PlannerPanel'
 import { BoardPanel } from '@/features/todos/BoardPanel'
+import { ResizablePanels, type PanelConfig } from '@/features/todos/ResizablePanels'
 import type { BoardColumn } from '@nanomail/shared'
 import type { DragEndEvent } from '@/contexts/DndContext'
 
@@ -27,6 +28,15 @@ export function TodosPage() {
 
   // Mutation hook for updating todos (includes optimistic update)
   const updateTodoMutation = useUpdateTodoMutation()
+
+  // Mutation hook for creating board columns
+  const createColumnMutation = useCreateBoardColumnMutation()
+
+  // Mutation hook for deleting board columns
+  const deleteColumnMutation = useDeleteBoardColumnMutation()
+
+  // Mutation hook for updating board columns (color, name, etc.)
+  const updateColumnMutation = useUpdateBoardColumnMutation()
 
   useEffect(() => {
     if (error) {
@@ -107,6 +117,50 @@ export function TodosPage() {
     )
   }, [updateTodoMutation])
 
+  /**
+   * Handle creating a new board column
+   */
+  const handleCreateColumn = useCallback((name: string, order: number) => {
+    createColumnMutation.mutate(
+      { name, order, color: null },
+      {
+        onSuccess: () => toast.success('Column created successfully'),
+        onError: () => toast.error('Failed to create column'),
+      }
+    )
+  }, [createColumnMutation])
+
+  /**
+   * Handle deleting a board column
+   */
+  const handleDeleteColumn = useCallback((columnId: number) => {
+    deleteColumnMutation.mutate(columnId, {
+      onSuccess: (data) => {
+        if (data.movedTasks > 0) {
+          toast.success(`${data.movedTasks} task${data.movedTasks === 1 ? '' : 's'} moved to Inbox`)
+        } else {
+          toast.success('Column deleted successfully')
+        }
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : 'Failed to delete column')
+      },
+    })
+  }, [deleteColumnMutation])
+
+  /**
+   * Handle updating a board column (color, name, etc.)
+   */
+  const handleUpdateColumn = useCallback((columnId: number, data: { name?: string; color?: string | null }) => {
+    updateColumnMutation.mutate(
+      { id: columnId, data },
+      {
+        onSuccess: () => toast.success('Column updated successfully'),
+        onError: () => toast.error('Failed to update column'),
+      }
+    )
+  }, [updateColumnMutation])
+
   const handleViewToggle = (view: ViewType) => {
     setActiveViews(prev => {
       const isActive = prev.includes(view)
@@ -124,6 +178,54 @@ export function TodosPage() {
   const showInbox = activeViews.includes('inbox')
   const showPlanner = activeViews.includes('planner')
   const showBoard = activeViews.includes('board')
+
+  // Compute panel configs based on active views
+  // minSize: Pixel values ensure absolute minimum widths per plan_2_phase_2.md
+  // defaultSize: Percentage strings for proportional layout
+  const panelConfigs = useMemo((): PanelConfig[] => {
+    const configs: PanelConfig[] = []
+    if (showInbox) configs.push({ id: 'inbox', defaultSize: '25%', minSize: 280 })
+    if (showPlanner) configs.push({ id: 'planner', defaultSize: '35%', minSize: 320 })
+    if (showBoard) configs.push({ id: 'board', defaultSize: '40%', minSize: 280 })
+    return configs
+  }, [showInbox, showPlanner, showBoard])
+
+  // Compute panel children based on active views
+  const panelChildren = useMemo(() => {
+    const children: React.ReactNode[] = []
+    if (showInbox) {
+      children.push(
+        <InboxPanel
+          key="inbox"
+          className="h-full"
+          todos={todos}
+        />
+      )
+    }
+    if (showPlanner) {
+      children.push(
+        <PlannerPanel
+          key="planner"
+          className="h-full"
+          todos={todos}
+        />
+      )
+    }
+    if (showBoard) {
+      children.push(
+        <BoardPanel
+          key="board"
+          className="h-full"
+          columns={columns}
+          todos={todos}
+          onCreateColumn={handleCreateColumn}
+          onDeleteColumn={handleDeleteColumn}
+          onUpdateColumn={handleUpdateColumn}
+        />
+      )
+    }
+    return children
+  }, [showInbox, showPlanner, showBoard, todos, columns])
 
   const isEmpty = todos.length === 0
 
@@ -158,27 +260,14 @@ export function TodosPage() {
         ) : (
           <div
             data-testid="panels-container"
-            className="flex-1 flex gap-4 overflow-hidden"
+            className="flex-1 overflow-hidden"
           >
-            {showInbox && (
-              <InboxPanel
-                className="flex-1 min-w-0"
-                todos={todos}
-              />
-            )}
-            {showPlanner && (
-              <PlannerPanel
-                className="flex-1 min-w-0"
-                todos={todos}
-              />
-            )}
-            {showBoard && (
-              <BoardPanel
-                className="flex-1 min-w-0"
-                columns={columns}
-                todos={todos}
-              />
-            )}
+            <ResizablePanels
+              panelConfigs={panelConfigs}
+              className="h-full"
+            >
+              {panelChildren}
+            </ResizablePanels>
           </div>
         )}
 

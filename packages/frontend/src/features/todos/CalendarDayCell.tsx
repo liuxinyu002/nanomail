@@ -2,6 +2,7 @@ import { memo, useCallback, KeyboardEvent } from 'react'
 import { format } from 'date-fns'
 import { useDroppable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
+import { COLUMN_ID_TO_TAILWIND } from '@/constants/colors'
 
 export interface CalendarDayCellProps {
   date: Date
@@ -10,13 +11,6 @@ export interface CalendarDayCellProps {
   todoCount: number
   highestPriorityColumn: number | null
   onClick: (date: Date) => void
-}
-
-const columnColors: Record<number, string> = {
-  2: 'bg-red-500',
-  3: 'bg-amber-500',
-  1: 'bg-blue-500',
-  4: 'bg-green-500',
 }
 
 export const CalendarDayCell = memo(function CalendarDayCell({
@@ -86,7 +80,7 @@ export const CalendarDayCell = memo(function CalendarDayCell({
           data-testid="priority-indicator"
           className={cn(
             'absolute bottom-0 left-0 right-0 h-1',
-            columnColors[highestPriorityColumn] || 'bg-gray-500'
+            COLUMN_ID_TO_TAILWIND[highestPriorityColumn] || 'bg-gray-500'
           )}
         />
       )}

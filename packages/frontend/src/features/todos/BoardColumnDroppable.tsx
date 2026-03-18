@@ -4,15 +4,7 @@ import type { BoardColumn } from '@nanomail/shared'
 import type { TodoItem } from '@/services'
 import { cn } from '@/lib/utils'
 import { DraggableTodoItem } from './DraggableTodoItem'
-
-export interface BoardColumnDroppableProps {
-  /** The column to display */
-  column: BoardColumn
-  /** Todos belonging to this column */
-  todos: TodoItem[]
-  /** Additional CSS classes */
-  className?: string
-}
+import { ColumnHeader } from './ColumnHeader'
 
 const VALID_HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/
 
@@ -21,20 +13,38 @@ function isValidHexColor(color: string | null | undefined): boolean {
   return VALID_HEX_COLOR_REGEX.test(color)
 }
 
-function getSafeColor(color: string | null | undefined): string | undefined {
-  if (!isValidHexColor(color)) return undefined
-  return color ?? undefined
+export interface BoardColumnDroppableProps {
+  /** The column to display */
+  column: BoardColumn
+  /** Todos belonging to this column */
+  todos: TodoItem[]
+  /** Additional CSS classes */
+  className?: string
+  /** Callback when column is renamed */
+  onRename?: (name: string) => void
+  /** Callback when column color changes */
+  onColorChange?: (color: string | null) => void
+  /** Callback when column is deleted */
+  onDelete?: () => void
 }
 
 /**
  * BoardColumnDroppable - A sortable droppable container for a Kanban board column
  *
  * Features:
- * - Header with column name and count
+ * - Header with column name, color indicator, count, and settings menu
+ * - Inline renaming via double-click
  * - Sortable container using SortableContext
  * - Visual feedback on drag-over
  */
-export function BoardColumnDroppable({ column, todos, className }: BoardColumnDroppableProps) {
+export function BoardColumnDroppable({
+  column,
+  todos,
+  className,
+  onRename,
+  onColorChange,
+  onDelete,
+}: BoardColumnDroppableProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${column.id}`,
     data: {
@@ -44,39 +54,29 @@ export function BoardColumnDroppable({ column, todos, className }: BoardColumnDr
   })
 
   const todoIds = todos.map(t => t.id)
-  const safeColor = getSafeColor(column.color)
+
+  // Check if column has a valid hex color
+  const hasValidColor = isValidHexColor(column.color)
 
   return (
     <div
       data-testid="board-column-droppable"
       className={cn(
-        'flex flex-col bg-gray-50 rounded-lg',
+        'flex flex-col rounded-lg',
         'border border-gray-200',
+        !hasValidColor && 'bg-gray-50',
         className
       )}
+      style={hasValidColor ? { backgroundColor: column.color! } : undefined}
     >
       {/* Column Header */}
-      <div
-        data-testid="column-header"
-        className="p-3 border-b flex items-center justify-between"
-      >
-        <div className="flex items-center gap-2">
-          {safeColor && (
-            <div
-              data-testid="column-color-indicator"
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: safeColor }}
-            />
-          )}
-          <h3 className="font-medium text-sm">{column.name}</h3>
-        </div>
-        <span
-          className="text-sm text-gray-500"
-          aria-label={`${todos.length} items`}
-        >
-          {todos.length}
-        </span>
-      </div>
+      <ColumnHeader
+        column={column}
+        itemCount={todos.length}
+        onRename={onRename || (() => {})}
+        onColorChange={onColorChange || (() => {})}
+        onDelete={onDelete || (() => {})}
+      />
 
       {/* Droppable Zone */}
       <div

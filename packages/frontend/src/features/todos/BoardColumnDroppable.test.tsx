@@ -1,43 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { DndProvider } from '@/contexts/DndContext'
 import { BoardColumnDroppable, type BoardColumnDroppableProps } from './BoardColumnDroppable'
 import type { BoardColumn } from '@nanomail/shared'
 import type { TodoItem } from '@/services'
 
-// Mock SortableContext and useSortable from dnd-kit
-let mockSortableReturnValue: {
-  attributes: Record<string, unknown>
-  listeners: Record<string, unknown>
-  setNodeRef: (node: HTMLElement | null) => void
-  transform: { x: number; y: number } | null
-  transition: string | null
-  isDragging: boolean
-} = {
-  attributes: {},
-  listeners: {},
-  setNodeRef: vi.fn(),
-  transform: null,
-  transition: null,
-  isDragging: false,
-}
+// Mock @dnd-kit/core
+vi.mock('@dnd-kit/core', () => ({
+  useDroppable: vi.fn(() => ({
+    setNodeRef: vi.fn(),
+    isOver: false,
+  })),
+}))
 
-vi.mock('@dnd-kit/sortable', async () => {
-  const actual = await vi.importActual('@dnd-kit/sortable')
-  return {
-    ...actual,
-    useSortable: () => {
-      return mockSortableReturnValue
-    },
-    SortableContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    verticalListSortingStrategy: 'vertical',
-  }
-})
+// Mock @dnd-kit/sortable
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => <div data-testid="sortable-context">{children}</div>,
+  verticalListSortingStrategy: {},
+}))
 
 // Mock DraggableTodoItem
 vi.mock('./DraggableTodoItem', () => ({
-  DraggableTodoItem: ({ todo }: { todo: TodoItem }) => (
-    <div data-testid={`draggable-todo-${todo.id}`}>{todo.description}</div>
+  DraggableTodoItem: ({ todo }: { todo: { id: number; title: string } }) => (
+    <div data-testid={`todo-item-${todo.id}`}>{todo.title}</div>
+  ),
+}))
+
+// Mock ColumnHeader
+vi.mock('./ColumnHeader', () => ({
+  ColumnHeader: ({ column, itemCount }: { column: { name: string }; itemCount: number }) => (
+    <div data-testid="column-header">
+      <span>{column.name}</span>
+      <span>{itemCount} items</span>
+    </div>
   ),
 }))
 
@@ -45,33 +39,15 @@ describe('BoardColumnDroppable', () => {
   const mockColumn: BoardColumn = {
     id: 2,
     name: 'Todo',
-    color: '#3B82F6',
+    color: null,
     order: 1,
     isSystem: false,
     createdAt: new Date('2024-01-01T00:00:00.000Z'),
   }
 
   const mockTodos: TodoItem[] = [
-    {
-      id: 1,
-      emailId: 100,
-      description: 'Test todo 1',
-      status: 'pending',
-      deadline: null,
-      boardColumnId: 2,
-      position: 0,
-      createdAt: '2024-01-15T10:00:00.000Z',
-    },
-    {
-      id: 2,
-      emailId: 101,
-      description: 'Test todo 2',
-      status: 'in_progress',
-      deadline: null,
-      boardColumnId: 2,
-      position: 1,
-      createdAt: '2024-01-15T11:00:00.000Z',
-    },
+    { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+    { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
   ]
 
   const defaultProps: BoardColumnDroppableProps = {
@@ -80,343 +56,134 @@ describe('BoardColumnDroppable', () => {
   }
 
   beforeEach(() => {
-    mockSortableReturnValue = {
-      attributes: {},
-      listeners: {},
-      setNodeRef: vi.fn(),
-      transform: null,
-      transition: null,
-      isDragging: false,
-    }
+    vi.clearAllMocks()
   })
 
   describe('Rendering', () => {
-    it('should render the column container', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+    it('should render the column header', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
 
-      expect(screen.getByTestId('board-column-droppable')).toBeInTheDocument()
+      expect(screen.getByTestId('column-header')).toBeInTheDocument()
     })
 
-    it('should render column header with name', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+    it('should render all todos', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
 
-      expect(screen.getByText('Todo')).toBeInTheDocument()
+      expect(screen.getByTestId('todo-item-1')).toBeInTheDocument()
+      expect(screen.getByTestId('todo-item-2')).toBeInTheDocument()
     })
 
-    it('should render todo count in header', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+    it('should render droppable zone', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
 
-      expect(screen.getByText('2')).toBeInTheDocument()
+      expect(screen.getByTestId('droppable-zone')).toBeInTheDocument()
     })
 
-    it('should render todo count of 0 when empty', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} todos={[]} />
-        </DndProvider>
-      )
+    it('should render empty column when no todos', () => {
+      render(<BoardColumnDroppable {...defaultProps} todos={[]} />)
 
-      expect(screen.getByText('0')).toBeInTheDocument()
-    })
-
-    it('should render all todos in the column', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      expect(screen.getByText('Test todo 1')).toBeInTheDocument()
-      expect(screen.getByText('Test todo 2')).toBeInTheDocument()
+      expect(screen.getByTestId('droppable-zone')).toBeInTheDocument()
+      expect(screen.queryByTestId(/todo-item-/)).not.toBeInTheDocument()
     })
   })
 
-  describe('Droppable Configuration', () => {
-    it('should have a droppable zone with correct id', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+  describe('Background Color', () => {
+    it('should apply default gray background when column has no color', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
 
-      const dropZone = screen.getByTestId('droppable-zone')
-      expect(dropZone).toBeInTheDocument()
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('bg-gray-50')
     })
 
-    it('should configure droppable with column id', () => {
-      // The DroppableZone should receive type='board' and columnId
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+    it('should apply column color as background when color is set', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} />)
 
-      const dropZone = screen.getByTestId('droppable-zone')
-      expect(dropZone).toBeInTheDocument()
-    })
-  })
-
-  describe('Visual Feedback', () => {
-    it('should have base styling for column container', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      const container = screen.getByTestId('board-column-droppable')
-      expect(container).toHaveClass('flex')
-      expect(container).toHaveClass('flex-col')
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveStyle({ backgroundColor: '#DBEAFE' })
     })
 
-    it('should have rounded corners', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
+    it('should not apply bg-gray-50 when custom color is set', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#D1FAE5' }} />)
 
-      const container = screen.getByTestId('board-column-droppable')
-      expect(container).toHaveClass('rounded-lg')
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).not.toHaveClass('bg-gray-50')
     })
 
-    it('should have minimum height for empty drop zone', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
+    it('should apply different colors correctly', () => {
+      const { rerender } = render(
+        <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#FEF3C7' }} />
       )
 
-      const dropZone = screen.getByTestId('droppable-zone')
-      expect(dropZone).toHaveClass('min-h-[200px]')
-    })
-  })
+      let column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveStyle({ backgroundColor: '#FEF3C7' })
 
-  describe('Header', () => {
-    it('should have a header section with border', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
+      // Rerender with different color
+      rerender(
+        <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#EDE9FE' }} />
       )
 
-      const header = screen.getByTestId('column-header')
-      expect(header).toHaveClass('border-b')
+      column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveStyle({ backgroundColor: '#EDE9FE' })
     })
 
-    it('should display column color indicator if color is provided', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#3B82F6' })
-    })
-
-    it('should not display color indicator if color is null', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable
-            {...defaultProps}
-            column={{ ...mockColumn, color: null }}
-          />
-        </DndProvider>
-      )
-
-      expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
-    })
-  })
-
-  describe('Sortable Context', () => {
-    it('should wrap todos in SortableContext', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      // The todos should be rendered within SortableContext
-      expect(screen.getByTestId('draggable-todo-1')).toBeInTheDocument()
-      expect(screen.getByTestId('draggable-todo-2')).toBeInTheDocument()
-    })
-
-    it('should handle empty todos array', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} todos={[]} />
-        </DndProvider>
-      )
-
-      const dropZone = screen.getByTestId('droppable-zone')
-      expect(dropZone).toBeInTheDocument()
-    })
-  })
-
-  describe('Different Column Types', () => {
-    it('should render system column correctly', () => {
-      const systemColumn: BoardColumn = {
-        ...mockColumn,
-        id: 1,
-        name: 'Inbox',
-        isSystem: true,
-      }
-
-      render(
-        <DndProvider>
-          <BoardColumnDroppable column={systemColumn} todos={mockTodos} />
-        </DndProvider>
-      )
-
-      expect(screen.getByText('Inbox')).toBeInTheDocument()
-    })
-
-    it('should render "In Progress" column correctly', () => {
-      const inProgressColumn: BoardColumn = {
-        ...mockColumn,
-        id: 3,
-        name: 'In Progress',
-        color: '#F59E0B',
-        order: 2,
-      }
-
-      render(
-        <DndProvider>
-          <BoardColumnDroppable column={inProgressColumn} todos={[]} />
-        </DndProvider>
-      )
-
-      expect(screen.getByText('In Progress')).toBeInTheDocument()
-      expect(screen.getByText('0')).toBeInTheDocument()
-    })
-
-    it('should render "Done" column correctly', () => {
-      const doneColumn: BoardColumn = {
-        ...mockColumn,
-        id: 4,
-        name: 'Done',
-        color: '#10B981',
-        order: 3,
-      }
-
-      const doneTodos: TodoItem[] = [
-        {
-          id: 3,
-          emailId: 102,
-          description: 'Completed task',
-          status: 'completed',
-          deadline: null,
-          boardColumnId: 4,
-          position: 0,
-          createdAt: '2024-01-15T12:00:00.000Z',
-        },
+    it('should handle preset colors from ColorPicker', () => {
+      const presetColors = [
+        '#E5E7EB', // Gray
+        '#DBEAFE', // Blue
+        '#D1FAE5', // Green
+        '#FEF3C7', // Yellow
+        '#EDE9FE', // Purple
+        '#FCE7F3', // Pink
       ]
 
-      render(
-        <DndProvider>
-          <BoardColumnDroppable column={doneColumn} todos={doneTodos} />
-        </DndProvider>
-      )
+      presetColors.forEach(color => {
+        const { unmount } = render(
+          <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color }} />
+        )
 
-      expect(screen.getByText('Done')).toBeInTheDocument()
-      expect(screen.getByText('1')).toBeInTheDocument()
+        const column = screen.getByTestId('board-column-droppable')
+        expect(column).toHaveStyle({ backgroundColor: color })
+        unmount()
+      })
+    })
+
+    it('should fallback to gray for invalid hex colors', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: 'invalid' }} />)
+
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('bg-gray-50')
+    })
+
+    it('should fallback to gray for colors without # prefix', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: 'DBEAFE' }} />)
+
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('bg-gray-50')
+    })
+
+    it('should fallback to gray for 3-character hex colors', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#ABC' }} />)
+
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('bg-gray-50')
     })
   })
 
-  describe('Custom className', () => {
-    it('should accept custom className prop', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} className="custom-column-class" />
-        </DndProvider>
-      )
+  describe('Custom ClassName', () => {
+    it('should apply custom className', () => {
+      render(<BoardColumnDroppable {...defaultProps} className="custom-class" />)
 
-      const container = screen.getByTestId('board-column-droppable')
-      expect(container).toHaveClass('custom-column-class')
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle large number of todos', () => {
-      const manyTodos: TodoItem[] = Array.from({ length: 50 }, (_, i) => ({
-        id: i + 100,
-        emailId: 100 + i,
-        description: `Todo ${i}`,
-        status: 'pending' as const,
-        deadline: null,
-        boardColumnId: 2,
-        position: i,
-        createdAt: '2024-01-15T10:00:00.000Z',
-      }))
-
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} todos={manyTodos} />
-        </DndProvider>
-      )
-
-      expect(screen.getByText('50')).toBeInTheDocument()
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('custom-class')
     })
 
-    it('should handle todos with null positions', () => {
-      const todosWithNullPosition: TodoItem[] = [
-        {
-          id: 1,
-          emailId: 100,
-          description: 'Test todo',
-          status: 'pending',
-          deadline: null,
-          boardColumnId: 2,
-          position: undefined,
-          createdAt: '2024-01-15T10:00:00.000Z',
-        },
-      ]
+    it('should merge custom className with default classes', () => {
+      render(<BoardColumnDroppable {...defaultProps} className="mt-4 rounded-xl" />)
 
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} todos={todosWithNullPosition} />
-        </DndProvider>
-      )
-
-      expect(screen.getByText('Test todo')).toBeInTheDocument()
-    })
-  })
-
-  describe('Accessibility', () => {
-    it('should have proper heading for column name', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      const heading = screen.getByRole('heading', { name: 'Todo' })
-      expect(heading).toBeInTheDocument()
-    })
-
-    it('should have accessible count label', () => {
-      render(
-        <DndProvider>
-          <BoardColumnDroppable {...defaultProps} />
-        </DndProvider>
-      )
-
-      const count = screen.getByLabelText('2 items')
-      expect(count).toBeInTheDocument()
+      const column = screen.getByTestId('board-column-droppable')
+      expect(column).toHaveClass('mt-4')
+      expect(column).toHaveClass('rounded-xl')
+      expect(column).toHaveClass('flex')
     })
   })
 })

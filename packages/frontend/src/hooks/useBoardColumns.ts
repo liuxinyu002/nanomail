@@ -96,6 +96,8 @@ export function useUpdateBoardColumnMutation() {
  * Note: System columns (isSystem: true) cannot be deleted.
  * The backend will reject the request with an error.
  *
+ * @returns Object with message and movedTasks count on success
+ *
  * @example
  * ```tsx
  * const deleteMutation = useDeleteBoardColumnMutation()
@@ -105,7 +107,11 @@ export function useUpdateBoardColumnMutation() {
  *     alert('Cannot delete system column')
  *     return
  *   }
- *   deleteMutation.mutate(column.id)
+ *   deleteMutation.mutate(column.id, {
+ *     onSuccess: (data) => {
+ *       console.log(`${data.movedTasks} tasks moved to Inbox`)
+ *     }
+ *   })
  * }
  * ```
  */
@@ -116,6 +122,7 @@ export function useDeleteBoardColumnMutation() {
     mutationFn: (id: number) => BoardColumnService.deleteBoardColumn(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boardColumns'] })
+      queryClient.invalidateQueries({ queryKey: ['todos'] })
     },
   })
 }

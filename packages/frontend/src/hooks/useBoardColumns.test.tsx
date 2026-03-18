@@ -401,9 +401,12 @@ describe('useDeleteBoardColumnMutation', () => {
     vi.restoreAllMocks()
   })
 
-  it('should delete board column successfully', async () => {
+  it('should delete board column successfully and return moved tasks count', async () => {
     const { wrapper } = createWrapper()
-    vi.mocked(BoardColumnService.deleteBoardColumn).mockResolvedValueOnce(undefined)
+    vi.mocked(BoardColumnService.deleteBoardColumn).mockResolvedValueOnce({
+      message: 'Column deleted',
+      movedTasks: 3,
+    })
 
     const { result } = renderHook(() => useDeleteBoardColumnMutation(), { wrapper })
 
@@ -416,13 +419,17 @@ describe('useDeleteBoardColumnMutation', () => {
     })
 
     expect(BoardColumnService.deleteBoardColumn).toHaveBeenCalledWith(2)
+    expect(result.current.data?.movedTasks).toBe(3)
   })
 
   it('should invalidate queries after success', async () => {
     const { wrapper, queryClient } = createWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    vi.mocked(BoardColumnService.deleteBoardColumn).mockResolvedValueOnce(undefined)
+    vi.mocked(BoardColumnService.deleteBoardColumn).mockResolvedValueOnce({
+      message: 'Column deleted',
+      movedTasks: 0,
+    })
 
     const { result } = renderHook(() => useDeleteBoardColumnMutation(), { wrapper })
 
@@ -435,6 +442,7 @@ describe('useDeleteBoardColumnMutation', () => {
     })
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['boardColumns'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
   })
 
   it('should handle error when deleting system column', async () => {
@@ -478,8 +486,8 @@ describe('useDeleteBoardColumnMutation', () => {
     const { wrapper } = createWrapper()
 
     // Create a promise that we can control
-    let resolvePromise: () => void
-    const pendingPromise = new Promise<void>((resolve) => {
+    let resolvePromise: (value: { message: string; movedTasks: number }) => void
+    const pendingPromise = new Promise<{ message: string; movedTasks: number }>((resolve) => {
       resolvePromise = resolve
     })
 
@@ -497,7 +505,7 @@ describe('useDeleteBoardColumnMutation', () => {
     })
 
     // Resolve the promise to complete the mutation
-    resolvePromise!()
+    resolvePromise!({ message: 'Column deleted', movedTasks: 0 })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)

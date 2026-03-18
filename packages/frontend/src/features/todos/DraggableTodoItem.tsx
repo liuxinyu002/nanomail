@@ -12,6 +12,9 @@ export interface DraggableTodoItemProps {
 /**
  * A draggable wrapper for TodoItem component.
  * Provides drag-and-drop functionality with visual feedback.
+ *
+ * Design: Drag handle is absolutely positioned inside the container's left edge,
+ * appearing on hover without occupying flex space, maximizing content area.
  */
 export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -32,16 +35,17 @@ export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
       style={style}
       data-testid="draggable-todo-item"
       className={cn(
-        'group flex items-center gap-2 transition-opacity',
+        'group relative transition-opacity',
         isDragging && 'opacity-50'
       )}
     >
-      {/* Drag Handle - ONLY this area triggers drag */}
+      {/* Drag Handle - Absolutely positioned inside left edge, no space occupation */}
       <button
         data-testid="drag-handle"
         type="button"
         className={cn(
-          'cursor-grab active:cursor-grabbing p-1',
+          'absolute left-1 top-1/2 -translate-y-1/2 z-10',
+          'cursor-grab active:cursor-grabbing',
           'text-muted-foreground hover:text-foreground',
           'opacity-0 group-hover:opacity-100 transition-opacity',
           'touch-none'
@@ -49,13 +53,11 @@ export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="h-5 w-5" />
+        <GripVertical className="h-4 w-4" />
       </button>
 
-      {/* Todo Item */}
-      <div className="flex-1">
-        <TodoItem todo={todo} />
-      </div>
+      {/* Todo Item - Full width */}
+      <TodoItem todo={todo} />
     </div>
   )
 }

@@ -182,9 +182,9 @@ export function WeekView({
       </div>
 
       {/* Main content area: TimeAxis + single day content */}
-      {/* Flexbox items-stretch ensures TimeAxis height matches HourSlots (1440px) */}
-      <div className="flex flex-1 min-h-0 overflow-y-auto">
-        <div className="self-stretch sticky left-0 bg-gray-50 z-10 shrink-0">
+      {/* items-start prevents flex from stretching TimeAxis wrapper to viewport height */}
+      <div className="flex flex-1 min-h-0 overflow-y-auto items-start">
+        <div className="sticky left-0 bg-gray-50 z-10 shrink-0">
           <TimeAxis />
         </div>
 

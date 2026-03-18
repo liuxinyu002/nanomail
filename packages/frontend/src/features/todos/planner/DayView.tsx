@@ -74,10 +74,10 @@ export function DayView({ date, todos, onTodoClick, className }: DayViewProps) {
   return (
     <div
       data-testid="day-view"
-      className={cn('flex h-full overflow-auto', className)}
+      className={cn('flex h-full overflow-auto items-start', className)}
     >
       {/* Time axis on the left - wrapper handles sticky + background */}
-      <div className="self-stretch sticky left-0 bg-gray-50 z-10 shrink-0">
+      <div className="sticky left-0 bg-gray-50 z-10 shrink-0">
         <TimeAxis />
       </div>
 

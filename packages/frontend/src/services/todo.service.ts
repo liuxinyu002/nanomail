@@ -3,24 +3,20 @@
  * Handles API calls for todo operations
  */
 
-import type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition } from '@nanomail/shared'
+import type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo } from '@nanomail/shared'
 
 // Re-export types for convenience
-export type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition } from '@nanomail/shared'
+export type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo } from '@nanomail/shared'
 
-export interface TodoItem {
-  id: number
-  emailId: number
-  description: string
-  status: TodoStatus
-  deadline: string | null
-  boardColumnId: number
-  position?: number
-  createdAt: string
-}
+/**
+ * @deprecated Use `Todo` from '@nanomail/shared' instead.
+ * This alias is kept for backward compatibility with existing imports.
+ * New code should import `Todo` directly from '@nanomail/shared'.
+ */
+export type TodoItem = Todo
 
 export interface TodosResponse {
-  todos: TodoItem[]
+  todos: Todo[]
 }
 
 export interface TodosQuery {

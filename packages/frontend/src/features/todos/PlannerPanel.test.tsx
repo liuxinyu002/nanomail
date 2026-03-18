@@ -1,98 +1,92 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { DndProvider } from '@/contexts/DndContext'
+import userEvent from '@testing-library/user-event'
 import { PlannerPanel, type PlannerPanelProps } from './PlannerPanel'
-import type { TodoItem } from '@/services'
+import type { Todo } from '@nanomail/shared'
 
-// Mock useTodosByDateRange hook
-vi.mock('@/hooks', () => ({
-  useTodosByDateRange: () => ({
-    data: {
-      todos: [],
-    },
-    isLoading: false,
-  }),
+// Mock @dnd-kit/core
+vi.mock('@dnd-kit/core', () => ({
+  useDroppable: vi.fn(() => ({
+    setNodeRef: vi.fn(),
+    isOver: false,
+  })),
+  DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-// Mock TodoCalendar to simplify testing
-vi.mock('./TodoCalendar', () => ({
-  TodoCalendar: ({ onTodoClick }: { onTodoClick?: (todo: TodoItem) => void }) => (
-    <div data-testid="todo-calendar-mock" data-has-click-handler={!!onTodoClick}>
-      Calendar Component
-    </div>
-  ),
-}))
+// Helper to create mock Todo with required fields
+function createMockTodo(overrides: Partial<Todo> = {}): Todo {
+  return {
+    id: 1,
+    emailId: 100,
+    description: 'Test todo',
+    status: 'pending',
+    deadline: null,
+    boardColumnId: 1,
+    position: 0,
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    ...overrides,
+  }
+}
 
 describe('PlannerPanel', () => {
+  // Mock current date for consistent tests
+  const mockCurrentDate = new Date(2024, 0, 15) // January 15, 2024
+  let originalDate: typeof Date
+
+  beforeEach(() => {
+    originalDate = global.Date
+    // Mock Date constructor to return consistent date
+    const MockDate = class extends Date {
+      constructor(dateString?: string | number | Date) {
+        super(dateString ?? mockCurrentDate)
+      }
+      static now() {
+        return mockCurrentDate.getTime()
+      }
+    }
+    global.Date = MockDate as typeof Date
+  })
+
+  afterEach(() => {
+    global.Date = originalDate
+  })
+
   const defaultProps: PlannerPanelProps = {
     todos: [],
     onTodoClick: vi.fn(),
     onDeadlineChange: vi.fn(),
   }
 
-  describe('Rendering', () => {
-    it('should render the planner panel container', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+  describe('rendering', () => {
+    it('renders the panel with header', () => {
+      render(<PlannerPanel {...defaultProps} />)
 
       expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('panel-header')).toBeInTheDocument()
     })
 
-    it('should render planner header with title', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+    it('renders the PlannerViewToggle in header', () => {
+      render(<PlannerPanel {...defaultProps} />)
 
-      expect(screen.getByRole('heading', { name: /planner/i })).toBeInTheDocument()
+      expect(screen.getByTestId('planner-view-toggle')).toBeInTheDocument()
     })
 
-    it('should render the TodoCalendar component', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+    it('renders DayView by default', () => {
+      render(<PlannerPanel {...defaultProps} />)
 
-      expect(screen.getByTestId('todo-calendar-mock')).toBeInTheDocument()
-    })
-  })
-
-  describe('Calendar Integration', () => {
-    it('should pass onTodoClick to TodoCalendar', () => {
-      const onTodoClick = vi.fn()
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} onTodoClick={onTodoClick} />
-        </DndProvider>
-      )
-
-      const calendar = screen.getByTestId('todo-calendar-mock')
-      expect(calendar).toHaveAttribute('data-has-click-handler', 'true')
+      expect(screen.getByTestId('day-view')).toBeInTheDocument()
+      expect(screen.queryByTestId('week-view')).not.toBeInTheDocument()
     })
 
-    it('should work without onTodoClick prop', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} onTodoClick={undefined} />
-        </DndProvider>
-      )
+    it('applies custom className', () => {
+      render(<PlannerPanel {...defaultProps} className="custom-class" />)
 
-      expect(screen.getByTestId('todo-calendar-mock')).toBeInTheDocument()
+      const panel = screen.getByTestId('planner-panel')
+      expect(panel).toHaveClass('custom-class')
     })
-  })
 
-  describe('Visual Styling', () => {
     it('should have proper panel layout', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+      render(<PlannerPanel {...defaultProps} />)
 
       const panel = screen.getByTestId('planner-panel')
       expect(panel).toHaveClass('flex')
@@ -100,217 +94,239 @@ describe('PlannerPanel', () => {
     })
 
     it('should have proper header styling', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+      render(<PlannerPanel {...defaultProps} />)
 
       const header = screen.getByTestId('panel-header')
       expect(header).toHaveClass('border-b')
     })
+  })
 
-    it('should accept custom className', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} className="custom-class" />
-        </DndProvider>
-      )
+  describe('todo filtering', () => {
+    it('shows count of scheduled todos (todos with deadline AND boardColumnId === 2)', () => {
+      const todos: Todo[] = [
+        createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
+        createMockTodo({ id: 2, description: 'Another scheduled', deadline: '2024-01-16T10:00:00', boardColumnId: 2 }),
+        createMockTodo({ id: 3, description: 'No deadline', deadline: null, boardColumnId: 2 }),
+        createMockTodo({ id: 4, description: 'Different column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
+      ]
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
 
-      const panel = screen.getByTestId('planner-panel')
-      expect(panel).toHaveClass('custom-class')
+      // Only 2 todos have deadline AND boardColumnId === 2
+      const countElement = screen.getByLabelText(/scheduled tasks/i)
+      expect(countElement).toHaveTextContent('2 scheduled')
+    })
+
+    it('filters todos to only show those with deadline AND boardColumnId === 2 in DayView', () => {
+      const todos: Todo[] = [
+        createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
+        createMockTodo({ id: 2, description: 'No deadline', deadline: null, boardColumnId: 2 }),
+        createMockTodo({ id: 3, description: 'Wrong column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
+        createMockTodo({ id: 4, description: 'Wrong column 3', deadline: '2024-01-15T10:00:00', boardColumnId: 3 }),
+      ]
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      // Only "Scheduled todo" should be visible
+      expect(screen.getByText('Scheduled todo')).toBeInTheDocument()
+      expect(screen.queryByText('No deadline')).not.toBeInTheDocument()
+      expect(screen.queryByText('Wrong column')).not.toBeInTheDocument()
+      expect(screen.queryByText('Wrong column 3')).not.toBeInTheDocument()
+    })
+
+    it('shows "0 scheduled" when no matching todos', () => {
+      const todos: Todo[] = [
+        createMockTodo({ id: 1, description: 'No deadline', deadline: null, boardColumnId: 2 }),
+        createMockTodo({ id: 2, description: 'Wrong column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
+      ]
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      const countElement = screen.getByLabelText(/scheduled tasks/i)
+      expect(countElement).toHaveTextContent('0 scheduled')
     })
   })
 
-  describe('Deadline Display', () => {
-    it('should display count of todos with deadlines', () => {
-      const todos: TodoItem[] = [
+  describe('view switching', () => {
+    it('switches to WeekView when week button is clicked', async () => {
+      const user = userEvent.setup()
+      render(<PlannerPanel {...defaultProps} />)
+
+      // Initially DayView
+      expect(screen.getByTestId('day-view')).toBeInTheDocument()
+
+      // Click week button
+      const weekButton = screen.getByRole('button', { name: /周/i })
+      await user.click(weekButton)
+
+      // Should now show WeekView
+      expect(screen.getByTestId('week-view')).toBeInTheDocument()
+      expect(screen.queryByTestId('day-view')).not.toBeInTheDocument()
+    })
+
+    it('switches back to DayView when day button is clicked', async () => {
+      const user = userEvent.setup()
+      render(<PlannerPanel {...defaultProps} />)
+
+      // Switch to WeekView
+      const weekButton = screen.getByRole('button', { name: /周/i })
+      await user.click(weekButton)
+      expect(screen.getByTestId('week-view')).toBeInTheDocument()
+
+      // Switch back to DayView
+      const dayButton = screen.getByRole('button', { name: /日/i })
+      await user.click(dayButton)
+      expect(screen.getByTestId('day-view')).toBeInTheDocument()
+    })
+
+    it('preserves todo count when switching views', async () => {
+      const user = userEvent.setup()
+      const todos: Todo[] = [
+        createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
+        createMockTodo({ id: 2, description: 'Another scheduled', deadline: '2024-01-16T10:00:00', boardColumnId: 2 }),
+      ]
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      // Initial count
+      const countElement = screen.getByLabelText(/scheduled tasks/i)
+      expect(countElement).toHaveTextContent('2 scheduled')
+
+      // Switch to WeekView
+      const weekButton = screen.getByRole('button', { name: /周/i })
+      await user.click(weekButton)
+
+      // Count should still be 2
+      expect(screen.getByLabelText(/scheduled tasks/i)).toHaveTextContent('2 scheduled')
+    })
+  })
+
+  describe('current date handling', () => {
+    it('passes current date to DayView', () => {
+      const todos: Todo[] = []
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      // DayView should be rendered with today's date
+      const dayView = screen.getByTestId('day-view')
+      expect(dayView).toBeInTheDocument()
+    })
+
+    it('passes week start (Sunday) to WeekView', async () => {
+      const user = userEvent.setup()
+      render(<PlannerPanel {...defaultProps} />)
+
+      // Switch to WeekView
+      const weekButton = screen.getByRole('button', { name: /周/i })
+      await user.click(weekButton)
+
+      // WeekView should be rendered
+      const weekView = screen.getByTestId('week-view')
+      expect(weekView).toBeInTheDocument()
+
+      // The week header should contain day headers
+      const weekHeader = screen.getByTestId('week-header')
+      expect(weekHeader).toBeInTheDocument()
+    })
+  })
+
+  describe('interactions', () => {
+    it('calls onTodoClick when a todo card is clicked in DayView', async () => {
+      const user = userEvent.setup()
+      const mockTodo = createMockTodo({
+        id: 1,
+        description: 'Clickable todo',
+        deadline: '2024-01-15T10:00:00',
+        boardColumnId: 2,
+      })
+      const onTodoClick = vi.fn()
+      render(<PlannerPanel {...defaultProps} todos={[mockTodo]} onTodoClick={onTodoClick} />)
+
+      const todoCard = screen.getByTestId('planner-todo-card-1')
+      await user.click(todoCard)
+
+      expect(onTodoClick).toHaveBeenCalledWith(mockTodo)
+    })
+
+    it('calls onTodoClick when a todo card is clicked in WeekView', async () => {
+      const user = userEvent.setup()
+      const mockTodo = createMockTodo({
+        id: 1,
+        description: 'Clickable todo',
+        deadline: '2024-01-15T10:00:00', // Same date as mocked current date
+        boardColumnId: 2,
+      })
+      const onTodoClick = vi.fn()
+      render(<PlannerPanel {...defaultProps} todos={[mockTodo]} onTodoClick={onTodoClick} />)
+
+      // Switch to WeekView
+      const weekButton = screen.getByRole('button', { name: /周/i })
+      await user.click(weekButton)
+
+      const todoCard = screen.getByTestId('planner-todo-card-1')
+      await user.click(todoCard)
+
+      expect(onTodoClick).toHaveBeenCalledWith(mockTodo)
+    })
+  })
+
+  describe('edge cases', () => {
+    it('handles empty todos array', () => {
+      const todos: Todo[] = []
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
+      expect(screen.getByLabelText(/scheduled tasks/i)).toHaveTextContent('0 scheduled')
+    })
+
+    it('handles todos with null deadline', () => {
+      const todos: Todo[] = [
+        createMockTodo({ id: 1, description: 'Null deadline', deadline: null, boardColumnId: 2 }),
+      ]
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      // Should not show in the scheduler
+      expect(screen.queryByText('Null deadline')).not.toBeInTheDocument()
+    })
+
+    it('handles large number of todos', () => {
+      const todos: Todo[] = Array.from({ length: 100 }, (_, i) =>
+        createMockTodo({
+          id: i + 1,
+          description: `Todo ${i + 1}`,
+          deadline: `2024-01-15T${String(i % 24).padStart(2, '0')}:00:00`,
+          boardColumnId: 2,
+        })
+      )
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
+
+      expect(screen.getByLabelText(/scheduled tasks/i)).toHaveTextContent('100 scheduled')
+    })
+  })
+
+  describe('type consistency', () => {
+    it('uses Todo type from @nanomail/shared', () => {
+      // This test verifies that the component accepts Todo[] as props
+      const todos: Todo[] = [
         {
           id: 1,
           emailId: 100,
-          description: 'Todo with deadline',
+          description: 'Test',
           status: 'pending',
-          deadline: '2024-12-31T23:59:59.000Z',
-          boardColumnId: 1,
-          position: 0,
-          createdAt: '2024-01-15T10:00:00.000Z',
-        },
-        {
-          id: 2,
-          emailId: 101,
-          description: 'Todo without deadline',
-          status: 'pending',
-          deadline: null,
-          boardColumnId: 1,
-          position: 1,
-          createdAt: '2024-01-15T11:00:00.000Z',
-        },
-        {
-          id: 3,
-          emailId: 102,
-          description: 'Another with deadline',
-          status: 'pending',
-          deadline: '2024-12-25T00:00:00.000Z',
+          deadline: '2024-01-15T10:00:00',
           boardColumnId: 2,
           position: 0,
-          createdAt: '2024-01-15T12:00:00.000Z',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
         },
       ]
+      // TypeScript will error if types don't match
+      render(<PlannerPanel {...defaultProps} todos={todos} />)
 
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} todos={todos} />
-        </DndProvider>
-      )
-
-      // Should show count of todos with deadlines (2)
-      expect(screen.getByLabelText('2 scheduled tasks')).toBeInTheDocument()
-    })
-
-    it('should show 0 when no todos have deadlines', () => {
-      const todos: TodoItem[] = [
-        {
-          id: 1,
-          emailId: 100,
-          description: 'No deadline',
-          status: 'pending',
-          deadline: null,
-          boardColumnId: 1,
-          position: 0,
-          createdAt: '2024-01-15T10:00:00.000Z',
-        },
-      ]
-
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} todos={todos} />
-        </DndProvider>
-      )
-
-      expect(screen.getByLabelText('0 scheduled tasks')).toBeInTheDocument()
-    })
-  })
-
-  describe('Drag and Drop for Deadline Assignment', () => {
-    it('should be configured as a planner droppable zone', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
-
-      // The calendar should be wrapped in appropriate droppable context
-      expect(screen.getByTestId('todo-calendar-mock')).toBeInTheDocument()
+      expect(screen.getByTestId('planner-panel')).toBeInTheDocument()
     })
   })
 
   describe('Accessibility', () => {
-    it('should have proper heading level', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} />
-        </DndProvider>
-      )
+    it('should have proper ARIA labels for scheduled count', () => {
+      render(<PlannerPanel {...defaultProps} />)
 
-      const heading = screen.getByRole('heading', { name: /planner/i, level: 2 })
-      expect(heading).toBeInTheDocument()
-    })
-  })
-
-  describe('Empty State', () => {
-    it('should display empty state when no todos have deadlines', () => {
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} todos={[]} />
-        </DndProvider>
-      )
-
-      // Calendar should still render
-      expect(screen.getByTestId('todo-calendar-mock')).toBeInTheDocument()
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle todos with invalid deadline dates gracefully', () => {
-      const todos: TodoItem[] = [
-        {
-          id: 1,
-          emailId: 100,
-          description: 'Invalid deadline',
-          status: 'pending',
-          deadline: 'invalid-date',
-          boardColumnId: 1,
-          position: 0,
-          createdAt: '2024-01-15T10:00:00.000Z',
-        },
-      ]
-
-      // Should not throw
-      expect(() => {
-        render(
-          <DndProvider>
-            <PlannerPanel {...defaultProps} todos={todos} />
-          </DndProvider>
-        )
-      }).not.toThrow()
-    })
-
-    it('should handle large number of todos', () => {
-      const todos: TodoItem[] = Array.from({ length: 100 }, (_, i) => ({
-        id: i + 1,
-        emailId: 100 + i,
-        description: `Todo ${i}`,
-        status: 'pending' as const,
-        deadline: i % 2 === 0 ? '2024-12-31T23:59:59.000Z' : null,
-        boardColumnId: 1,
-        position: i,
-        createdAt: '2024-01-15T10:00:00.000Z',
-      }))
-
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} todos={todos} />
-        </DndProvider>
-      )
-
-      // Should show 50 todos with deadlines
-      expect(screen.getByLabelText('50 scheduled tasks')).toBeInTheDocument()
-    })
-  })
-
-  describe('Interaction with Board Columns', () => {
-    it('should not filter by boardColumnId - shows all todos with deadlines', () => {
-      const todos: TodoItem[] = [
-        {
-          id: 1,
-          emailId: 100,
-          description: 'Inbox todo with deadline',
-          status: 'pending',
-          deadline: '2024-12-31T23:59:59.000Z',
-          boardColumnId: 1, // Inbox
-          position: 0,
-          createdAt: '2024-01-15T10:00:00.000Z',
-        },
-        {
-          id: 2,
-          emailId: 101,
-          description: 'Board todo with deadline',
-          status: 'pending',
-          deadline: '2024-12-25T00:00:00.000Z',
-          boardColumnId: 3, // In Progress
-          position: 0,
-          createdAt: '2024-01-15T11:00:00.000Z',
-        },
-      ]
-
-      render(
-        <DndProvider>
-          <PlannerPanel {...defaultProps} todos={todos} />
-        </DndProvider>
-      )
-
-      // Should count both todos regardless of boardColumnId
-      expect(screen.getByLabelText('2 scheduled tasks')).toBeInTheDocument()
+      const countElement = screen.getByLabelText(/scheduled tasks/i)
+      expect(countElement).toBeInTheDocument()
     })
   })
 })

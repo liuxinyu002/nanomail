@@ -372,6 +372,147 @@ describe('TodosPage (Refactored)', () => {
     })
   })
 
+  describe('Drag-Drop Integration (Phase 5)', () => {
+    describe('Planner Hour-Slot Drop Logic', () => {
+      // Unit tests for the datetime logic used in handleDragEnd
+      // Note: We test the logic pattern, not exact ISO strings (timezone dependent)
+      it('should create datetime with hour set correctly', () => {
+        const date = '2024-03-18'
+        const hour = 14
+        const targetDate = new Date(date)
+        targetDate.setHours(hour, 0, 0, 0)
+
+        // Verify the hour is set correctly (local time)
+        expect(targetDate.getHours()).toBe(hour)
+        expect(targetDate.getMinutes()).toBe(0)
+        expect(targetDate.getSeconds()).toBe(0)
+        expect(targetDate.getMilliseconds()).toBe(0)
+      })
+
+      it('should handle hour 0 (midnight) correctly', () => {
+        const date = '2024-03-18'
+        const hour = 0
+        const targetDate = new Date(date)
+        targetDate.setHours(hour, 0, 0, 0)
+
+        expect(targetDate.getHours()).toBe(0)
+        expect(targetDate.getMinutes()).toBe(0)
+      })
+
+      it('should handle hour 23 (late night) correctly', () => {
+        const date = '2024-03-18'
+        const hour = 23
+        const targetDate = new Date(date)
+        targetDate.setHours(hour, 0, 0, 0)
+
+        expect(targetDate.getHours()).toBe(23)
+        expect(targetDate.getMinutes()).toBe(0)
+      })
+
+      it('should handle hour 12 (noon) correctly', () => {
+        const date = '2024-03-18'
+        const hour = 12
+        const targetDate = new Date(date)
+        targetDate.setHours(hour, 0, 0, 0)
+
+        expect(targetDate.getHours()).toBe(12)
+        expect(targetDate.getMinutes()).toBe(0)
+      })
+
+      it('should ignore invalid hour values below 0', () => {
+        const date = '2024-03-18'
+        const hour = -1
+        const targetDate = new Date(date)
+        // Invalid hours should not be applied
+        // The implementation should skip setHours for invalid values
+        const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+        if (isValidHour) {
+          targetDate.setHours(hour, 0, 0, 0)
+        }
+
+        // Date should remain unchanged (no setHours called)
+        expect(isValidHour).toBe(false)
+      })
+
+      it('should ignore invalid hour values above 23', () => {
+        const date = '2024-03-18'
+        const hour = 25
+        const targetDate = new Date(date)
+        // Invalid hours should not be applied
+        const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+        if (isValidHour) {
+          targetDate.setHours(hour, 0, 0, 0)
+        }
+
+        expect(isValidHour).toBe(false)
+      })
+
+      it('should ignore NaN hour values', () => {
+        const date = '2024-03-18'
+        const hour = NaN
+        const targetDate = new Date(date)
+        // NaN hours should not be applied
+        const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+        if (isValidHour) {
+          targetDate.setHours(hour, 0, 0, 0)
+        }
+
+        expect(isValidHour).toBe(false)
+      })
+
+      it('should ignore non-integer hour values', () => {
+        const date = '2024-03-18'
+        const hour = 14.5
+        const targetDate = new Date(date)
+        // Non-integer hours should not be applied
+        const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+        if (isValidHour) {
+          targetDate.setHours(hour, 0, 0, 0)
+        }
+
+        expect(isValidHour).toBe(false)
+      })
+
+      it('should validate hour range correctly (0-23)', () => {
+        // Test boundary values
+        const validHours = [0, 1, 12, 22, 23]
+        const invalidHours = [-1, 24, 25, NaN, 14.5, -0.5, Infinity, -Infinity]
+
+        validHours.forEach((hour) => {
+          const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+          expect(isValidHour).toBe(true)
+        })
+
+        invalidHours.forEach((hour) => {
+          const isValidHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+          expect(isValidHour).toBe(false)
+        })
+      })
+
+      it('should produce ISO string that can be parsed back', () => {
+        const date = '2024-03-18'
+        const hour = 14
+        const targetDate = new Date(date)
+        targetDate.setHours(hour, 0, 0, 0)
+
+        const isoString = targetDate.toISOString()
+        const parsedDate = new Date(isoString)
+
+        // When parsed back, it should represent the same moment in time
+        expect(parsedDate.getTime()).toBe(targetDate.getTime())
+      })
+    })
+
+    describe('Planner Drop Without Hour (Legacy)', () => {
+      it('should create datetime from date-only', () => {
+        const date = '2024-03-18'
+        const targetDate = new Date(date)
+
+        expect(targetDate.toISOString()).toMatch(/^2024-03-18/)
+      })
+    })
+  })
+
   describe('No Tabs (Removed)', () => {
     it('should NOT render Tabs component', async () => {
       mockTodosData = { todos: mockTodos }

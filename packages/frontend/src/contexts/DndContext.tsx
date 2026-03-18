@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import {
   DndContext as DndKitContext,
+  DragOverlay,
   useSensors,
   useSensor,
   PointerSensor,
@@ -10,17 +11,15 @@ import {
   type DragOverEvent,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
+import { TodoItem } from '@/features/todos/TodoItem'
+import type { Todo } from '@nanomail/shared'
 
 /**
  * Data associated with a draggable item
  */
 export interface DragData {
   type: 'todo' | 'other'
-  todo?: {
-    id: number
-    boardColumnId: number
-    position?: number
-  }
+  todo?: Todo
   [key: string]: unknown
 }
 
@@ -40,6 +39,7 @@ export interface OverZone {
   type: 'inbox' | 'planner' | 'board'
   columnId?: number
   date?: string
+  hour?: number
 }
 
 /**
@@ -126,6 +126,7 @@ export function DndProvider({
           type: event.over.data.current?.type ?? 'board',
           columnId: event.over.data.current?.columnId,
           date: event.over.data.current?.date,
+          hour: event.over.data.current?.hour,
         })
       } else {
         setOverZone(null)
@@ -146,6 +147,13 @@ export function DndProvider({
     [onDragEnd]
   )
 
+  // Handle drag cancel - clears state when drag is cancelled (e.g., pressing Escape)
+  const handleDragCancel = useCallback(() => {
+    setIsDragging(false)
+    setActiveItem(null)
+    setOverZone(null)
+  }, [])
+
   // Context value
   const contextValue: DndContextValue = {
     isDragging,
@@ -159,8 +167,25 @@ export function DndProvider({
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <DndContext.Provider value={contextValue}>{children}</DndContext.Provider>
+
+      {/* CRITICAL: z-index 9999 ensures card floats above all panels during drag */}
+      <DragOverlay style={{ zIndex: 9999 }}>
+        {activeItem?.data?.todo && (
+          <div
+            data-testid="drag-overlay-item"
+            className="shadow-lg pointer-events-none"
+            style={{
+              transform: 'scale(0.95)',
+              opacity: 0.9,
+            }}
+          >
+            <TodoItem todo={activeItem.data.todo} />
+          </div>
+        )}
+      </DragOverlay>
     </DndKitContext>
   )
 }

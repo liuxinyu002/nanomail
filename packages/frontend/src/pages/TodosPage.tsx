@@ -11,6 +11,18 @@ import { ResizablePanels, type PanelConfig } from '@/features/todos/ResizablePan
 import type { BoardColumn } from '@nanomail/shared'
 import type { DragEndEvent } from '@/contexts/DndContext'
 
+/**
+ * Validates that an hour value is a valid integer between 0 and 23.
+ * @param hour - The hour value to validate
+ * @returns true if valid, false otherwise
+ */
+function isValidHour(hour: number | undefined): hour is number {
+  if (hour === undefined) return false
+  if (!Number.isInteger(hour)) return false
+  if (hour < 0 || hour > 23) return false
+  return true
+}
+
 const DEFAULT_COLUMNS: BoardColumn[] = [
   { id: 1, name: 'Inbox', color: '#6B7280', order: 0, isSystem: true, createdAt: new Date() },
   { id: 2, name: 'Todo', color: '#3B82F6', order: 1, isSystem: false, createdAt: new Date() },
@@ -54,9 +66,10 @@ export function TodosPage() {
    * Handle drag end events from dnd-kit
    *
    * Drag behavior matrix:
-   * - To Inbox: Set boardColumnId = 1
+   * - To Inbox: Set boardColumnId = 1, clear deadline
    * - To Board Column: Set boardColumnId + optional position
-   * - To Planner: Set deadline (preserve boardColumnId for Board items - visual snapback)
+   * - To Planner Hour Slot: Set deadline (from date + hour) + boardColumnId = 2
+   * - To Planner (no hour): Set deadline (date-only)
    */
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     // No drop target - drag cancelled
@@ -77,6 +90,7 @@ export function TodosPage() {
     const targetZoneType = overData.type as 'inbox' | 'planner' | 'board'
     const targetColumnId = overData.columnId as number | undefined
     const targetDate = overData.date as string | undefined
+    const targetHour = overData.hour as number | undefined
 
     // Prepare update payload
     const updatePayload: { boardColumnId?: number; deadline?: string | null } = {}
@@ -96,11 +110,17 @@ export function TodosPage() {
         break
 
       case 'planner':
-        // Dropping to Planner: set deadline
-        // Note: For Board items, this creates visual snapback (stays in Board with new deadline)
+        // Dropping to Planner hour slot: set deadline AND boardColumnId = 2
         if (!targetDate) return
-        // Convert date string (yyyy-MM-dd) to ISO datetime format
-        updatePayload.deadline = new Date(targetDate).toISOString()
+
+        // Create ISO datetime from date + hour (if hour is specified and valid)
+        const targetDateTime = new Date(targetDate)
+        if (isValidHour(targetHour)) {
+          // Hour-specific drop: set precise time (validated 0-23 integer)
+          targetDateTime.setHours(targetHour, 0, 0, 0)
+        }
+        updatePayload.deadline = targetDateTime.toISOString()
+        updatePayload.boardColumnId = 2 // Move to Todo column
         break
 
       default:

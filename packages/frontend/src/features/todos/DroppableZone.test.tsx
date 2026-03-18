@@ -286,6 +286,188 @@ describe('DroppableZone', () => {
     })
   })
 
+  describe('Hour Field Support (Phase 5)', () => {
+    it('should pass hour in data when provided', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-2024-12-25-14"
+            type="planner"
+            date="2024-12-25"
+            hour={14}
+          >
+            <div>Hour 14 Slot</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'planner',
+            date: '2024-12-25',
+            hour: 14,
+          }),
+        })
+      )
+    })
+
+    it('should pass hour as 0 for midnight', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-2024-12-25-0"
+            type="planner"
+            date="2024-12-25"
+            hour={0}
+          >
+            <div>Midnight Slot</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hour: 0,
+          }),
+        })
+      )
+    })
+
+    it('should pass hour as 23 for late night', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-2024-12-25-23"
+            type="planner"
+            date="2024-12-25"
+            hour={23}
+          >
+            <div>Late Night Slot</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hour: 23,
+          }),
+        })
+      )
+    })
+
+    it('should not require hour for non-planner zones', () => {
+      render(
+        <DndProvider>
+          <DroppableZone id="board-column-1" type="board" columnId={1}>
+            <div>Board Column 1</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'board',
+            columnId: 1,
+          }),
+        })
+      )
+      // hour should be undefined for board zones
+      expect((capturedDroppableArgs as { data: { hour?: number } }).data.hour).toBeUndefined()
+    })
+
+    it('should reject invalid hour values below 0 (use undefined)', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-invalid"
+            type="planner"
+            date="2024-12-25"
+            hour={-1}
+          >
+            <div>Invalid Hour</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'planner',
+            date: '2024-12-25',
+          }),
+        })
+      )
+      // Invalid hour should result in undefined
+      expect((capturedDroppableArgs as { data: { hour?: number } }).data.hour).toBeUndefined()
+    })
+
+    it('should reject invalid hour values above 23 (use undefined)', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-invalid"
+            type="planner"
+            date="2024-12-25"
+            hour={25}
+          >
+            <div>Invalid Hour</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      expect(capturedDroppableArgs).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'planner',
+            date: '2024-12-25',
+          }),
+        })
+      )
+      // Invalid hour should result in undefined
+      expect((capturedDroppableArgs as { data: { hour?: number } }).data.hour).toBeUndefined()
+    })
+
+    it('should reject NaN hour value (use undefined)', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-invalid"
+            type="planner"
+            date="2024-12-25"
+            hour={NaN}
+          >
+            <div>NaN Hour</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      // NaN hour should result in undefined
+      expect((capturedDroppableArgs as { data: { hour?: number } }).data.hour).toBeUndefined()
+    })
+
+    it('should reject non-integer hour values (use undefined)', () => {
+      render(
+        <DndProvider>
+          <DroppableZone
+            id="planner-hour-invalid"
+            type="planner"
+            date="2024-12-25"
+            hour={14.5}
+          >
+            <div>Non-integer Hour</div>
+          </DroppableZone>
+        </DndProvider>
+      )
+
+      // Non-integer hour should result in undefined
+      expect((capturedDroppableArgs as { data: { hour?: number } }).data.hour).toBeUndefined()
+    })
+  })
+
   describe('Edge Cases', () => {
     it('should handle empty children', () => {
       render(

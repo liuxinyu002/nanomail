@@ -1,13 +1,14 @@
-import { useMemo } from 'react'
-import type { TodoItem } from '@/services'
+import { useState, useMemo } from 'react'
+import { startOfWeek } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { TodoCalendar } from './TodoCalendar'
+import { DayView, WeekView, PlannerViewToggle } from './planner'
+import type { Todo } from '@nanomail/shared'
 
 export interface PlannerPanelProps {
-  /** All todos (filtered by deadline in the calendar view) */
-  todos: TodoItem[]
+  /** All todos (filtered by deadline and boardColumnId in the panel) */
+  todos: Todo[]
   /** Callback fired when a todo is clicked */
-  onTodoClick?: (todo: TodoItem) => void
+  onTodoClick?: (todo: Todo) => void
   /** Callback fired when a deadline is changed via drag */
   onDeadlineChange?: (todoId: number, deadline: string | null) => void
   /** Additional CSS classes */
@@ -15,18 +16,28 @@ export interface PlannerPanelProps {
 }
 
 /**
- * PlannerPanel - Calendar-based view for todos with deadlines
+ * PlannerPanel - Calendar-based view for todos with deadlines.
  *
  * Features:
- * - Reuses TodoCalendar logic
- * - Shows all todos with deadlines regardless of boardColumnId
- * - Dropping a todo sets its deadline field (preserves boardColumnId)
+ * - Shows only todos with deadline AND boardColumnId === 2
+ * - Day view (default) and Week view toggle
+ * - Current date passed to DayView
+ * - Week start (Sunday) passed to WeekView
  */
 export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProps) {
-  // Count todos with deadlines (for display in header)
-  const todosWithDeadlines = useMemo(() => {
-    return todos.filter(t => t.deadline !== null)
+  // View state: 'day' or 'week'
+  const [view, setView] = useState<'day' | 'week'>('day')
+
+  // Current date for DayView
+  const [currentDate] = useState(() => new Date())
+
+  // Filter todos: only show items with deadline AND boardColumnId === 2
+  const scheduledTodos = useMemo(() => {
+    return todos.filter(t => t.deadline !== null && t.boardColumnId === 2)
   }, [todos])
+
+  // Calculate week start (Sunday)
+  const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 0 }), [currentDate])
 
   return (
     <div
@@ -38,18 +49,32 @@ export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProp
         data-testid="panel-header"
         className="p-4 border-b flex items-center justify-between"
       >
-        <h2 className="text-lg font-semibold">Planner</h2>
+        <div className="flex items-center gap-4">
+          <PlannerViewToggle value={view} onChange={setView} />
+        </div>
         <span
           className="text-sm text-muted-foreground"
-          aria-label={`${todosWithDeadlines.length} scheduled tasks`}
+          aria-label={`${scheduledTodos.length} scheduled tasks`}
         >
-          {todosWithDeadlines.length} scheduled
+          {scheduledTodos.length} scheduled
         </span>
       </div>
 
-      {/* Calendar */}
+      {/* Calendar View */}
       <div className="flex-1 overflow-hidden">
-        <TodoCalendar onTodoClick={onTodoClick} />
+        {view === 'day' ? (
+          <DayView
+            date={currentDate}
+            todos={scheduledTodos}
+            onTodoClick={onTodoClick}
+          />
+        ) : (
+          <WeekView
+            weekStart={weekStart}
+            todos={scheduledTodos}
+            onTodoClick={onTodoClick}
+          />
+        )}
       </div>
     </div>
   )

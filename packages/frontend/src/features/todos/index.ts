@@ -12,3 +12,9 @@ export { ViewToggle, type ViewToggleProps, type ViewType } from './ViewToggle'
 export { InboxPanel, type InboxPanelProps } from './InboxPanel'
 export { PlannerPanel, type PlannerPanelProps } from './PlannerPanel'
 export { BoardPanel, type BoardPanelProps } from './BoardPanel'
+
+// Resizable panels
+export { ResizablePanels, DEFAULT_PANEL_CONFIGS, type PanelConfig, type ResizablePanelsProps } from './ResizablePanels'
+
+// TodoCard components (public API)
+export { TodoCard, TodoDetailPopover } from './TodoCard'

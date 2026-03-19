@@ -112,6 +112,11 @@ vi.mock('@/features/todos/ResizablePanels', () => ({
       {children}
     </div>
   ),
+  DEFAULT_PANEL_CONFIGS: [
+    { id: 'inbox', defaultSize: '25%', minSize: 280 },
+    { id: 'planner', defaultSize: '35%', minSize: 320 },
+    { id: 'board', defaultSize: '40%', minSize: 280 },
+  ],
 }))
 
 describe('TodosPage (Refactored)', () => {

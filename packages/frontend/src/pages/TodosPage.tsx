@@ -3,11 +3,15 @@ import { CheckSquare, Loader2 } from 'lucide-react'
 import { useTodos, useBoardColumns, useUpdateTodoMutation, useCreateBoardColumnMutation, useDeleteBoardColumnMutation, useUpdateBoardColumnMutation } from '@/hooks'
 import { toast } from 'sonner'
 import { DndProvider } from '@/contexts/DndContext'
-import { ViewToggle, type ViewType } from '@/features/todos/ViewToggle'
-import { InboxPanel } from '@/features/todos/InboxPanel'
-import { PlannerPanel } from '@/features/todos/PlannerPanel'
-import { BoardPanel } from '@/features/todos/BoardPanel'
-import { ResizablePanels, type PanelConfig } from '@/features/todos/ResizablePanels'
+import {
+  ViewToggle,
+  InboxPanel,
+  PlannerPanel,
+  BoardPanel,
+  ResizablePanels,
+  DEFAULT_PANEL_CONFIGS,
+  type ViewType,
+} from '@/features/todos'
 import type { BoardColumn } from '@nanomail/shared'
 import type { DragEndEvent } from '@/contexts/DndContext'
 
@@ -199,16 +203,18 @@ export function TodosPage() {
   const showPlanner = activeViews.includes('planner')
   const showBoard = activeViews.includes('board')
 
-  // Compute panel configs based on active views
+  // Filter panel configs based on active views
   // minSize: Pixel values ensure absolute minimum widths per plan_2_phase_2.md
   // defaultSize: Percentage strings for proportional layout
-  const panelConfigs = useMemo((): PanelConfig[] => {
-    const configs: PanelConfig[] = []
-    if (showInbox) configs.push({ id: 'inbox', defaultSize: '25%', minSize: 280 })
-    if (showPlanner) configs.push({ id: 'planner', defaultSize: '35%', minSize: 320 })
-    if (showBoard) configs.push({ id: 'board', defaultSize: '40%', minSize: 280 })
-    return configs
-  }, [showInbox, showPlanner, showBoard])
+  const panelConfigs = useMemo(
+    () => DEFAULT_PANEL_CONFIGS.filter(config => {
+      if (config.id === 'inbox') return showInbox
+      if (config.id === 'planner') return showPlanner
+      if (config.id === 'board') return showBoard
+      return false
+    }),
+    [showInbox, showPlanner, showBoard]
+  )
 
   // Compute panel children based on active views
   const panelChildren = useMemo(() => {

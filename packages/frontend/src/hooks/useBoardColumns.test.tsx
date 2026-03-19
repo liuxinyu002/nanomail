@@ -332,6 +332,28 @@ describe('useUpdateBoardColumnMutation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['boardColumns'] })
   })
 
+  it('should invalidate todos query when column is updated (for color sync)', async () => {
+    const { wrapper, queryClient } = createWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    vi.mocked(BoardColumnService.updateBoardColumn).mockResolvedValueOnce(updatedColumn)
+
+    const { result } = renderHook(() => useUpdateBoardColumnMutation(), { wrapper })
+
+    act(() => {
+      result.current.mutate({ id: 2, data: { color: '#FF5733' } })
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    // Should invalidate both boardColumns and todos queries
+    // todos invalidation is needed for color sync when column color changes
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['boardColumns'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
+  })
+
   it('should handle error when updating system column', async () => {
     const { wrapper } = createWrapper()
     vi.mocked(BoardColumnService.updateBoardColumn).mockRejectedValueOnce(

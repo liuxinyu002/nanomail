@@ -17,7 +17,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ColorPicker } from './ColorPicker'
-import { MACARON_COLORS } from '@/constants/colors'
 
 export interface ColumnHeaderProps {
   /** The column to display */
@@ -39,29 +38,63 @@ export interface ColumnHeaderProps {
 }
 
 const VALID_HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/
+const FALLBACK_BACKGROUND_COLOR = '#F3F4F6'
 
+/**
+ * Check if a color string is a valid 6-character hex color.
+ */
 function isValidHexColor(color: string | null | undefined): boolean {
   if (!color) return false
   return VALID_HEX_COLOR_REGEX.test(color)
 }
 
 /**
- * Get the display color for the status dot.
- * Returns the column color if valid, otherwise returns the fallback color (MACARON_COLORS[0]).
+ * Calculate the relative luminance of a hex color.
+ * Uses the formula: (0.299 * R + 0.587 * G + 0.114 * B) / 255
  */
-function getDisplayColor(color: string | null | undefined): string {
+function calculateLuminance(hexColor: string): number {
+  // Parse hex color to RGB
+  const hex = hexColor.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+}
+
+/**
+ * Determine the appropriate text color (dark or light) for a given background color.
+ * Returns 'dark' for light backgrounds, 'light' for dark backgrounds.
+ *
+ * @param color - The background color in hex format (#RRGGBB) or null/undefined
+ * @returns 'dark' for dark text (light background), 'light' for white text (dark background)
+ */
+export function getTextColorForBackground(color: string | null | undefined): 'dark' | 'light' {
+  if (!isValidHexColor(color)) {
+    return 'dark' // Default to dark text for invalid/null colors
+  }
+
+  const luminance = calculateLuminance(color!)
+  // Use 0.5 as threshold: above = light background (dark text), below = dark background (light text)
+  return luminance > 0.5 ? 'dark' : 'light'
+}
+
+/**
+ * Get the background color for the header.
+ * Returns the column color if valid, otherwise returns the fallback color.
+ */
+function getHeaderBackgroundColor(color: string | null | undefined): string {
   if (isValidHexColor(color)) {
     return color!
   }
-  // Fallback to first macaron color (Pastel Red)
-  return MACARON_COLORS[0]
+  return FALLBACK_BACKGROUND_COLOR
 }
 
 /**
  * ColumnHeader - A standalone header component for a Kanban board column
  *
  * Features:
- * - Displays column name with color indicator and item count
+ * - Displays column name with colored background and item count
  * - Hover-reveal settings button
  * - Popover menu with Rename, Change Color, and Delete options
  * - Inline editing via double-click
@@ -87,8 +120,9 @@ export function ColumnHeader({
   const isEditing = isEditingExternal ?? isEditingInternal
   const isControlled = isEditingExternal !== undefined
 
-  // Always show status dot with fallback color
-  const displayColor = getDisplayColor(column.color)
+  // Get background color and text color for the header
+  const backgroundColor = getHeaderBackgroundColor(column.color)
+  const textColorClass = getTextColorForBackground(column.color)
 
   // Handle starting edit mode
   const handleStartEdit = useCallback(() => {
@@ -158,16 +192,11 @@ export function ColumnHeader({
   return (
     <div
       data-testid="column-header"
-      className="p-3 border-b flex items-center justify-between group"
+      className={`p-3 border-b flex items-center justify-between group ${textColorClass === 'dark' ? 'text-gray-900' : 'text-white'}`}
+      style={{ backgroundColor }}
     >
-      {/* Left side: color indicator and name */}
+      {/* Left side: name */}
       <div className="flex items-center gap-2">
-        {/* Status dot - always visible with fallback color */}
-        <div
-          data-testid="column-color-indicator"
-          className="w-2 h-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: displayColor }}
-        />
         {isEditing ? (
           <input
             ref={inputRef}
@@ -192,7 +221,7 @@ export function ColumnHeader({
       {/* Right side: count and settings */}
       <div className="flex items-center gap-2">
         <span
-          className="text-sm text-gray-500"
+          className="text-sm opacity-70"
           aria-label={`${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
         >
           {itemCount}
@@ -203,9 +232,9 @@ export function ColumnHeader({
           <PopoverTrigger asChild>
             <button
               aria-label="Column settings"
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200"
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/10"
             >
-              <MoreHorizontal className="w-4 h-4 text-gray-500" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -214,7 +243,7 @@ export function ColumnHeader({
           >
             <div className="flex flex-col">
               <button
-                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100"
+                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 text-gray-900"
                 onClick={() => {
                   handleStartEdit()
                 }}
@@ -222,7 +251,7 @@ export function ColumnHeader({
                 Rename
               </button>
               <button
-                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100"
+                className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 text-gray-900"
                 onClick={() => {
                   setShowColorPicker(!showColorPicker)
                 }}

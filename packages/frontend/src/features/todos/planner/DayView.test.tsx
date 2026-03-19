@@ -14,6 +14,14 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// Mock the mutation hook used by PlannerTodoCard
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 // Helper to create mock Todo
 function createMockTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -24,6 +32,8 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
     deadline: null,
     boardColumnId: 1,
     position: 0,
+    notes: null,
+    color: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   }
@@ -72,17 +82,17 @@ describe('DayView', () => {
 
       render(<DayView date={mockDate} todos={todos} />)
 
-      // Check 9 AM slot contains "Morning meeting"
+      // Check 9 AM slot contains "Morning meeting" (title span)
       const hour9Slot = screen.getByTestId(`hour-slot-9`)
-      expect(within(hour9Slot).getByText('Morning meeting')).toBeInTheDocument()
+      expect(within(hour9Slot).getAllByText('Morning meeting').length).toBeGreaterThan(0)
 
       // Check 2 PM (14) slot contains "Afternoon call"
       const hour14Slot = screen.getByTestId(`hour-slot-14`)
-      expect(within(hour14Slot).getByText('Afternoon call')).toBeInTheDocument()
+      expect(within(hour14Slot).getAllByText('Afternoon call').length).toBeGreaterThan(0)
 
       // Check 6 PM (18) slot contains "Evening review"
       const hour18Slot = screen.getByTestId(`hour-slot-18`)
-      expect(within(hour18Slot).getByText('Evening review')).toBeInTheDocument()
+      expect(within(hour18Slot).getAllByText('Evening review').length).toBeGreaterThan(0)
     })
 
     it('shows empty state when no todos for the day', () => {
@@ -115,8 +125,8 @@ describe('DayView', () => {
 
       render(<DayView date={mockDate} todos={todos} />)
 
-      // Only "Same day todo" should be visible
-      expect(screen.getByText('Same day todo')).toBeInTheDocument()
+      // Only "Same day todo" should be visible (may appear multiple times)
+      expect(screen.getAllByText('Same day todo').length).toBeGreaterThan(0)
       expect(screen.queryByText('Different day todo')).not.toBeInTheDocument()
       expect(screen.queryByText('Another day todo')).not.toBeInTheDocument()
     })
@@ -137,7 +147,7 @@ describe('DayView', () => {
 
       render(<DayView date={mockDate} todos={todos} />)
 
-      expect(screen.getByText('Todo with deadline')).toBeInTheDocument()
+      expect(screen.getAllByText('Todo with deadline').length).toBeGreaterThan(0)
       expect(screen.queryByText('Todo without deadline')).not.toBeInTheDocument()
     })
   })
@@ -240,7 +250,7 @@ describe('DayView', () => {
       render(<DayView date={mockDate} todos={todos} />)
 
       const hour0Slot = screen.getByTestId('hour-slot-0')
-      expect(within(hour0Slot).getByText('Midnight task')).toBeInTheDocument()
+      expect(within(hour0Slot).getAllByText('Midnight task').length).toBeGreaterThan(0)
     })
 
     it('handles late night (hour 23) correctly', () => {
@@ -255,7 +265,7 @@ describe('DayView', () => {
       render(<DayView date={mockDate} todos={todos} />)
 
       const hour23Slot = screen.getByTestId('hour-slot-23')
-      expect(within(hour23Slot).getByText('Late night task')).toBeInTheDocument()
+      expect(within(hour23Slot).getAllByText('Late night task').length).toBeGreaterThan(0)
     })
 
     it('handles multiple todos in the same hour', () => {
@@ -280,9 +290,9 @@ describe('DayView', () => {
       render(<DayView date={mockDate} todos={todos} />)
 
       const hour10Slot = screen.getByTestId('hour-slot-10')
-      expect(within(hour10Slot).getByText('First task at 10')).toBeInTheDocument()
-      expect(within(hour10Slot).getByText('Second task at 10')).toBeInTheDocument()
-      expect(within(hour10Slot).getByText('Third task at 10')).toBeInTheDocument()
+      expect(within(hour10Slot).getAllByText('First task at 10').length).toBeGreaterThan(0)
+      expect(within(hour10Slot).getAllByText('Second task at 10').length).toBeGreaterThan(0)
+      expect(within(hour10Slot).getAllByText('Third task at 10').length).toBeGreaterThan(0)
     })
 
     it('truncates long todo descriptions', () => {

@@ -64,7 +64,8 @@ export function useCreateBoardColumnMutation() {
 /**
  * Hook for updating a board column
  *
- * Automatically invalidates the boardColumns query on success.
+ * Automatically invalidates both boardColumns and todos queries on success.
+ * The todos invalidation ensures color sync when column color changes.
  *
  * @example
  * ```tsx
@@ -86,6 +87,7 @@ export function useUpdateBoardColumnMutation() {
       BoardColumnService.updateBoardColumn(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boardColumns'] })
+      queryClient.invalidateQueries({ queryKey: ['todos'] })
     },
   })
 }

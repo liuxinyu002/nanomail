@@ -13,6 +13,7 @@ interface MockQueryBuilder {
   orderBy: ReturnType<typeof vi.fn>
   addOrderBy: ReturnType<typeof vi.fn>
   getMany: ReturnType<typeof vi.fn>
+  leftJoinAndSelect: ReturnType<typeof vi.fn>
 }
 
 describe('TodoRoutes', () => {
@@ -30,6 +31,7 @@ describe('TodoRoutes', () => {
       orderBy: vi.fn().mockReturnThis(),
       addOrderBy: vi.fn().mockReturnThis(),
       getMany: vi.fn(),
+      leftJoinAndSelect: vi.fn().mockReturnThis(),
     }
 
     // Create mock repository
@@ -85,6 +87,89 @@ describe('TodoRoutes', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.todos).toHaveLength(1)
+    })
+
+    describe('color field (derived from BoardColumn)', () => {
+      it('should return color from related boardColumn', async () => {
+        const mockTodos = [
+          {
+            id: 1,
+            emailId: 1,
+            description: 'Test todo',
+            status: 'pending' as const,
+            deadline: new Date('2024-12-31T23:59:59Z'),
+            boardColumnId: 2,
+            boardColumn: { id: 2, name: 'Todo', color: '#FF5733' },
+            position: 0,
+            createdAt: new Date('2024-01-15'),
+          },
+        ]
+
+        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+
+        const response = await request(app).get('/api/todos')
+
+        expect(response.status).toBe(200)
+        expect(response.body.todos[0].color).toBe('#FF5733')
+      })
+
+      it('should return null color when boardColumn has no color', async () => {
+        const mockTodos = [
+          {
+            id: 1,
+            emailId: 1,
+            description: 'Test todo',
+            status: 'pending' as const,
+            deadline: new Date('2024-12-31T23:59:59Z'),
+            boardColumnId: 1,
+            boardColumn: { id: 1, name: 'Inbox', color: null },
+            position: 0,
+            createdAt: new Date('2024-01-15'),
+          },
+        ]
+
+        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+
+        const response = await request(app).get('/api/todos')
+
+        expect(response.status).toBe(200)
+        expect(response.body.todos[0].color).toBeNull()
+      })
+
+      it('should return null color when boardColumn relation is not loaded', async () => {
+        const mockTodos = [
+          {
+            id: 1,
+            emailId: 1,
+            description: 'Test todo',
+            status: 'pending' as const,
+            deadline: new Date('2024-12-31T23:59:59Z'),
+            boardColumnId: 1,
+            // boardColumn relation not loaded
+            position: 0,
+            createdAt: new Date('2024-01-15'),
+          },
+        ]
+
+        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+
+        const response = await request(app).get('/api/todos')
+
+        expect(response.status).toBe(200)
+        expect(response.body.todos[0].color).toBeNull()
+      })
+
+      it('should request boardColumn relation in find options', async () => {
+        vi.mocked(mockRepository.find).mockResolvedValue([])
+
+        await request(app).get('/api/todos')
+
+        expect(mockRepository.find).toHaveBeenCalledWith(
+          expect.objectContaining({
+            relations: expect.arrayContaining(['boardColumn']),
+          })
+        )
+      })
     })
 
     it('should include deadline in response', async () => {
@@ -239,15 +324,16 @@ describe('TodoRoutes', () => {
         status: 'pending' as const,
         deadline: new Date('2024-12-31T23:59:59Z'),
         boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: '#00FF00' },
         position: 0,
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
       vi.mocked(mockRepository.save).mockResolvedValue({
         ...mockTodo,
         status: 'completed',
-      })
+      } as unknown as Todo)
 
       const response = await request(app)
         .patch('/api/todos/1/status')
@@ -255,6 +341,59 @@ describe('TodoRoutes', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.status).toBe('completed')
+    })
+
+    it('should include color from boardColumn in response', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: new Date('2024-12-31T23:59:59Z'),
+        boardColumnId: 2,
+        boardColumn: { id: 2, name: 'Todo', color: '#FF5733' },
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+      vi.mocked(mockRepository.save).mockResolvedValue({
+        ...mockTodo,
+        status: 'completed',
+      } as unknown as Todo)
+
+      const response = await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'completed' })
+
+      expect(response.body.color).toBe('#FF5733')
+    })
+
+    it('should request boardColumn relation in findOne', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: new Date('2024-12-31T23:59:59Z'),
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+      vi.mocked(mockRepository.save).mockResolvedValue(mockTodo as unknown as Todo)
+
+      await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'completed' })
+
+      expect(mockRepository.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relations: expect.arrayContaining(['boardColumn']),
+        })
+      )
     })
 
     it('should include deadline in update response', async () => {
@@ -392,12 +531,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         boardColumnId: 2,
         position: 5,
-      })
+        boardColumn: { id: 2, name: 'Todo', color: '#3B82F6' },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1/position')
@@ -417,24 +560,21 @@ describe('TodoRoutes', () => {
     })
 
     it('should allow updating deadline along with position', async () => {
-      const mockTodo = {
+      const updatedTodo = {
         id: 1,
         emailId: 1,
         description: 'Test',
         status: 'pending' as const,
-        deadline: null,
-        boardColumnId: 1,
-        position: 0,
-        createdAt: new Date(),
-      }
-
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
-        ...mockTodo,
         boardColumnId: 2,
         position: 5,
         deadline: new Date('2024-12-31T23:59:59Z'),
-      })
+        boardColumn: { id: 2, name: 'Todo', color: '#3B82F6' },
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1/position')
@@ -514,11 +654,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         description: 'New description',
-      })
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -540,11 +685,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         deadline: new Date('2024-12-31T23:59:59Z'),
-      })
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -566,11 +716,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         status: 'completed',
-      })
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -592,11 +747,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         boardColumnId: 2,
-      })
+        boardColumn: { id: 2, name: 'Todo', color: '#3B82F6' },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -618,11 +778,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         position: 10,
-      })
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -644,15 +809,20 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         description: 'New',
         status: 'in_progress',
         boardColumnId: 2,
         position: 5,
         deadline: new Date('2024-12-31T23:59:59Z'),
-      })
+        boardColumn: { id: 2, name: 'Todo', color: '#3B82F6' },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -683,11 +853,16 @@ describe('TodoRoutes', () => {
         createdAt: new Date(),
       }
 
-      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo)
-      vi.mocked(mockRepository.save).mockResolvedValue({
+      const updatedTodo = {
         ...mockTodo,
         deadline: null,
-      })
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
 
       const response = await request(app)
         .patch('/api/todos/1')
@@ -747,6 +922,190 @@ describe('TodoRoutes', () => {
       const response = await request(app).delete('/api/todos/invalid')
 
       expect(response.status).toBe(400)
+    })
+  })
+
+  describe('PATCH /api/todos/:id - notes field', () => {
+    it('should update todo notes', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test todo',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        createdAt: new Date(),
+      }
+
+      const updatedTodo = {
+        ...mockTodo,
+        notes: 'This is a note',
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ notes: 'This is a note' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.notes).toBe('This is a note')
+    })
+
+    it('should set notes to null (clear notes)', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test todo',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: 'Existing note',
+        createdAt: new Date(),
+      }
+
+      const updatedTodo = {
+        ...mockTodo,
+        notes: null,
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ notes: null })
+
+      expect(response.status).toBe(200)
+      expect(response.body.notes).toBeNull()
+    })
+
+    it('should include notes in update response', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test todo',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: 'Note content',
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ description: 'Updated description' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.notes).toBe('Note content')
+    })
+
+    it('should reject notes exceeding 2000 characters', async () => {
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ notes: 'a'.repeat(2001) })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toBe('Invalid request body')
+    })
+
+    it('should accept notes with exactly 2000 characters', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test todo',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        createdAt: new Date(),
+      }
+
+      const updatedTodo = {
+        ...mockTodo,
+        notes: 'a'.repeat(2000),
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ notes: 'a'.repeat(2000) })
+
+      expect(response.status).toBe(200)
+      expect(response.body.notes).toHaveLength(2000)
+    })
+  })
+
+  describe('GET /api/todos - notes field', () => {
+    it('should include notes in response when present', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Test todo',
+          status: 'pending' as const,
+          deadline: null,
+          boardColumnId: 1,
+          boardColumn: { id: 1, name: 'Inbox', color: null },
+          position: 0,
+          notes: 'Important notes here',
+          createdAt: new Date('2024-01-15'),
+        },
+      ]
+
+      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app).get('/api/todos')
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos[0].notes).toBe('Important notes here')
+    })
+
+    it('should return null notes when not set', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Test todo',
+          status: 'pending' as const,
+          deadline: null,
+          boardColumnId: 1,
+          boardColumn: { id: 1, name: 'Inbox', color: null },
+          position: 0,
+          notes: null,
+          createdAt: new Date('2024-01-15'),
+        },
+      ]
+
+      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app).get('/api/todos')
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos[0].notes).toBeNull()
     })
   })
 })

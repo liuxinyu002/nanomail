@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 
 export interface DraggableTodoItemProps {
   todo: TodoItemType
+  showDelete?: boolean
 }
 
 /**
@@ -16,7 +17,7 @@ export interface DraggableTodoItemProps {
  * Design: Drag handle is absolutely positioned inside the container's left edge,
  * appearing on hover without occupying flex space, maximizing content area.
  */
-export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
+export function DraggableTodoItem({ todo, showDelete }: DraggableTodoItemProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: todo.id,
     data: {
@@ -57,7 +58,7 @@ export function DraggableTodoItem({ todo }: DraggableTodoItemProps) {
       </button>
 
       {/* Todo Item - Full width */}
-      <TodoItem todo={todo} />
+      <TodoItem todo={todo} showDelete={showDelete} />
     </div>
   )
 }

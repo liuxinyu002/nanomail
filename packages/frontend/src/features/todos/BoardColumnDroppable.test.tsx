@@ -90,52 +90,74 @@ describe('BoardColumnDroppable', () => {
     })
   })
 
-  describe('Background Color - Purified Column', () => {
-    it('should always use fixed neutral background #F7F8FA regardless of column color', () => {
+  describe('Card Area Color Overlay', () => {
+    it('should have a card area container with white base background', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
+
+      const cardArea = screen.getByTestId('card-area')
+      expect(cardArea).toHaveStyle({ backgroundColor: '#FFFFFF' })
+    })
+
+    it('should have a color overlay layer with 12% opacity using column color', () => {
       render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#DBEAFE' }} />)
 
-      const column = screen.getByTestId('board-column-droppable')
-      // Column should use fixed background color, not dynamic color
-      expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
+      const colorOverlay = screen.getByTestId('color-overlay')
+      expect(colorOverlay).toHaveStyle({ backgroundColor: '#DBEAFE' })
+      expect(colorOverlay).toHaveStyle({ opacity: 0.12 })
     })
 
-    it('should use fixed background #F7F8FA when column has no color', () => {
+    it('should use fallback color #F7F8FA when column has no color', () => {
       render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
 
-      const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
+      const colorOverlay = screen.getByTestId('color-overlay')
+      expect(colorOverlay).toHaveStyle({ backgroundColor: '#F7F8FA' })
+      expect(colorOverlay).toHaveStyle({ opacity: 0.12 })
     })
 
-    it('should not apply dynamic column color to background', () => {
-      const colors = ['#FFB5BA', '#FFD8A8', '#B8E6C1', '#B8D4FF', '#D4B8FF']
+    it('should have pointer-events-none on color overlay to not interfere with drag/drop', () => {
+      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: '#FFB5BA' }} />)
+
+      const colorOverlay = screen.getByTestId('color-overlay')
+      expect(colorOverlay).toHaveClass('pointer-events-none')
+    })
+
+    it('should position color overlay absolutely covering the card area', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
+
+      const colorOverlay = screen.getByTestId('color-overlay')
+      expect(colorOverlay).toHaveClass('absolute')
+      expect(colorOverlay).toHaveClass('inset-0')
+    })
+
+    it('should have content layer with z-10 for proper stacking', () => {
+      render(<BoardColumnDroppable {...defaultProps} />)
+
+      const droppableZone = screen.getByTestId('droppable-zone')
+      expect(droppableZone).toHaveClass('z-10')
+    })
+
+    it('should apply different color overlays for different column colors', () => {
+      const colors = ['#FFB5BA', '#FFD8A8', '#B8E6C1']
 
       colors.forEach(color => {
         const { unmount } = render(
           <BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color }} />
         )
 
-        const column = screen.getByTestId('board-column-droppable')
-        // Should always be #F7F8FA, not the column's color
-        expect(column).toHaveStyle({ backgroundColor: '#F7F8FA' })
-        expect(column).not.toHaveStyle({ backgroundColor: color })
+        const colorOverlay = screen.getByTestId('color-overlay')
+        expect(colorOverlay).toHaveStyle({ backgroundColor: color })
+        expect(colorOverlay).toHaveStyle({ opacity: 0.12 })
         unmount()
       })
-    })
-
-    it('should not have bg-gray-50 class (uses inline style instead)', () => {
-      render(<BoardColumnDroppable {...defaultProps} column={{ ...mockColumn, color: null }} />)
-
-      const column = screen.getByTestId('board-column-droppable')
-      expect(column).not.toHaveClass('bg-gray-50')
     })
   })
 
   describe('Column Padding', () => {
-    it('should have p-3 padding on the column container', () => {
+    it('should have p-3 padding on the content layer (droppable zone)', () => {
       render(<BoardColumnDroppable {...defaultProps} />)
 
-      const column = screen.getByTestId('board-column-droppable')
-      expect(column).toHaveClass('p-3')
+      const droppableZone = screen.getByTestId('droppable-zone')
+      expect(droppableZone).toHaveClass('p-3')
     })
   })
 

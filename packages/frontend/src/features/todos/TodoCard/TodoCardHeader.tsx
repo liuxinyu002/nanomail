@@ -1,27 +1,28 @@
 import { Checkbox } from '@/components/ui/checkbox'
-import { CardDropdownMenu } from '../CardDropdownMenu'
+import { DeleteIconButton } from './DeleteIconButton'
 import { cn } from '@/lib/utils'
 
 interface TodoCardHeaderProps {
   description: string
   completed: boolean
   onToggle: () => void
-  onEdit?: () => void
   onDelete?: () => void
   isExpanded?: boolean
+  /** Whether to show the delete icon button. Default: true */
+  showDelete?: boolean
 }
 
 /**
  * Header component for TodoCard
- * Contains checkbox, title, and dropdown menu
+ * Contains checkbox, title, and delete icon button
  */
 export function TodoCardHeader({
   description,
   completed,
   onToggle,
-  onEdit,
   onDelete,
   isExpanded = false,
+  showDelete = true,
 }: TodoCardHeaderProps) {
   return (
     <div className="flex items-start gap-3">
@@ -48,11 +49,10 @@ export function TodoCardHeader({
         {description}
       </p>
 
-      {/* Dropdown trigger */}
-      <CardDropdownMenu
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
+      {/* Delete icon button - only show when showDelete=true AND onDelete is provided */}
+      {showDelete && onDelete && (
+        <DeleteIconButton onDelete={onDelete} />
+      )}
     </div>
   )
 }

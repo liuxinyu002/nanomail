@@ -34,6 +34,7 @@ describe('InboxPanel', () => {
     deadline: null,
     boardColumnId,
     position: id,
+    notes: null,
     createdAt: '2024-01-15T10:00:00.000Z',
   })
 
@@ -326,6 +327,7 @@ describe('InboxPanel', () => {
           deadline: null,
           boardColumnId: 1,
           position: undefined,
+          notes: null,
           createdAt: '2024-01-15T10:00:00.000Z',
         },
       ]

@@ -112,4 +112,52 @@ describe('Todo Entity', () => {
       expect(todo.deadline).toBeInstanceOf(Date)
     })
   })
+
+  describe('notes field', () => {
+    it('should have notes field', () => {
+      const todo = new Todo()
+      todo.notes = 'This is a note'
+      expect(todo.notes).toBe('This is a note')
+    })
+
+    it('should allow null notes', () => {
+      const todo = new Todo()
+      todo.notes = null
+      expect(todo.notes).toBeNull()
+    })
+
+    it('should allow empty string notes', () => {
+      const todo = new Todo()
+      todo.notes = ''
+      expect(todo.notes).toBe('')
+    })
+
+    it('should accept notes up to 2000 characters', () => {
+      const todo = new Todo()
+      const longNotes = 'a'.repeat(2000)
+      todo.notes = longNotes
+      expect(todo.notes).toBe(longNotes)
+      expect(todo.notes?.length).toBe(2000)
+    })
+
+    it('should be optional (undefined)', () => {
+      const todo = new Todo()
+      expect(todo.notes).toBeUndefined()
+    })
+
+    it('should support notes with other fields', () => {
+      const todo = new Todo()
+      todo.id = 1
+      todo.emailId = 100
+      todo.description = 'Test todo'
+      todo.status = 'pending'
+      todo.boardColumnId = 1
+      todo.position = 0
+      todo.deadline = null
+      todo.notes = 'Important notes for this todo'
+
+      expect(todo.notes).toBe('Important notes for this todo')
+      expect(todo.description).toBe('Test todo')
+    })
+  })
 })

@@ -24,6 +24,8 @@ export interface TodosResponse {
     deadline: string | null
     boardColumnId: number
     position: number
+    notes: string | null
+    color: string | null
     createdAt: string
   }>
 }
@@ -36,6 +38,7 @@ const VALID_STATUSES: TodoStatus[] = ['pending', 'in_progress', 'completed']
 /**
  * Formats a Todo entity for API response.
  * Converts Date fields to ISO strings and handles nullable deadline.
+ * Color is derived from the related BoardColumn entity.
  */
 function formatTodo(todo: Todo): TodosResponse['todos'][0] {
   return {
@@ -46,6 +49,8 @@ function formatTodo(todo: Todo): TodosResponse['todos'][0] {
     deadline: todo.deadline?.toISOString() ?? null,
     boardColumnId: todo.boardColumnId,
     position: todo.position,
+    notes: todo.notes,
+    color: todo.boardColumn?.color ?? null,
     createdAt: todo.createdAt.toISOString(),
   }
 }
@@ -137,6 +142,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
           const where = buildWhereClause({ status, boardColumnId, emailId })
           const todos = await todoRepository.find({
             where,
+            relations: ['boardColumn'],
             order: {
               position: 'ASC',
               deadline: { direction: 'ASC', nulls: 'LAST' },
@@ -152,6 +158,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
 
         let queryBuilder = todoRepository
           .createQueryBuilder('todo')
+          .leftJoinAndSelect('todo.boardColumn', 'boardColumn')
           .where('todo.deadline BETWEEN :start AND :end', { start, end })
           .orWhere('todo.deadline IS NULL')
           .orderBy('todo.position', 'ASC')
@@ -168,6 +175,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
       const where = buildWhereClause(req.query)
       const todos = await todoRepository.find({
         where,
+        relations: ['boardColumn'],
         order: {
           position: 'ASC',
           deadline: { direction: 'ASC', nulls: 'LAST' },
@@ -206,7 +214,10 @@ export function createTodoRoutes(dataSource: DataSource): Router {
         return
       }
 
-      const todo = await todoRepository.findOne({ where: { id } })
+      const todo = await todoRepository.findOne({
+        where: { id },
+        relations: ['boardColumn'],
+      })
 
       if (!todo) {
         res.status(404).json({ error: 'Todo not found' })
@@ -250,21 +261,29 @@ export function createTodoRoutes(dataSource: DataSource): Router {
 
       const { boardColumnId, position, deadline } = validationResult.data
 
-      const todo = await todoRepository.findOne({ where: { id } })
-      if (!todo) {
+      // Use update() to bypass TypeORM relation tracking issue
+      // When boardColumn relation is loaded, save() uses the relation object
+      // instead of the boardColumnId value, causing updates to be ignored
+      const updateData: Record<string, unknown> = { boardColumnId }
+      if (position !== undefined) {
+        updateData.position = position
+      }
+      if (deadline !== undefined) {
+        updateData.deadline = deadline ? new Date(deadline) : null
+      }
+
+      await todoRepository.update(id, updateData)
+
+      // Fetch the updated todo with relations for response
+      const updatedTodo = await todoRepository.findOne({
+        where: { id },
+        relations: ['boardColumn'],
+      })
+      if (!updatedTodo) {
         return res.status(404).json({ error: 'Todo not found' })
       }
 
-      todo.boardColumnId = boardColumnId
-      if (position !== undefined) {
-        todo.position = position
-      }
-      if (deadline !== undefined) {
-        todo.deadline = deadline ? new Date(deadline) : null
-      }
-
-      await todoRepository.save(todo)
-      res.json(formatTodo(todo))
+      res.json(formatTodo(updatedTodo))
     } catch (error) {
       next(error)
     }
@@ -307,7 +326,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
 
   /**
    * @route PATCH /api/todos/:id
-   * @description Update todo fields (description, deadline, status, boardColumnId, position).
+   * @description Update todo fields (description, deadline, status, boardColumnId, position, notes).
    *             Uses Zod schema validation. Rejects unknown fields.
    * @param {number} id - Todo ID
    * @bodyparam {string} [description] - New description (1-2000 chars)
@@ -315,6 +334,7 @@ export function createTodoRoutes(dataSource: DataSource): Router {
    * @bodyparam {string} [status] - New status (pending, in_progress, completed)
    * @bodyparam {number} [boardColumnId] - New column ID
    * @bodyparam {number} [position] - New position within column
+   * @bodyparam {string|null} [notes] - Optional notes (max 2000 chars, null to clear)
    * @returns {Object} Updated todo object
    * @throws {400} Invalid request body or todo ID
    * @throws {404} Todo not found
@@ -335,31 +355,51 @@ export function createTodoRoutes(dataSource: DataSource): Router {
       }
 
       const validatedData = validationResult.data
-      const todo = await todoRepository.findOne({ where: { id } })
 
-      if (!todo) {
+      // Check if todo exists
+      const existingTodo = await todoRepository.findOne({ where: { id } })
+      if (!existingTodo) {
         return res.status(404).json({ error: 'Todo not found' })
       }
 
-      // Update only provided fields
+      // Build update data object
+      const updateData: Record<string, unknown> = {}
       if (validatedData.description !== undefined) {
-        todo.description = validatedData.description
+        updateData.description = validatedData.description
       }
       if (validatedData.deadline !== undefined) {
-        todo.deadline = validatedData.deadline ? new Date(validatedData.deadline) : null
+        updateData.deadline = validatedData.deadline ? new Date(validatedData.deadline) : null
       }
       if (validatedData.status !== undefined) {
-        todo.status = validatedData.status
+        updateData.status = validatedData.status
       }
       if (validatedData.boardColumnId !== undefined) {
-        todo.boardColumnId = validatedData.boardColumnId
+        updateData.boardColumnId = validatedData.boardColumnId
       }
       if (validatedData.position !== undefined) {
-        todo.position = validatedData.position
+        updateData.position = validatedData.position
+      }
+      if (validatedData.notes !== undefined) {
+        updateData.notes = validatedData.notes
       }
 
-      await todoRepository.save(todo)
-      res.json(formatTodo(todo))
+      // Use update() to bypass TypeORM relation tracking issue
+      // When boardColumn relation is loaded, save() uses the relation object
+      // instead of the boardColumnId value, causing updates to be ignored
+      if (Object.keys(updateData).length > 0) {
+        await todoRepository.update(id, updateData)
+      }
+
+      // Fetch the updated todo with relations for response
+      const updatedTodo = await todoRepository.findOne({
+        where: { id },
+        relations: ['boardColumn'],
+      })
+      if (!updatedTodo) {
+        return res.status(404).json({ error: 'Todo not found' })
+      }
+
+      res.json(formatTodo(updatedTodo))
     } catch (error) {
       next(error)
     }

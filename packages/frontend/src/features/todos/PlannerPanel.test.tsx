@@ -13,6 +13,14 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// Mock the mutation hook used by PlannerTodoCard
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 // Helper to create mock Todo with required fields
 function createMockTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -23,6 +31,8 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
     deadline: null,
     boardColumnId: 1,
     position: 0,
+    notes: null,
+    color: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   }
@@ -324,6 +334,7 @@ describe('PlannerPanel', () => {
           deadline: '2024-01-15T10:00:00',
           boardColumnId: 2,
           position: 0,
+          notes: null,
           createdAt: new Date('2024-01-01T00:00:00Z'),
         },
       ]

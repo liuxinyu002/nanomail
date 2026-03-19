@@ -8,6 +8,7 @@ export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed'])
 /**
  * Schema for Todo entity
  * Note: urgency field is deprecated - status now determined by boardColumnId
+ * Note: color field is derived from related BoardColumn, not stored in database
  */
 export const TodoSchema = z.object({
   id: z.number().int().positive(),
@@ -17,16 +18,20 @@ export const TodoSchema = z.object({
   deadline: z.string().datetime().nullable(),
   boardColumnId: z.number().int().positive().default(1), // Required, defaults to Inbox (id: 1)
   position: z.number().int().optional(), // Position within column for ordering
+  notes: z.string().max(2000).nullable().default(null), // Optional notes field, max 2000 chars
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().default(null), // Derived from BoardColumn
   createdAt: z.coerce.date()
 })
 
 /**
  * Schema for creating a new Todo
+ * Uses .strict() to reject unknown fields like id, color (derived), createdAt
  */
 export const CreateTodoSchema = TodoSchema.omit({
   id: true,
+  color: true, // Color is derived from BoardColumn, not stored
   createdAt: true
-})
+}).strict()
 
 /**
  * Schema for updating a Todo
@@ -38,7 +43,8 @@ export const UpdateTodoSchema = z.object({
   deadline: z.string().datetime().nullable().optional(),
   status: TodoStatusSchema.optional(),
   boardColumnId: z.number().int().positive().optional(),
-  position: z.number().int().optional()
+  position: z.number().int().optional(),
+  notes: z.string().max(2000).nullable().optional()
 }).strict()
 
 /**

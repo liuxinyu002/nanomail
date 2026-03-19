@@ -29,6 +29,14 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// Mock the mutation hook used by PlannerTodoCard
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 // Helper to create mock Todo with required fields
 function createMockTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -39,6 +47,8 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
     deadline: null,
     boardColumnId: 1,
     position: 0,
+    notes: null,
+    color: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   }
@@ -947,16 +957,16 @@ describe('WeekView Integration in PlannerPanel', () => {
       const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
-      // Today task should be visible initially
-      expect(screen.getByText('Today task')).toBeInTheDocument()
+      // Today task should be visible initially (may appear multiple times)
+      expect(screen.getAllByText('Today task').length).toBeGreaterThan(0)
 
       // Click on tomorrow's date - find the button with tomorrow's date number
       const tomorrowDate = tomorrow.getDate()
       const tomorrowButton = screen.getByRole('button', { name: new RegExp(tomorrowDate.toString()) })
       await user.click(tomorrowButton)
 
-      // Now should show tomorrow task
-      expect(screen.getByText('Tomorrow task')).toBeInTheDocument()
+      // Now should show tomorrow task (may appear multiple times)
+      expect(screen.getAllByText('Tomorrow task').length).toBeGreaterThan(0)
     })
 
     it('should update selected date styling when date is clicked', async () => {
@@ -1230,8 +1240,8 @@ describe('WeekView Integration in PlannerPanel', () => {
       const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
-      // Today task should be visible
-      expect(screen.getByText('Today task')).toBeInTheDocument()
+      // Today task should be visible (may appear multiple times)
+      expect(screen.getAllByText('Today task').length).toBeGreaterThan(0)
       expect(screen.queryByText('Tomorrow task')).not.toBeInTheDocument()
     })
 
@@ -1273,8 +1283,8 @@ describe('WeekView Integration in PlannerPanel', () => {
       const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
-      // Only "Scheduled" should be visible
-      expect(screen.getByText('Scheduled')).toBeInTheDocument()
+      // Only "Scheduled" should be visible (may appear multiple times)
+      expect(screen.getAllByText('Scheduled').length).toBeGreaterThan(0)
       expect(screen.queryByText('No deadline')).not.toBeInTheDocument()
       expect(screen.queryByText('Wrong column')).not.toBeInTheDocument()
     })

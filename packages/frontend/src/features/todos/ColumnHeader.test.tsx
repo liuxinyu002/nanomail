@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ColumnHeader, type ColumnHeaderProps } from './ColumnHeader'
+import { ColumnHeader, type ColumnHeaderProps, getTextColorForBackground } from './ColumnHeader'
 import type { BoardColumn } from '@nanomail/shared'
 
 // Mock Popover to avoid portal issues in tests
@@ -75,119 +75,6 @@ describe('ColumnHeader', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  describe('Status Dot - Always Visible', () => {
-    it('should render color indicator when column has color', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#3B82F6' })
-    })
-
-    it('should ALWAYS render color indicator even when column has no color (with fallback)', () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
-
-      // Status dot should always be visible for visual consistency
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
-    })
-
-    it('should use MACARON_COLORS[0] (#FFB5BA) as fallback when column has no color', () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
-    })
-
-    it('should use MACARON_COLORS[0] as fallback for invalid hex color', () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: 'invalid' }} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
-    })
-
-    it('should use MACARON_COLORS[0] as fallback for colors without # prefix', () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: 'ABCDEF' }} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
-    })
-
-    it('should use MACARON_COLORS[0] as fallback for 3-character hex colors', () => {
-      render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#ABC' }} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#FFB5BA' })
-    })
-  })
-
-  describe('Status Dot - Size and Position', () => {
-    it('should have smaller dot size (w-2 h-2) instead of w-3 h-3', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveClass('w-2')
-      expect(colorIndicator).toHaveClass('h-2')
-    })
-
-    it('should have rounded-full class', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveClass('rounded-full')
-    })
-
-    it('should have flex-shrink-0 class to prevent shrinking', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveClass('flex-shrink-0')
-    })
-
-    it('should be positioned on LEFT of column name', () => {
-      render(<ColumnHeader {...defaultProps} />)
-
-      // The color indicator should come before the column name in DOM order
-      const leftSection = screen.getByTestId('column-header').querySelector('.flex.items-center.gap-2')
-      expect(leftSection).toBeInTheDocument()
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      const columnName = screen.getByRole('heading', { name: 'Todo' })
-
-      // Check DOM order: color indicator should be before column name
-      expect(leftSection?.children[0]).toBe(colorIndicator)
-      expect(leftSection?.children[1]).toContainElement(columnName)
-    })
-  })
-
-  describe('Color Validation', () => {
-    it('should accept valid 6-character hex colors', () => {
-      const columnWithColor = { ...mockColumn, color: '#ABCDEF' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#ABCDEF' })
-    })
-
-    it('should accept lowercase hex colors', () => {
-      const columnWithColor = { ...mockColumn, color: '#abcdef' }
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toBeInTheDocument()
-    })
-
-    it('should use column color when valid, not fallback', () => {
-      const columnWithColor = { ...mockColumn, color: '#B8D4FF' } // Pastel Blue
-      render(<ColumnHeader {...defaultProps} column={columnWithColor} />)
-
-      const colorIndicator = screen.getByTestId('column-color-indicator')
-      expect(colorIndicator).toHaveStyle({ backgroundColor: '#B8D4FF' })
-      expect(colorIndicator).not.toHaveStyle({ backgroundColor: '#FFB5BA' })
-    })
   })
 
   describe('Hover Behavior - Settings Button', () => {
@@ -835,6 +722,298 @@ describe('ColumnHeader', () => {
       await userEvent.click(cancelButton)
 
       expect(onDelete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Phase 2 Redesign: Colored Background Header', () => {
+    describe('Color Badge Removal', () => {
+      it('should NOT render the 2x2 color dot (color badge indicator)', () => {
+        render(<ColumnHeader {...defaultProps} />)
+
+        // The color badge indicator should be removed
+        expect(screen.queryByTestId('column-color-indicator')).not.toBeInTheDocument()
+      })
+
+      it('should not have any small colored dot element', () => {
+        const { container } = render(<ColumnHeader {...defaultProps} />)
+
+        // Check for w-2 h-2 rounded-full elements (the old color badge)
+        const smallDots = container.querySelectorAll('.w-2.h-2.rounded-full')
+        expect(smallDots.length).toBe(0)
+      })
+    })
+
+    describe('Colored Background', () => {
+      it('should have colored background on header container', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#FFB5BA' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveStyle({ backgroundColor: '#FFB5BA' })
+      })
+
+      it('should use column color as background', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8D4FF' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveStyle({ backgroundColor: '#B8D4FF' })
+      })
+
+      it('should use fallback color #F3F4F6 when column has no color', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveStyle({ backgroundColor: '#F3F4F6' })
+      })
+
+      it('should use fallback color for invalid color', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: 'invalid' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveStyle({ backgroundColor: '#F3F4F6' })
+      })
+    })
+
+    describe('Dynamic Text Color', () => {
+      it('should have dark text on light background (Pastel Yellow)', () => {
+        // Pastel Yellow #FFF4BD has high luminance - should use dark text
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#FFF4BD' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have dark text on light background (Pastel Green)', () => {
+        // Pastel Green #B8E6C1 has relatively high luminance
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8E6C1' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have white text on dark background (dark blue)', () => {
+        // Dark blue color #1E40AF has low luminance - should use white text
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#1E40AF' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-white')
+      })
+
+      it('should have white text on dark background (dark purple)', () => {
+        // Dark purple #5B21B6 has low luminance
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#5B21B6' }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-white')
+      })
+
+      it('should have dark text on fallback background (#F3F4F6)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: null }} />)
+
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+    })
+
+    describe('Text Readability on All Macaron Colors', () => {
+      it('should have readable text on Pastel Red (#FFB5BA)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#FFB5BA' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have readable text on Pastel Orange (#FFD8B8)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#FFD8B8' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have readable text on Pastel Yellow (#FFF4BD)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#FFF4BD' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have readable text on Pastel Green (#B8E6C1)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8E6C1' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have readable text on Pastel Blue (#B8D4FF)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#B8D4FF' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+
+      it('should have readable text on Pastel Purple (#D4B8FF)', () => {
+        render(<ColumnHeader {...defaultProps} column={{ ...mockColumn, color: '#D4B8FF' }} />)
+        const header = screen.getByTestId('column-header')
+        expect(header).toHaveClass('text-gray-900')
+      })
+    })
+
+    describe('Functionality Preservation', () => {
+      it('should still support inline renaming after redesign', async () => {
+        const onRename = vi.fn()
+        render(<ColumnHeader {...defaultProps} onRename={onRename} />)
+
+        const columnName = screen.getByText('Todo')
+        await userEvent.dblClick(columnName)
+
+        const input = screen.getByRole('textbox')
+        await userEvent.clear(input)
+        await userEvent.type(input, 'In Progress')
+        await userEvent.keyboard('{Enter}')
+
+        expect(onRename).toHaveBeenCalledWith('In Progress')
+      })
+
+      it('should still show settings menu on hover after redesign', () => {
+        render(<ColumnHeader {...defaultProps} />)
+
+        const settingsButton = screen.getByRole('button', { name: /column settings/i })
+        expect(settingsButton).toBeInTheDocument()
+        expect(settingsButton).toHaveClass('opacity-0')
+        expect(settingsButton).toHaveClass('group-hover:opacity-100')
+      })
+
+      it('should still show delete dialog when Delete is clicked', async () => {
+        const onDelete = vi.fn()
+        render(<ColumnHeader {...defaultProps} onDelete={onDelete} />)
+
+        const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
+        const popoverDeleteButton = deleteButtons.find(btn => btn.className.includes('text-red-600'))
+        await userEvent.click(popoverDeleteButton!)
+
+        expect(screen.getByTestId('alert-dialog')).toBeInTheDocument()
+      })
+
+      it('should still show ColorPicker when Change Color is clicked', async () => {
+        render(<ColumnHeader {...defaultProps} />)
+
+        const colorButton = screen.getByRole('button', { name: 'Change Color' })
+        await userEvent.click(colorButton)
+
+        expect(screen.getByTestId('color-picker')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('getTextColorForBackground helper', () => {
+    describe('Light backgrounds - should return "dark"', () => {
+      it('should return "dark" for white (#FFFFFF)', () => {
+        expect(getTextColorForBackground('#FFFFFF')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Yellow (#FFF4BD)', () => {
+        expect(getTextColorForBackground('#FFF4BD')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Red (#FFB5BA)', () => {
+        expect(getTextColorForBackground('#FFB5BA')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Orange (#FFD8B8)', () => {
+        expect(getTextColorForBackground('#FFD8B8')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Green (#B8E6C1)', () => {
+        expect(getTextColorForBackground('#B8E6C1')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Blue (#B8D4FF)', () => {
+        expect(getTextColorForBackground('#B8D4FF')).toBe('dark')
+      })
+
+      it('should return "dark" for Pastel Purple (#D4B8FF)', () => {
+        expect(getTextColorForBackground('#D4B8FF')).toBe('dark')
+      })
+
+      it('should return "dark" for fallback gray (#F3F4F6)', () => {
+        expect(getTextColorForBackground('#F3F4F6')).toBe('dark')
+      })
+
+      it('should return "dark" for light gray (#E5E7EB)', () => {
+        expect(getTextColorForBackground('#E5E7EB')).toBe('dark')
+      })
+    })
+
+    describe('Dark backgrounds - should return "light"', () => {
+      it('should return "light" for black (#000000)', () => {
+        expect(getTextColorForBackground('#000000')).toBe('light')
+      })
+
+      it('should return "light" for dark blue (#1E40AF)', () => {
+        expect(getTextColorForBackground('#1E40AF')).toBe('light')
+      })
+
+      it('should return "light" for dark purple (#5B21B6)', () => {
+        expect(getTextColorForBackground('#5B21B6')).toBe('light')
+      })
+
+      it('should return "light" for dark red (#991B1B)', () => {
+        expect(getTextColorForBackground('#991B1B')).toBe('light')
+      })
+
+      it('should return "light" for dark green (#166534)', () => {
+        expect(getTextColorForBackground('#166534')).toBe('light')
+      })
+
+      it('should return "light" for navy (#1E3A8A)', () => {
+        expect(getTextColorForBackground('#1E3A8A')).toBe('light')
+      })
+    })
+
+    describe('Edge cases', () => {
+      it('should return "dark" for null input', () => {
+        expect(getTextColorForBackground(null)).toBe('dark')
+      })
+
+      it('should return "dark" for undefined input', () => {
+        expect(getTextColorForBackground(undefined)).toBe('dark')
+      })
+
+      it('should return "dark" for empty string', () => {
+        expect(getTextColorForBackground('')).toBe('dark')
+      })
+
+      it('should return "dark" for invalid hex format', () => {
+        expect(getTextColorForBackground('invalid')).toBe('dark')
+        expect(getTextColorForBackground('FFF')).toBe('dark')
+        expect(getTextColorForBackground('#FF')).toBe('dark')
+      })
+
+      it('should handle lowercase hex colors', () => {
+        expect(getTextColorForBackground('#ffffff')).toBe('dark')
+        expect(getTextColorForBackground('#000000')).toBe('light')
+      })
+
+      it('should handle mixed case hex colors', () => {
+        expect(getTextColorForBackground('#FfFfFf')).toBe('dark')
+        expect(getTextColorForBackground('#1e40af')).toBe('light')
+      })
+    })
+
+    describe('Luminance threshold boundary', () => {
+      // Threshold is 0.5: luminance > 0.5 = dark text, <= 0.5 = light text
+      // For gray colors (R=G=B), luminance = R/255
+      // Testing colors near the threshold
+
+      it('should return "dark" for colors with luminance just above threshold', () => {
+        // #808080 (128): luminance = 128/255 = 0.502 (> 0.5, "dark")
+        expect(getTextColorForBackground('#808080')).toBe('dark')
+        // #B0B0B0 (176): luminance = 176/255 = 0.69 (> 0.5, "dark")
+        expect(getTextColorForBackground('#B0B0B0')).toBe('dark')
+        // #C0C0C0 (192): luminance = 192/255 = 0.75 (> 0.5, "dark")
+        expect(getTextColorForBackground('#C0C0C0')).toBe('dark')
+      })
+
+      it('should return "light" for colors with luminance just below threshold', () => {
+        // #7F7F7F (127): luminance = 127/255 = 0.498 (<= 0.5, "light")
+        expect(getTextColorForBackground('#7F7F7F')).toBe('light')
+        // #707070 (112): luminance = 112/255 = 0.44 (<= 0.5, "light")
+        expect(getTextColorForBackground('#707070')).toBe('light')
+      })
     })
   })
 })

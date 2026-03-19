@@ -14,6 +14,14 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// Mock the mutation hook used by PlannerTodoCard
+vi.mock('@/hooks', () => ({
+  useUpdateTodoMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 // Helper to create mock Todo
 function createMockTodo(overrides: Partial<Todo> = {}): Todo {
   return {
@@ -24,6 +32,8 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
     deadline: null,
     boardColumnId: 1,
     position: 0,
+    notes: null,
+    color: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   }
@@ -137,8 +147,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
 
       render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      // Only Wednesday task should be visible
-      expect(screen.getByText('Wednesday task')).toBeInTheDocument()
+      // Only Wednesday task should be visible (may appear multiple times)
+      expect(screen.getAllByText('Wednesday task').length).toBeGreaterThan(0)
       expect(screen.queryByText('Thursday task')).not.toBeInTheDocument()
     })
 
@@ -162,8 +172,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
       const hour9Slot = within(dayContent).getByTestId('hour-slot-9')
       const hour14Slot = within(dayContent).getByTestId('hour-slot-14')
 
-      expect(within(hour9Slot).getByText('Morning task')).toBeInTheDocument()
-      expect(within(hour14Slot).getByText('Afternoon task')).toBeInTheDocument()
+      expect(within(hour9Slot).getAllByText('Morning task').length).toBeGreaterThan(0)
+      expect(within(hour14Slot).getAllByText('Afternoon task').length).toBeGreaterThan(0)
     })
 
     it('handles todos with null deadline - does not display them', () => {
@@ -182,7 +192,7 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
 
       render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      expect(screen.getByText('Task with deadline')).toBeInTheDocument()
+      expect(screen.getAllByText('Task with deadline').length).toBeGreaterThan(0)
       expect(screen.queryByText('Task without deadline')).not.toBeInTheDocument()
     })
 
@@ -214,17 +224,17 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
 
       render(<WeekView selectedDate={testDate} todos={todos} />)
 
-      // Initially shows Wednesday task
-      expect(screen.getByText('Wednesday task')).toBeInTheDocument()
+      // Initially shows Wednesday task (may appear multiple times)
+      expect(screen.getAllByText('Wednesday task').length).toBeGreaterThan(0)
       expect(screen.queryByText('Thursday task')).not.toBeInTheDocument()
 
       // Click on Thursday (index 4)
       const thursdayButton = screen.getByTestId('date-item-4')
       await user.click(thursdayButton)
 
-      // Now should show Thursday task
+      // Now should show Thursday task (may appear multiple times)
       expect(screen.queryByText('Wednesday task')).not.toBeInTheDocument()
-      expect(screen.getByText('Thursday task')).toBeInTheDocument()
+      expect(screen.getAllByText('Thursday task').length).toBeGreaterThan(0)
     })
 
     it('calls onDateChange when date is selected', async () => {
@@ -498,8 +508,8 @@ describe('WeekView (Refactored - Single Day Mode)', () => {
       const hour0Slot = within(dayContent).getByTestId('hour-slot-0')
       const hour23Slot = within(dayContent).getByTestId('hour-slot-23')
 
-      expect(within(hour0Slot).getByText('Midnight task')).toBeInTheDocument()
-      expect(within(hour23Slot).getByText('Late night task')).toBeInTheDocument()
+      expect(within(hour0Slot).getAllByText('Midnight task').length).toBeGreaterThan(0)
+      expect(within(hour23Slot).getAllByText('Late night task').length).toBeGreaterThan(0)
     })
 
     it('handles selectedDate prop change within same week', () => {

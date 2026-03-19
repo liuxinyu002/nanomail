@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import { TodoItem, type TodoItemProps } from './TodoItem'
@@ -30,12 +30,52 @@ vi.mock('@/hooks', () => ({
   }),
 }))
 
+// Mock AlertDialog to avoid portal issues in tests
+vi.mock('@/components/ui/alert-dialog', () => ({
+  AlertDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="alert-dialog" data-open={open}>{children}</div>
+  ),
+  AlertDialogTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => (
+    <div data-testid="alert-dialog-trigger">{children}</div>
+  ),
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-content">{children}</div>
+  ),
+  AlertDialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-header">{children}</div>
+  ),
+  AlertDialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-footer">{children}</div>
+  ),
+  AlertDialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2 data-testid="alert-dialog-title">{children}</h2>
+  ),
+  AlertDialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p data-testid="alert-dialog-description">{children}</p>
+  ),
+  AlertDialogAction: ({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) => (
+    <button data-testid="alert-dialog-action" onClick={onClick} className={className}>{children}</button>
+  ),
+  AlertDialogCancel: ({ children }: { children: React.ReactNode }) => (
+    <button data-testid="alert-dialog-cancel">{children}</button>
+  ),
+}))
+
 // Helper to render with router
 function renderWithRouter(ui: React.ReactElement) {
   return render(
     <BrowserRouter>
       {ui}
     </BrowserRouter>
+  )
+}
+
+// Helper to find the delete icon button (not the AlertDialog action button)
+function getDeleteIconButton(): HTMLElement | undefined {
+  const buttons = screen.queryAllByRole('button')
+  return buttons.find(btn =>
+    btn.getAttribute('aria-label') === 'Delete' &&
+    !btn.hasAttribute('data-testid')
   )
 }
 
@@ -71,7 +111,9 @@ describe('TodoItem', () => {
     it('should render todo description', () => {
       renderWithRouter(<TodoItem {...defaultProps} />)
 
-      expect(screen.getByText('Review the quarterly report')).toBeInTheDocument()
+      // Use testid to get the specific title element
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveTextContent('Review the quarterly report')
     })
 
     it('should have white background', () => {
@@ -85,7 +127,8 @@ describe('TodoItem', () => {
       renderWithRouter(<TodoItem {...defaultProps} />)
 
       const card = screen.getByTestId('todo-card')
-      expect(card).toHaveClass('shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]')
+      // shadow-sm is the simplified shadow class
+      expect(card).toHaveClass('shadow-sm')
     })
 
     it('should NOT have column-based border colors (Phase 7 migration)', () => {
@@ -218,78 +261,63 @@ describe('TodoItem', () => {
     })
   })
 
-  describe('Dropdown Menu', () => {
-    it('should render dropdown menu trigger', () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
-
-      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
-    })
-
-    it('should open dropdown menu when trigger is clicked', async () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
-
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
-
-      expect(screen.getByTestId('card-dropdown-menu')).toBeInTheDocument()
-    })
-
-    it('should render Edit action in dropdown', async () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
-
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
-
-      expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument()
-    })
-
-    it('should render Delete action in dropdown', async () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
-
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
-
-      expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
-    })
-
-    it('should call delete mutation when Delete is clicked', async () => {
+  describe('Delete Icon Button', () => {
+    it('should render delete icon button when showDelete=true', () => {
       renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
 
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeInTheDocument()
+    })
 
-      const deleteButton = screen.getByRole('menuitem', { name: 'Delete' })
-      await userEvent.click(deleteButton)
+    it('should NOT render delete icon button when showDelete=false (default)', () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={false} />)
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
+
+    it('should show confirmation dialog when delete icon is clicked', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument()
+    })
+
+    it('should call delete mutation when Delete is confirmed', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      const confirmButton = screen.getByTestId('alert-dialog-action')
+      await userEvent.click(confirmButton)
 
       expect(mockDeleteMutate).toHaveBeenCalledWith(1)
+    })
+
+    it('should NOT call delete mutation when cancelled', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      const cancelButton = screen.getByTestId('alert-dialog-cancel')
+      await userEvent.click(cancelButton)
+
+      expect(mockDeleteMutate).not.toHaveBeenCalled()
     })
 
     it('should NOT call delete mutation when showDelete is false', async () => {
       renderWithRouter(<TodoItem {...defaultProps} showDelete={false} />)
 
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
+      // No delete button should be present
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
 
-      // Delete button should still be in the dropdown but won't call mutation
-      const deleteButton = screen.getByRole('menuitem', { name: 'Delete' })
-      await userEvent.click(deleteButton)
-
-      // Delete mutation should NOT be called when showDelete is false
+      // Delete mutation should NOT be called
       expect(mockDeleteMutate).not.toHaveBeenCalled()
-    })
-
-    it('should trigger onEdit callback when Edit is clicked (placeholder)', async () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
-
-      const triggerButton = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(triggerButton)
-
-      const editButton = screen.getByRole('menuitem', { name: 'Edit' })
-      // Edit is currently a placeholder - clicking it should not throw
-      await userEvent.click(editButton)
-
-      // Menu should close after clicking
-      expect(screen.queryByTestId('card-dropdown-menu')).not.toBeInTheDocument()
     })
   })
 
@@ -297,7 +325,7 @@ describe('TodoItem', () => {
     it('should start collapsed by default', () => {
       renderWithRouter(<TodoItem {...defaultProps} />)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
@@ -307,7 +335,7 @@ describe('TodoItem', () => {
       const card = screen.getByTestId('todo-card')
       await userEvent.click(card)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:1fr]')
     })
 
@@ -317,17 +345,17 @@ describe('TodoItem', () => {
       const checkbox = screen.getByRole('checkbox')
       await userEvent.click(checkbox)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
-    it('should NOT expand when clicking on dropdown trigger', async () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
+    it('should NOT expand when clicking on delete icon button', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
 
-      const dropdownTrigger = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(dropdownTrigger)
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
   })
@@ -340,10 +368,11 @@ describe('TodoItem', () => {
       expect(checkbox).toBeInTheDocument()
     })
 
-    it('should have more options button accessible by label', () => {
-      renderWithRouter(<TodoItem {...defaultProps} />)
+    it('should have delete button accessible by label when showDelete=true', () => {
+      renderWithRouter(<TodoItem {...defaultProps} showDelete={true} />)
 
-      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeInTheDocument()
     })
 
     it('should have cursor-pointer on card', () => {
@@ -380,6 +409,126 @@ describe('TodoItem', () => {
 
       const title = screen.getByTestId('todo-card-title')
       expect(title).not.toHaveClass('line-through')
+    })
+  })
+
+  describe('Save Handlers Integration', () => {
+    it('should call updateMutation when description is saved', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change description
+      const textarea = screen.getByLabelText(/描述/i)
+      await userEvent.clear(textarea)
+      await userEvent.type(textarea, 'New description')
+      fireEvent.blur(textarea)
+
+      // Wait for the mutation to be called
+      await waitFor(() => {
+        expect(mockUpdateMutate).toHaveBeenCalledWith({
+          id: 1,
+          data: { description: 'New description' },
+        })
+      })
+    })
+
+    it('should call updateMutation when notes is saved', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change notes
+      const textarea = screen.getByLabelText(/笔记/i)
+      await userEvent.type(textarea, 'New notes')
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(mockUpdateMutate).toHaveBeenCalledWith({
+          id: 1,
+          data: { notes: 'New notes' },
+        })
+      })
+    })
+
+    it('should call updateMutation with null when notes is cleared', async () => {
+      const todoWithNotes = { ...mockTodo, notes: 'Original notes' }
+      renderWithRouter(<TodoItem {...defaultProps} todo={todoWithNotes} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Clear notes
+      const textarea = screen.getByLabelText(/笔记/i)
+      await userEvent.clear(textarea)
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(mockUpdateMutate).toHaveBeenCalledWith({
+          id: 1,
+          data: { notes: null },
+        })
+      })
+    })
+
+    it('should call updateMutation when deadline is saved', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change deadline
+      const dateInput = screen.getByLabelText(/截止时间/i)
+      fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
+
+      await waitFor(() => {
+        expect(mockUpdateMutate).toHaveBeenCalledWith({
+          id: 1,
+          data: { deadline: '2024-12-25T23:59:59.999Z' },
+        })
+      })
+    })
+
+    it('should call updateMutation with null when deadline is cleared', async () => {
+      const todoWithDeadline = { ...mockTodo, deadline: '2024-12-25T23:59:59.999Z' }
+      renderWithRouter(<TodoItem {...defaultProps} todo={todoWithDeadline} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Clear deadline
+      const clearButton = screen.getByText('清除')
+      await userEvent.click(clearButton)
+
+      await waitFor(() => {
+        expect(mockUpdateMutate).toHaveBeenCalledWith({
+          id: 1,
+          data: { deadline: null },
+        })
+      })
+    })
+
+    it('should NOT call updateMutation when description unchanged', async () => {
+      renderWithRouter(<TodoItem {...defaultProps} />)
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Focus and blur without changing
+      const textarea = screen.getByLabelText(/描述/i)
+      fireEvent.blur(textarea)
+
+      // Wait a bit to ensure no mutation is called
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(mockUpdateMutate).not.toHaveBeenCalled()
     })
   })
 })

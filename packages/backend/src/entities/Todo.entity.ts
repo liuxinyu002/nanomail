@@ -65,6 +65,13 @@ export class Todo {
   @Column({ type: 'integer', default: 0 })
   position!: number
 
+  /**
+   * Optional notes for the todo item
+   * Max 2000 characters, can be null
+   */
+  @Column({ type: 'text', nullable: true })
+  notes!: string | null
+
   @CreateDateColumn({ type: 'datetime' })
   createdAt!: Date
 }

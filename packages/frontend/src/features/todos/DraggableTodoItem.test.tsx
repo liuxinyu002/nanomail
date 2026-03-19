@@ -5,10 +5,16 @@ import { DraggableTodoItem, type DraggableTodoItemProps } from './DraggableTodoI
 import type { TodoItem } from '@/services'
 
 // Mock the TodoItem component
+const mockTodoItemRender = vi.fn()
 vi.mock('./TodoItem', () => ({
-  TodoItem: ({ todo }: { todo: TodoItem }) => (
-    <div data-testid="todo-item-mock">{todo.description}</div>
-  ),
+  TodoItem: ({ todo, showDelete }: { todo: TodoItem; showDelete?: boolean }) => {
+    mockTodoItemRender({ todo, showDelete })
+    return (
+      <div data-testid="todo-item-mock" data-show-delete={showDelete}>
+        {todo.description}
+      </div>
+    )
+  },
 }))
 
 // Store for captured useDraggable arguments and return values
@@ -60,6 +66,7 @@ describe('DraggableTodoItem', () => {
     status: 'pending',
     boardColumnId: 2,
     deadline: null,
+    notes: null,
     createdAt: '2024-01-15T10:00:00.000Z',
   }
 
@@ -79,6 +86,7 @@ describe('DraggableTodoItem', () => {
       transform: null,
       isDragging: false,
     }
+    mockTodoItemRender.mockClear()
   })
 
   afterEach(() => {
@@ -419,6 +427,62 @@ describe('DraggableTodoItem', () => {
           }),
         })
       )
+    })
+  })
+
+  describe('showDelete prop', () => {
+    it('should pass showDelete=true to TodoItem when showDelete prop is true', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} showDelete={true} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showDelete: true,
+        })
+      )
+    })
+
+    it('should pass showDelete=false to TodoItem when showDelete prop is false', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} showDelete={false} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showDelete: false,
+        })
+      )
+    })
+
+    it('should not pass showDelete to TodoItem by default (undefined)', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      // By default, showDelete should be undefined (falls back to TodoItem default)
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showDelete: undefined,
+        })
+      )
+    })
+
+    it('should render the mock with correct data-show-delete attribute when showDelete=true', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} showDelete={true} />
+        </DndProvider>
+      )
+
+      const todoItemMock = screen.getByTestId('todo-item-mock')
+      expect(todoItemMock).toHaveAttribute('data-show-delete', 'true')
     })
   })
 })

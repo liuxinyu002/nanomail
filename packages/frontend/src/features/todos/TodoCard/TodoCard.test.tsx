@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import { TodoCard } from './TodoCard'
@@ -8,6 +8,37 @@ import { TodoCardContent } from './TodoCardContent'
 import { DeadlineChip } from './DeadlineChip'
 import { EmailLinkIcon } from './EmailLinkIcon'
 import type { Todo } from '@nanomail/shared'
+
+// Mock AlertDialog to avoid portal issues in tests
+vi.mock('@/components/ui/alert-dialog', () => ({
+  AlertDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="alert-dialog" data-open={open}>{children}</div>
+  ),
+  AlertDialogTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => (
+    <div data-testid="alert-dialog-trigger">{children}</div>
+  ),
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-content">{children}</div>
+  ),
+  AlertDialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-header">{children}</div>
+  ),
+  AlertDialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-footer">{children}</div>
+  ),
+  AlertDialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2 data-testid="alert-dialog-title">{children}</h2>
+  ),
+  AlertDialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p data-testid="alert-dialog-description">{children}</p>
+  ),
+  AlertDialogAction: ({ children, onClick, className }: { children: React.ReactNode; onClick?: () => void; className?: string }) => (
+    <button data-testid="alert-dialog-action" onClick={onClick} className={className}>{children}</button>
+  ),
+  AlertDialogCancel: ({ children }: { children: React.ReactNode }) => (
+    <button data-testid="alert-dialog-cancel">{children}</button>
+  ),
+}))
 
 // Helper to create mock Todo
 function createMockTodo(overrides: Partial<Todo> = {}): Todo {
@@ -19,9 +50,19 @@ function createMockTodo(overrides: Partial<Todo> = {}): Todo {
     deadline: null,
     boardColumnId: 1,
     position: 0,
+    notes: null,
     createdAt: new Date('2024-01-01'),
     ...overrides,
   }
+}
+
+// Helper to find the delete icon button (not the AlertDialog action button)
+function getDeleteIconButton(): HTMLElement | undefined {
+  const buttons = screen.queryAllByRole('button')
+  return buttons.find(btn =>
+    btn.getAttribute('aria-label') === 'Delete' &&
+    !btn.hasAttribute('data-testid')
+  )
 }
 
 // Wrapper for components that need router
@@ -35,10 +76,6 @@ function renderWithRouter(ui: React.ReactElement) {
 
 describe('TodoCard', () => {
   const defaultOnToggle = vi.fn()
-  const defaultOnEdit = vi.fn()
-  const defaultOnDelete = vi.fn()
-  const defaultOnMoveToColumn = vi.fn()
-  const defaultOnSetDeadline = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -57,7 +94,7 @@ describe('TodoCard', () => {
       expect(card).toHaveClass('bg-white')
     })
 
-    it('should have soft shadow by default', () => {
+    it('should have shadow-sm for consistent light shadow', () => {
       renderWithRouter(
         <TodoCard
           todo={createMockTodo()}
@@ -66,10 +103,10 @@ describe('TodoCard', () => {
       )
 
       const card = screen.getByTestId('todo-card')
-      expect(card).toHaveClass('shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)]')
+      expect(card).toHaveClass('shadow-sm')
     })
 
-    it('should have hover shadow effect', () => {
+    it('should have hover:shadow-md for hover effect', () => {
       renderWithRouter(
         <TodoCard
           todo={createMockTodo()}
@@ -78,7 +115,20 @@ describe('TodoCard', () => {
       )
 
       const card = screen.getByTestId('todo-card')
-      expect(card).toHaveClass('hover:shadow-[0_8px_12px_-2px_rgba(0,0,0,0.08)]')
+      expect(card).toHaveClass('hover:shadow-md')
+    })
+
+    it('should have subtle border for edge definition', () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+        />
+      )
+
+      const card = screen.getByTestId('todo-card')
+      expect(card).toHaveClass('border')
+      expect(card).toHaveClass('border-gray-100')
     })
 
     it('should have correct padding (p-4)', () => {
@@ -181,7 +231,9 @@ describe('TodoCard', () => {
         />
       )
 
-      expect(screen.getByText('My test task')).toBeInTheDocument()
+      // Use testid to get the specific title element, not the textarea
+      const title = screen.getByTestId('todo-card-title')
+      expect(title).toHaveTextContent('My test task')
     })
 
     it('should have primary text color', () => {
@@ -254,7 +306,7 @@ describe('TodoCard', () => {
         />
       )
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
@@ -269,7 +321,7 @@ describe('TodoCard', () => {
       const card = screen.getByTestId('todo-card')
       await userEvent.click(card)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:1fr]')
     })
 
@@ -287,7 +339,7 @@ describe('TodoCard', () => {
       // Click to collapse
       await userEvent.click(card)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
@@ -302,22 +354,24 @@ describe('TodoCard', () => {
       const checkbox = screen.getByRole('checkbox')
       await userEvent.click(checkbox)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
-    it('should NOT expand when clicking on dropdown trigger', async () => {
+    it('should NOT expand when clicking on delete icon button', async () => {
+      const onDelete = vi.fn()
       renderWithRouter(
         <TodoCard
           todo={createMockTodo()}
           onToggle={defaultOnToggle}
+          onDelete={onDelete}
         />
       )
 
-      const dropdownTrigger = screen.getByRole('button', { name: /more options/i })
-      await userEvent.click(dropdownTrigger)
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
     })
 
@@ -332,8 +386,48 @@ describe('TodoCard', () => {
       const emailLink = screen.getByRole('link')
       fireEvent.click(emailLink)
 
-      const expandableContent = screen.getByTestId('todo-card-expandable')
+      const expandableContent = screen.getByTestId('task-detail-expand')
       expect(expandableContent).toHaveClass('[grid-template-rows:0fr]')
+    })
+
+    it('should NOT expand when clicking on textarea', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+        />
+      )
+
+      // First expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Click on textarea should not collapse
+      const textarea = screen.getByLabelText(/描述/i)
+      await userEvent.click(textarea)
+
+      const expandableContent = screen.getByTestId('task-detail-expand')
+      expect(expandableContent).toHaveClass('[grid-template-rows:1fr]')
+    })
+
+    it('should NOT expand when clicking on input field', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ deadline: '2024-12-25T23:59:59.999Z' })}
+          onToggle={defaultOnToggle}
+        />
+      )
+
+      // First expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Click on date input should not collapse
+      const dateInput = screen.getByLabelText(/截止时间/i)
+      fireEvent.click(dateInput)
+
+      const expandableContent = screen.getByTestId('task-detail-expand')
+      expect(expandableContent).toHaveClass('[grid-template-rows:1fr]')
     })
 
     it('should remove line-clamp-2 when expanded', async () => {
@@ -352,44 +446,332 @@ describe('TodoCard', () => {
     })
   })
 
-  describe('Dropdown Menu Integration', () => {
-    it('should render dropdown menu trigger', () => {
-      renderWithRouter(
-        <TodoCard
-          todo={createMockTodo()}
-          onToggle={defaultOnToggle}
-        />
-      )
-
-      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
-    })
-
-    it('should pass callbacks to dropdown menu', async () => {
-      const onEdit = vi.fn()
+  describe('Delete Icon Button Integration', () => {
+    it('should render delete icon button when onDelete is provided', () => {
       const onDelete = vi.fn()
-
       renderWithRouter(
         <TodoCard
           todo={createMockTodo()}
           onToggle={defaultOnToggle}
-          onEdit={onEdit}
           onDelete={onDelete}
         />
       )
 
-      // Open dropdown
-      await userEvent.click(screen.getByRole('button', { name: /more options/i }))
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeInTheDocument()
+    })
 
-      // Click Edit
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
-      expect(onEdit).toHaveBeenCalled()
+    it('should NOT render delete icon button when onDelete is not provided', () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+        />
+      )
 
-      // Open dropdown again
-      await userEvent.click(screen.getByRole('button', { name: /more options/i }))
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
 
-      // Click Delete
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    it('should NOT render delete icon button when readonly=true', () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+          readonly={true}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
+
+    it('should NOT render delete icon button when showDelete=false', () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+          showDelete={false}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
+
+    it('should show confirmation dialog when delete icon is clicked', async () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      // AlertDialog should appear
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument()
+    })
+
+    it('should call onDelete when delete is confirmed', async () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      // Click confirm in AlertDialog
+      const confirmButton = screen.getByTestId('alert-dialog-action')
+      await userEvent.click(confirmButton)
+
       expect(onDelete).toHaveBeenCalled()
+    })
+
+    it('should NOT call onDelete when delete is cancelled', async () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      // Click cancel in AlertDialog
+      const cancelButton = screen.getByTestId('alert-dialog-cancel')
+      await userEvent.click(cancelButton)
+
+      expect(onDelete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Readonly Mode', () => {
+    it('should hide delete icon when readonly=true', () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo()}
+          onToggle={defaultOnToggle}
+          onDelete={onDelete}
+          readonly={true}
+        />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
+
+    it('should disable editing in TaskDetailExpand when readonly=true', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ description: 'Test task', notes: 'Test notes' })}
+          onToggle={defaultOnToggle}
+          readonly={true}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Should not have textareas (readonly mode)
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      // Should display text instead - look within the expandable content
+      const expandable = screen.getByTestId('task-detail-expand')
+      expect(expandable).toHaveTextContent('Test task')
+      expect(expandable).toHaveTextContent('Test notes')
+    })
+
+    it('should show text content in readonly mode', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ description: 'Readonly desc', notes: 'Readonly notes' })}
+          onToggle={defaultOnToggle}
+          readonly={true}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Should show description and notes as text - look within expandable content
+      const expandable = screen.getByTestId('task-detail-expand')
+      expect(expandable).toHaveTextContent('Readonly desc')
+      expect(expandable).toHaveTextContent('Readonly notes')
+    })
+
+    it('should show formatted deadline in readonly mode', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ deadline: '2024-12-25T23:59:59.999Z' })}
+          onToggle={defaultOnToggle}
+          readonly={true}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Should show formatted date (Chinese locale)
+      expect(screen.getByText(/12月/)).toBeInTheDocument()
+    })
+
+    it('should show "无详细信息" when all fields are empty in readonly mode', async () => {
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ description: '', notes: null, deadline: null })}
+          onToggle={defaultOnToggle}
+          readonly={true}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      expect(screen.getByText('无详细信息')).toBeInTheDocument()
+    })
+  })
+
+  describe('Save Handlers', () => {
+    it('should call onSaveDescription when description is changed and blurred', async () => {
+      const onSaveDescription = vi.fn().mockResolvedValue(undefined)
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ description: 'Original' })}
+          onToggle={defaultOnToggle}
+          onSaveDescription={onSaveDescription}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change description
+      const textarea = screen.getByLabelText(/描述/i)
+      await userEvent.clear(textarea)
+      await userEvent.type(textarea, 'New description')
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(onSaveDescription).toHaveBeenCalledWith('New description')
+      })
+    })
+
+    it('should call onSaveNotes when notes is changed and blurred', async () => {
+      const onSaveNotes = vi.fn().mockResolvedValue(undefined)
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ notes: null })}
+          onToggle={defaultOnToggle}
+          onSaveNotes={onSaveNotes}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change notes
+      const textarea = screen.getByLabelText(/笔记/i)
+      await userEvent.type(textarea, 'New notes')
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(onSaveNotes).toHaveBeenCalledWith('New notes')
+      })
+    })
+
+    it('should call onSaveNotes with null when notes is cleared', async () => {
+      const onSaveNotes = vi.fn().mockResolvedValue(undefined)
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ notes: 'Original notes' })}
+          onToggle={defaultOnToggle}
+          onSaveNotes={onSaveNotes}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Clear notes
+      const textarea = screen.getByLabelText(/笔记/i)
+      await userEvent.clear(textarea)
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(onSaveNotes).toHaveBeenCalledWith(null)
+      })
+    })
+
+    it('should call onSaveDeadline when deadline is changed', async () => {
+      const onSaveDeadline = vi.fn().mockResolvedValue(undefined)
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ deadline: null })}
+          onToggle={defaultOnToggle}
+          onSaveDeadline={onSaveDeadline}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // Change deadline
+      const dateInput = screen.getByLabelText(/截止时间/i)
+      fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
+
+      await waitFor(() => {
+        expect(onSaveDeadline).toHaveBeenCalledWith('2024-12-25T23:59:59.999Z')
+      })
+    })
+
+    it('should NOT call save handlers when readonly=true', async () => {
+      const onSaveDescription = vi.fn()
+      const onSaveNotes = vi.fn()
+      const onSaveDeadline = vi.fn()
+      renderWithRouter(
+        <TodoCard
+          todo={createMockTodo({ description: 'Test', notes: 'Notes' })}
+          onToggle={defaultOnToggle}
+          readonly={true}
+          onSaveDescription={onSaveDescription}
+          onSaveNotes={onSaveNotes}
+          onSaveDeadline={onSaveDeadline}
+        />
+      )
+
+      // Expand the card
+      const card = screen.getByTestId('todo-card')
+      await userEvent.click(card)
+
+      // In readonly mode, there are no textareas to change
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(onSaveDescription).not.toHaveBeenCalled()
+      expect(onSaveNotes).not.toHaveBeenCalled()
+      expect(onSaveDeadline).not.toHaveBeenCalled()
     })
   })
 })
@@ -481,36 +863,114 @@ describe('TodoCardHeader', () => {
     })
   })
 
-  describe('Dropdown Menu', () => {
-    it('should render dropdown menu trigger', () => {
+  describe('Delete Icon Button', () => {
+    it('should render delete icon button when showDelete=true (default) and onDelete is provided', () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCardHeader {...defaultProps} onDelete={onDelete} />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeInTheDocument()
+    })
+
+    it('should NOT render delete icon button when onDelete is not provided', () => {
       renderWithRouter(
         <TodoCardHeader {...defaultProps} />
       )
 
-      expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
     })
 
-    it('should pass callbacks to dropdown', async () => {
-      const onEdit = vi.fn()
+    it('should NOT render delete icon button when showDelete=false', () => {
+      const onDelete = vi.fn()
       renderWithRouter(
-        <TodoCardHeader {...defaultProps} onEdit={onEdit} />
+        <TodoCardHeader {...defaultProps} onDelete={onDelete} showDelete={false} />
       )
 
-      await userEvent.click(screen.getByRole('button', { name: /more options/i }))
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeUndefined()
+    })
 
-      expect(onEdit).toHaveBeenCalled()
+    it('should render delete icon button when showDelete=true and onDelete is provided', () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCardHeader {...defaultProps} onDelete={onDelete} showDelete={true} />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      expect(deleteIconButton).toBeInTheDocument()
+    })
+
+    it('should pass onDelete to DeleteIconButton', async () => {
+      const onDelete = vi.fn()
+      renderWithRouter(
+        <TodoCardHeader {...defaultProps} onDelete={onDelete} />
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      // AlertDialog should appear
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument()
+    })
+
+    it('should stop propagation when delete icon is clicked (card should not expand)', async () => {
+      const onDelete = vi.fn()
+      const parentClickHandler = vi.fn()
+
+      render(
+        <div onClick={parentClickHandler}>
+          <TodoCardHeader {...defaultProps} onDelete={onDelete} />
+        </div>
+      )
+
+      const deleteIconButton = getDeleteIconButton()
+      await userEvent.click(deleteIconButton!)
+
+      // Parent click handler should NOT be called due to stopPropagation
+      expect(parentClickHandler).not.toHaveBeenCalled()
     })
   })
 })
 
 describe('TodoCardContent', () => {
-  describe('DeadlineChip', () => {
-    it('should render deadline when provided', () => {
+  const defaultOnSaveDescription = vi.fn()
+  const defaultOnSaveNotes = vi.fn()
+  const defaultOnSaveDeadline = vi.fn()
+
+  // Helper to create mock todo data
+  function createMockTodoData(overrides: Partial<{
+    id: number
+    description: string
+    notes: string | null
+    deadline: string | null
+    emailId: number | null
+  }> = {}) {
+    return {
+      id: 1,
+      description: 'Test description',
+      notes: null,
+      deadline: null,
+      emailId: null,
+      ...overrides,
+    }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('Metadata Row', () => {
+    it('should render metadata row when collapsed with deadline', () => {
       renderWithRouter(
         <TodoCardContent
-          deadline="2024-12-25T00:00:00Z"
+          todo={createMockTodoData({ deadline: '2024-12-25T00:00:00Z' })}
           isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
         />
       )
 
@@ -519,33 +979,14 @@ describe('TodoCardContent', () => {
       expect(screen.getByText(/25/)).toBeInTheDocument()
     })
 
-    it('should NOT render when deadline is null', () => {
+    it('should render metadata row when collapsed with emailId', () => {
       renderWithRouter(
         <TodoCardContent
-          deadline={null}
+          todo={createMockTodoData({ emailId: 123 })}
           isExpanded={false}
-        />
-      )
-
-      // No deadline should be shown
-      expect(screen.queryByTestId('deadline-chip')).not.toBeInTheDocument()
-    })
-
-    it('should NOT render when deadline is undefined', () => {
-      renderWithRouter(
-        <TodoCardContent isExpanded={false} />
-      )
-
-      expect(screen.queryByTestId('deadline-chip')).not.toBeInTheDocument()
-    })
-  })
-
-  describe('EmailLinkIcon', () => {
-    it('should render email link when emailId is provided', () => {
-      renderWithRouter(
-        <TodoCardContent
-          emailId="123"
-          isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
         />
       )
 
@@ -553,51 +994,182 @@ describe('TodoCardContent', () => {
       expect(link).toHaveAttribute('href', '/inbox/123')
     })
 
-    it('should NOT render when emailId is null', () => {
+    it('should NOT render metadata row when expanded', () => {
       renderWithRouter(
         <TodoCardContent
-          emailId={null}
-          isExpanded={false}
+          todo={createMockTodoData({ deadline: '2024-12-25T00:00:00Z', emailId: 123 })}
+          isExpanded={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
         />
       )
 
-      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      // DeadlineChip and EmailLinkIcon should not be visible when expanded
+      expect(screen.queryByTestId('deadline-chip')).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /view associated email/i })).not.toBeInTheDocument()
     })
 
-    it('should NOT render when emailId is undefined', () => {
+    it('should NOT render metadata row when no deadline or emailId', () => {
       renderWithRouter(
-        <TodoCardContent isExpanded={false} />
+        <TodoCardContent
+          todo={createMockTodoData()}
+          isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
       )
 
+      expect(screen.queryByTestId('deadline-chip')).not.toBeInTheDocument()
       expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('TaskDetailExpand Integration', () => {
+    it('should pass description to TaskDetailExpand', () => {
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData({ description: 'My task' })}
+          isExpanded={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      const textarea = screen.getByLabelText(/描述/i)
+      expect(textarea).toHaveValue('My task')
+    })
+
+    it('should pass notes to TaskDetailExpand', () => {
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData({ notes: 'My notes' })}
+          isExpanded={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      const textarea = screen.getByLabelText(/笔记/i)
+      expect(textarea).toHaveValue('My notes')
+    })
+
+    it('should pass deadline to TaskDetailExpand', () => {
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData({ deadline: '2024-12-25T23:59:59.999Z' })}
+          isExpanded={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      const dateInput = screen.getByLabelText(/截止时间/i)
+      expect(dateInput).toHaveValue('2024-12-25')
+    })
+
+    it('should pass isExpanded prop to TaskDetailExpand', () => {
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData()}
+          isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      const expandable = screen.getByTestId('task-detail-expand')
+      expect(expandable).toHaveClass('[grid-template-rows:0fr]')
+    })
+
+    it('should pass readonly prop to TaskDetailExpand', () => {
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData({ description: 'Test' })}
+          isExpanded={true}
+          readonly={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      // In readonly mode, no textareas
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.getByText('Test')).toBeInTheDocument()
+    })
+
+    it('should pass save callbacks to TaskDetailExpand', async () => {
+      const onSaveDescription = vi.fn().mockResolvedValue(undefined)
+      renderWithRouter(
+        <TodoCardContent
+          todo={createMockTodoData({ description: 'Test' })}
+          isExpanded={true}
+          onSaveDescription={onSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
+      )
+
+      const textarea = screen.getByLabelText(/描述/i)
+      await userEvent.clear(textarea)
+      await userEvent.type(textarea, 'Changed')
+      fireEvent.blur(textarea)
+
+      await waitFor(() => {
+        expect(onSaveDescription).toHaveBeenCalledWith('Changed')
+      })
     })
   })
 
   describe('Expandable Area', () => {
     it('should be collapsed when isExpanded is false', () => {
       renderWithRouter(
-        <TodoCardContent isExpanded={false} />
+        <TodoCardContent
+          todo={createMockTodoData()}
+          isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
       )
 
-      const expandable = screen.getByTestId('todo-card-expandable')
+      const expandable = screen.getByTestId('task-detail-expand')
       expect(expandable).toHaveClass('[grid-template-rows:0fr]')
     })
 
     it('should be expanded when isExpanded is true', () => {
       renderWithRouter(
-        <TodoCardContent isExpanded={true} />
+        <TodoCardContent
+          todo={createMockTodoData()}
+          isExpanded={true}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
       )
 
-      const expandable = screen.getByTestId('todo-card-expandable')
+      const expandable = screen.getByTestId('task-detail-expand')
       expect(expandable).toHaveClass('[grid-template-rows:1fr]')
     })
 
     it('should have transition class for animation', () => {
       renderWithRouter(
-        <TodoCardContent isExpanded={false} />
+        <TodoCardContent
+          todo={createMockTodoData()}
+          isExpanded={false}
+          onSaveDescription={defaultOnSaveDescription}
+          onSaveNotes={defaultOnSaveNotes}
+          onSaveDeadline={defaultOnSaveDeadline}
+        />
       )
 
-      const expandable = screen.getByTestId('todo-card-expandable')
+      const expandable = screen.getByTestId('task-detail-expand')
       expect(expandable).toHaveClass('transition-[grid-template-rows]')
     })
   })
@@ -782,14 +1354,17 @@ describe('Accessibility', () => {
     expect(screen.getByRole('checkbox')).toBeInTheDocument()
   })
 
-  it('should have more options button accessible by label', () => {
+  it('should have delete button accessible by label when onDelete provided', () => {
+    const onDelete = vi.fn()
     renderWithRouter(
       <TodoCard
         todo={createMockTodo()}
         onToggle={defaultOnToggle}
+        onDelete={onDelete}
       />
     )
 
-    expect(screen.getByRole('button', { name: /more options/i })).toBeInTheDocument()
+    const deleteIconButton = getDeleteIconButton()
+    expect(deleteIconButton).toBeInTheDocument()
   })
 })

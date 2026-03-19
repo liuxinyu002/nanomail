@@ -6,6 +6,9 @@ import {
   TodoDateRangeQuerySchema
 } from './todo'
 
+// Helper to create a 2001 character string for testing max length
+const createLongString = (length: number) => 'a'.repeat(length)
+
 describe('Todo Schemas', () => {
   describe('TodoSchema', () => {
     const validTodo = {
@@ -17,6 +20,50 @@ describe('Todo Schemas', () => {
       boardColumnId: 1,
       createdAt: '2024-01-15T10:00:00Z'
     }
+
+    describe('color field', () => {
+      it('should accept valid hex color (#RRGGBB)', () => {
+        const result = TodoSchema.parse({ ...validTodo, color: '#FF5733' })
+        expect(result.color).toBe('#FF5733')
+      })
+
+      it('should accept lowercase hex color', () => {
+        const result = TodoSchema.parse({ ...validTodo, color: '#ff5733' })
+        expect(result.color).toBe('#ff5733')
+      })
+
+      it('should accept mixed case hex color', () => {
+        const result = TodoSchema.parse({ ...validTodo, color: '#Ff57aB' })
+        expect(result.color).toBe('#Ff57aB')
+      })
+
+      it('should accept null color', () => {
+        const result = TodoSchema.parse({ ...validTodo, color: null })
+        expect(result.color).toBeNull()
+      })
+
+      it('should default color to null when not provided', () => {
+        const result = TodoSchema.parse(validTodo)
+        expect(result.color).toBeNull()
+      })
+
+      it('should reject invalid hex color (missing #)', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, color: 'FF5733' })).toThrow()
+      })
+
+      it('should reject invalid hex color (wrong length)', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, color: '#FF573' })).toThrow() // 5 chars
+        expect(() => TodoSchema.parse({ ...validTodo, color: '#FF57333' })).toThrow() // 7 chars
+      })
+
+      it('should reject invalid hex color (invalid characters)', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, color: '#GG5733' })).toThrow()
+      })
+
+      it('should reject empty string color', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, color: '' })).toThrow()
+      })
+    })
 
     it('should parse valid todo with deadline', () => {
       const result = TodoSchema.parse(validTodo)
@@ -57,6 +104,40 @@ describe('Todo Schemas', () => {
       expect(() => TodoSchema.parse({ ...validTodo, boardColumnId: 0 })).toThrow()
       expect(() => TodoSchema.parse({ ...validTodo, boardColumnId: -1 })).toThrow()
     })
+
+    describe('notes field', () => {
+      it('should accept notes field with valid text', () => {
+        const result = TodoSchema.parse({ ...validTodo, notes: 'This is a note' })
+        expect(result.notes).toBe('This is a note')
+      })
+
+      it('should accept null notes', () => {
+        const result = TodoSchema.parse({ ...validTodo, notes: null })
+        expect(result.notes).toBeNull()
+      })
+
+      it('should accept empty string notes', () => {
+        const result = TodoSchema.parse({ ...validTodo, notes: '' })
+        expect(result.notes).toBe('')
+      })
+
+      it('should accept notes up to 2000 characters', () => {
+        const longNotes = createLongString(2000)
+        const result = TodoSchema.parse({ ...validTodo, notes: longNotes })
+        expect(result.notes).toBe(longNotes)
+        expect(result.notes?.length).toBe(2000)
+      })
+
+      it('should reject notes exceeding 2000 characters', () => {
+        const tooLongNotes = createLongString(2001)
+        expect(() => TodoSchema.parse({ ...validTodo, notes: tooLongNotes })).toThrow()
+      })
+
+      it('should default notes to null when not provided', () => {
+        const result = TodoSchema.parse(validTodo)
+        expect(result.notes).toBeNull()
+      })
+    })
   })
 
   describe('CreateTodoSchema', () => {
@@ -67,6 +148,23 @@ describe('Todo Schemas', () => {
       deadline: '2024-03-15T23:59:59.000Z',
       boardColumnId: 1
     }
+
+    describe('color field (derived - should be rejected)', () => {
+      it('should reject color field in create request', () => {
+        const result = CreateTodoSchema.safeParse({ ...validCreate, color: '#FF5733' })
+        expect(result.success).toBe(false)
+      })
+
+      it('should reject color: null in create request', () => {
+        const result = CreateTodoSchema.safeParse({ ...validCreate, color: null })
+        expect(result.success).toBe(false)
+      })
+
+      it('should reject any unknown field in create request', () => {
+        const result = CreateTodoSchema.safeParse({ ...validCreate, unknownField: 'value' })
+        expect(result.success).toBe(false)
+      })
+    })
 
     it('should parse valid create todo with deadline', () => {
       const result = CreateTodoSchema.parse(validCreate)
@@ -92,9 +190,62 @@ describe('Todo Schemas', () => {
       const result = CreateTodoSchema.parse({ ...validCreate, position: 10 })
       expect(result.position).toBe(10)
     })
+
+    describe('notes field', () => {
+      it('should accept notes field with valid text', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, notes: 'This is a note' })
+        expect(result.notes).toBe('This is a note')
+      })
+
+      it('should accept null notes', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, notes: null })
+        expect(result.notes).toBeNull()
+      })
+
+      it('should accept empty string notes', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, notes: '' })
+        expect(result.notes).toBe('')
+      })
+
+      it('should accept notes up to 2000 characters', () => {
+        const longNotes = createLongString(2000)
+        const result = CreateTodoSchema.parse({ ...validCreate, notes: longNotes })
+        expect(result.notes).toBe(longNotes)
+      })
+
+      it('should reject notes exceeding 2000 characters', () => {
+        const tooLongNotes = createLongString(2001)
+        expect(() => CreateTodoSchema.parse({ ...validCreate, notes: tooLongNotes })).toThrow()
+      })
+
+      it('should default notes to null when not provided', () => {
+        const result = CreateTodoSchema.parse(validCreate)
+        expect(result.notes).toBeNull()
+      })
+    })
   })
 
   describe('UpdateTodoSchema', () => {
+    describe('color field (derived - should be rejected)', () => {
+      it('should reject color field in update request', () => {
+        const result = UpdateTodoSchema.safeParse({ color: '#FF5733' })
+        expect(result.success).toBe(false)
+      })
+
+      it('should reject color: null in update request', () => {
+        const result = UpdateTodoSchema.safeParse({ color: null })
+        expect(result.success).toBe(false)
+      })
+
+      it('should reject color along with valid fields', () => {
+        const result = UpdateTodoSchema.safeParse({
+          description: 'Updated',
+          color: '#FF5733'
+        })
+        expect(result.success).toBe(false)
+      })
+    })
+
     it('should allow partial updates', () => {
       const result = UpdateTodoSchema.parse({ status: 'completed' })
       expect(result.status).toBe('completed')
@@ -159,6 +310,45 @@ describe('Todo Schemas', () => {
       expect(result.deadline).toBe('2024-05-01T12:00:00.000Z')
       expect(result.boardColumnId).toBe(3)
       expect(result.position).toBe(10)
+    })
+
+    describe('notes field', () => {
+      it('should allow updating notes', () => {
+        const result = UpdateTodoSchema.parse({ notes: 'Updated notes' })
+        expect(result.notes).toBe('Updated notes')
+      })
+
+      it('should allow setting notes to null', () => {
+        const result = UpdateTodoSchema.parse({ notes: null })
+        expect(result.notes).toBeNull()
+      })
+
+      it('should allow setting notes to empty string', () => {
+        const result = UpdateTodoSchema.parse({ notes: '' })
+        expect(result.notes).toBe('')
+      })
+
+      it('should accept notes up to 2000 characters', () => {
+        const longNotes = createLongString(2000)
+        const result = UpdateTodoSchema.parse({ notes: longNotes })
+        expect(result.notes).toBe(longNotes)
+      })
+
+      it('should reject notes exceeding 2000 characters', () => {
+        const tooLongNotes = createLongString(2001)
+        expect(() => UpdateTodoSchema.parse({ notes: tooLongNotes })).toThrow()
+      })
+
+      it('should allow updating notes along with other fields', () => {
+        const result = UpdateTodoSchema.parse({
+          description: 'Updated description',
+          notes: 'Important notes for this todo',
+          status: 'in_progress'
+        })
+        expect(result.description).toBe('Updated description')
+        expect(result.notes).toBe('Important notes for this todo')
+        expect(result.status).toBe('in_progress')
+      })
     })
   })
 

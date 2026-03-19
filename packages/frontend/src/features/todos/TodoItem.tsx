@@ -13,8 +13,9 @@ export interface TodoItemProps {
  *
  * This component:
  * - Wraps the new TodoCard component (Phase 7 migration)
- * - Handles toggle, delete, and other mutations
- * - Provides callback handlers for dropdown menu actions
+ * - Handles toggle and delete mutations
+ * - Provides callback handlers for delete action
+ * - Handles save mutations for description, notes, and deadline
  */
 export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
   const updateMutation = useUpdateTodoMutation()
@@ -31,16 +32,27 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
     deleteMutation.mutate(todo.id)
   }, [deleteMutation, todo.id])
 
-  const handleEdit = useCallback(() => {
-    // Placeholder - edit modal/form to be implemented in future phase
-  }, [])
+  // Save handlers for TaskDetailExpand fields
+  const handleSaveDescription = useCallback((value: string) => {
+    updateMutation.mutate({ id: todo.id, data: { description: value } })
+  }, [todo.id, updateMutation])
+
+  const handleSaveNotes = useCallback((value: string | null) => {
+    updateMutation.mutate({ id: todo.id, data: { notes: value } })
+  }, [todo.id, updateMutation])
+
+  const handleSaveDeadline = useCallback((value: string | null) => {
+    updateMutation.mutate({ id: todo.id, data: { deadline: value } })
+  }, [todo.id, updateMutation])
 
   return (
     <TodoCard
       todo={todo}
       onToggle={handleToggle}
-      onEdit={handleEdit}
       onDelete={showDelete ? handleDelete : undefined}
+      onSaveDescription={handleSaveDescription}
+      onSaveNotes={handleSaveNotes}
+      onSaveDeadline={handleSaveDeadline}
     />
   )
 }

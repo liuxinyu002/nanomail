@@ -61,8 +61,8 @@ export function InboxPanel({ todos, className }: InboxPanelProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {inboxTodos.map(todo => (
-              <DraggableTodoItem key={todo.id} todo={todo} />
+            {inboxTodos.map((todo, index) => (
+              <DraggableTodoItem key={todo.id} todo={todo} index={index} />
             ))}
           </div>
         )}

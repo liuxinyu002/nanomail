@@ -6,6 +6,10 @@ import { useUpdateTodoMutation, useDeleteTodoMutation } from '@/hooks'
 export interface TodoItemProps {
   todo: TodoItemType
   showDelete?: boolean
+  /** Ordinal number for sortable tasks (1, 2, 3...) */
+  ordinal?: number
+  /** Drag handle props from dnd-kit (attributes and listeners) */
+  dragHandleProps?: Record<string, unknown>
 }
 
 /**
@@ -17,7 +21,7 @@ export interface TodoItemProps {
  * - Provides callback handlers for delete action
  * - Handles save mutations for description, notes, and deadline
  */
-export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
+export function TodoItem({ todo, showDelete = false, ordinal, dragHandleProps }: TodoItemProps) {
   const updateMutation = useUpdateTodoMutation()
   const deleteMutation = useDeleteTodoMutation()
 
@@ -53,6 +57,8 @@ export function TodoItem({ todo, showDelete = false }: TodoItemProps) {
       onSaveDescription={handleSaveDescription}
       onSaveNotes={handleSaveNotes}
       onSaveDeadline={handleSaveDeadline}
+      ordinal={ordinal}
+      dragHandleProps={dragHandleProps}
     />
   )
 }

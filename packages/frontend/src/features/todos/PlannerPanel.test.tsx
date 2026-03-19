@@ -133,11 +133,12 @@ describe('PlannerPanel', () => {
       ]
       render(<PlannerPanel {...defaultProps} todos={todos} />)
 
-      // Only "Scheduled todo" should be visible
-      expect(screen.getByText('Scheduled todo')).toBeInTheDocument()
-      expect(screen.queryByText('No deadline')).not.toBeInTheDocument()
-      expect(screen.queryByText('Wrong column')).not.toBeInTheDocument()
-      expect(screen.queryByText('Wrong column 3')).not.toBeInTheDocument()
+      // Only "Scheduled todo" should be visible in the DayView
+      // Use test id to get the planner card specifically
+      expect(screen.getByTestId('planner-todo-card-1')).toBeInTheDocument()
+      expect(screen.queryByTestId('planner-todo-card-2')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('planner-todo-card-3')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('planner-todo-card-4')).not.toBeInTheDocument()
     })
 
     it('shows "0 scheduled" when no matching todos', () => {
@@ -239,7 +240,7 @@ describe('PlannerPanel', () => {
   })
 
   describe('interactions', () => {
-    it('calls onTodoClick when a todo card is clicked in DayView', async () => {
+    it('opens popover when a todo card is clicked in DayView (not onTodoClick callback)', async () => {
       const user = userEvent.setup()
       // Note: DayView shows today's content. Create todo with today's deadline.
       // This test focuses on click interaction, not date handling.
@@ -254,13 +255,19 @@ describe('PlannerPanel', () => {
       const onTodoClick = vi.fn()
       render(<PlannerPanel {...defaultProps} todos={[mockTodo]} onTodoClick={onTodoClick} />)
 
+      // Popover should not be visible initially
+      expect(screen.queryByTestId('todo-detail-popover')).not.toBeInTheDocument()
+
       const todoCard = screen.getByTestId('planner-todo-card-1')
       await user.click(todoCard)
 
-      expect(onTodoClick).toHaveBeenCalledWith(mockTodo)
+      // Popover should now be visible (new behavior)
+      expect(screen.getByTestId('todo-detail-popover')).toBeInTheDocument()
+      // onTodoClick is no longer called - popover opens instead
+      expect(onTodoClick).not.toHaveBeenCalled()
     })
 
-    it('calls onTodoClick when a todo card is clicked in WeekView', async () => {
+    it('opens popover when a todo card is clicked in WeekView (not onTodoClick callback)', async () => {
       const user = userEvent.setup()
       // Note: WeekView defaults to showing today. Create todo with today's deadline.
       // This test focuses on click interaction, not date handling.
@@ -281,10 +288,16 @@ describe('PlannerPanel', () => {
       await user.click(weekButton)
 
       // The todo should be visible since WeekView shows today by default
+      // Popover should not be visible initially
+      expect(screen.queryByTestId('todo-detail-popover')).not.toBeInTheDocument()
+
       const todoCard = screen.getByTestId('planner-todo-card-1')
       await user.click(todoCard)
 
-      expect(onTodoClick).toHaveBeenCalledWith(mockTodo)
+      // Popover should now be visible (new behavior)
+      expect(screen.getByTestId('todo-detail-popover')).toBeInTheDocument()
+      // onTodoClick is no longer called - popover opens instead
+      expect(onTodoClick).not.toHaveBeenCalled()
     })
   })
 

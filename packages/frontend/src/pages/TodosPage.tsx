@@ -24,7 +24,7 @@ function isValidHour(hour: number | undefined): hour is number {
 }
 
 const DEFAULT_COLUMNS: BoardColumn[] = [
-  { id: 1, name: 'Inbox', color: '#6B7280', order: 0, isSystem: true, createdAt: new Date() },
+  { id: 1, name: 'Inbox', color: '#C9CDD4', order: 0, isSystem: true, createdAt: new Date() },
   { id: 2, name: 'Todo', color: '#3B82F6', order: 1, isSystem: false, createdAt: new Date() },
   { id: 3, name: 'In Progress', color: '#F59E0B', order: 2, isSystem: false, createdAt: new Date() },
   { id: 4, name: 'Done', color: '#10B981', order: 3, isSystem: false, createdAt: new Date() },
@@ -277,7 +277,7 @@ export function TodosPage() {
         ) : (
           <div
             data-testid="panels-container"
-            className="flex-1 overflow-hidden"
+            className="flex-1 min-h-0 overflow-hidden"
           >
             <ResizablePanels
               panelConfigs={panelConfigs}

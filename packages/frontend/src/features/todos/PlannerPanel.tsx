@@ -4,7 +4,7 @@ import { DayView, WeekView, PlannerViewToggle } from './planner'
 import type { Todo } from '@nanomail/shared'
 
 export interface PlannerPanelProps {
-  /** All todos (filtered by deadline and boardColumnId in the panel) */
+  /** All todos (filtered by deadline in the panel) */
   todos: Todo[]
   /** Callback fired when a todo is clicked */
   onTodoClick?: (todo: Todo) => void
@@ -16,7 +16,7 @@ export interface PlannerPanelProps {
  * PlannerPanel - Calendar-based view for todos with deadlines.
  *
  * Features:
- * - Shows only todos with deadline AND boardColumnId === 2
+ * - Shows all todos with deadline set
  * - Day view (default) and Week view toggle
  * - Current date passed to DayView
  * - Selected date passed to WeekView (smart default applies within)
@@ -28,9 +28,9 @@ export function PlannerPanel({ todos, onTodoClick, className }: PlannerPanelProp
   // Current date for DayView
   const [currentDate] = useState(() => new Date())
 
-  // Filter todos: only show items with deadline AND boardColumnId === 2
+  // Filter todos: only show items with deadline
   const scheduledTodos = useMemo(() => {
-    return todos.filter(t => t.deadline !== null && t.boardColumnId === 2)
+    return todos.filter(t => t.deadline !== null)
   }, [todos])
 
   return (

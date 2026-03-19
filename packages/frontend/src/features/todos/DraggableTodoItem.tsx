@@ -1,24 +1,36 @@
-import { useDraggable } from '@dnd-kit/core'
+import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
 import { TodoItem } from './TodoItem'
 import type { TodoItem as TodoItemType } from '@/services'
 import { cn } from '@/lib/utils'
 
 export interface DraggableTodoItemProps {
   todo: TodoItemType
+  /** Index in the list (for ordinal display) */
+  index?: number
   showDelete?: boolean
 }
 
 /**
- * A draggable wrapper for TodoItem component.
+ * A sortable wrapper for TodoItem component.
  * Provides drag-and-drop functionality with visual feedback.
  *
- * Design: Drag handle is absolutely positioned inside the container's left edge,
- * appearing on hover without occupying flex space, maximizing content area.
+ * Phase 2: Passes ordinal and dragHandleProps to TodoItem,
+ * allowing the drag handle to be rendered inside TodoCardHeader
+ * with hover-swap interaction pattern.
+ *
+ * Phase 3: Uses useSortable for proper drop indicator/displacement
+ * animations during sortable drag operations.
  */
-export function DraggableTodoItem({ todo, showDelete }: DraggableTodoItemProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+export function DraggableTodoItem({ todo, index, showDelete }: DraggableTodoItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: todo.id,
     data: {
       type: 'todo',
@@ -27,7 +39,8 @@ export function DraggableTodoItem({ todo, showDelete }: DraggableTodoItemProps) 
   })
 
   const style = {
-    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transform: CSS.Transform.toString(transform),
+    transition,
   }
 
   return (
@@ -36,29 +49,16 @@ export function DraggableTodoItem({ todo, showDelete }: DraggableTodoItemProps) 
       style={style}
       data-testid="draggable-todo-item"
       className={cn(
-        'group relative transition-opacity',
+        'relative transition-opacity',
         isDragging && 'opacity-50'
       )}
     >
-      {/* Drag Handle - Absolutely positioned inside left edge, no space occupation */}
-      <button
-        data-testid="drag-handle"
-        type="button"
-        className={cn(
-          'absolute left-1 top-1/2 -translate-y-1/2 z-10',
-          'cursor-grab active:cursor-grabbing',
-          'text-muted-foreground hover:text-foreground',
-          'opacity-0 group-hover:opacity-100 transition-opacity',
-          'touch-none'
-        )}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-
-      {/* Todo Item - Full width */}
-      <TodoItem todo={todo} showDelete={showDelete} />
+      <TodoItem
+        todo={todo}
+        showDelete={showDelete}
+        ordinal={index !== undefined ? index + 1 : undefined}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
     </div>
   )
 }

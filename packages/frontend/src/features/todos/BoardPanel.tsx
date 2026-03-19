@@ -70,7 +70,7 @@ export function BoardPanel({ columns, todos, onCreateColumn, onDeleteColumn, onU
   return (
     <div
       data-testid="board-panel"
-      className={cn('flex flex-col bg-background rounded-lg border', className)}
+      className={cn('flex flex-col h-full bg-background rounded-lg border', className)}
     >
       {/* Header */}
       <div
@@ -87,7 +87,7 @@ export function BoardPanel({ columns, todos, onCreateColumn, onDeleteColumn, onU
       </div>
 
       {/* Columns */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 min-h-0 overflow-auto p-4">
         {isEmpty ? (
           <div className="flex gap-4 h-full">
             {/* Show only the New List button when no columns exist */}
@@ -96,7 +96,7 @@ export function BoardPanel({ columns, todos, onCreateColumn, onDeleteColumn, onU
         ) : (
           <div
             data-testid="columns-container"
-            className="flex gap-4 h-full"
+            className="flex gap-4"
           >
             {displayColumns.map(column => (
               <BoardColumnDroppable

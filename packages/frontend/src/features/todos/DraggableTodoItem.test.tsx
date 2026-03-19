@@ -7,23 +7,39 @@ import type { TodoItem } from '@/services'
 // Mock the TodoItem component
 const mockTodoItemRender = vi.fn()
 vi.mock('./TodoItem', () => ({
-  TodoItem: ({ todo, showDelete }: { todo: TodoItem; showDelete?: boolean }) => {
-    mockTodoItemRender({ todo, showDelete })
+  TodoItem: ({
+    todo,
+    showDelete,
+    ordinal,
+    dragHandleProps,
+  }: {
+    todo: TodoItem
+    showDelete?: boolean
+    ordinal?: number
+    dragHandleProps?: Record<string, unknown>
+  }) => {
+    mockTodoItemRender({ todo, showDelete, ordinal, dragHandleProps })
     return (
-      <div data-testid="todo-item-mock" data-show-delete={showDelete}>
+      <div
+        data-testid="todo-item-mock"
+        data-show-delete={showDelete}
+        data-ordinal={ordinal}
+        data-has-drag-props={!!dragHandleProps}
+      >
         {todo.description}
       </div>
     )
   },
 }))
 
-// Store for captured useDraggable arguments and return values
-let capturedDraggableArgs: unknown = null
+// Store for captured useSortable arguments and return values
+let capturedSortableArgs: unknown = null
 let mockReturnValue: {
   attributes: Record<string, unknown>
   listeners: Record<string, unknown>
   setNodeRef: (node: HTMLElement | null) => void
-  transform: { x: number; y: number } | null
+  transform: { x: number; y: number; scaleX: number; scaleY: number } | null
+  transition: string
   isDragging: boolean
 } = {
   attributes: {
@@ -33,27 +49,25 @@ let mockReturnValue: {
   listeners: {},
   setNodeRef: vi.fn(),
   transform: null,
+  transition: '',
   isDragging: false,
 }
 
-// Mock useDraggable from dnd-kit
-vi.mock('@dnd-kit/core', async () => {
-  const actual = await vi.importActual('@dnd-kit/core')
-  return {
-    ...actual,
-    useDraggable: (args: unknown) => {
-      capturedDraggableArgs = args
-      return mockReturnValue
-    },
-  }
-})
+// Mock useSortable from @dnd-kit/sortable
+vi.mock('@dnd-kit/sortable', () => ({
+  useSortable: (args: unknown) => {
+    capturedSortableArgs = args
+    return mockReturnValue
+  },
+  verticalListSortingStrategy: {},
+}))
 
 // Mock CSS utilities
 vi.mock('@dnd-kit/utilities', () => ({
   CSS: {
-    Translate: {
-      toString: (transform: { x: number; y: number } | null) =>
-        transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : '',
+    Transform: {
+      toString: (transform: { x: number; y: number; scaleX: number; scaleY: number } | null) =>
+        transform ? `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scaleX}, ${transform.scaleY})` : '',
     },
   },
 }))
@@ -75,7 +89,7 @@ describe('DraggableTodoItem', () => {
   }
 
   beforeEach(() => {
-    capturedDraggableArgs = null
+    capturedSortableArgs = null
     mockReturnValue = {
       attributes: {
         role: 'button',
@@ -84,6 +98,7 @@ describe('DraggableTodoItem', () => {
       listeners: {},
       setNodeRef: vi.fn(),
       transform: null,
+      transition: '',
       isDragging: false,
     }
     mockTodoItemRender.mockClear()
@@ -116,28 +131,28 @@ describe('DraggableTodoItem', () => {
       expect(container).toBeInTheDocument()
     })
 
-    it('should pass todo id to useDraggable', () => {
+    it('should pass todo id to useSortable', () => {
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      expect(capturedDraggableArgs).toEqual(
+      expect(capturedSortableArgs).toEqual(
         expect.objectContaining({
           id: 1,
         })
       )
     })
 
-    it('should pass todo data to useDraggable', () => {
+    it('should pass todo data to useSortable', () => {
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      expect(capturedDraggableArgs).toEqual(
+      expect(capturedSortableArgs).toEqual(
         expect.objectContaining({
           data: expect.objectContaining({
             type: 'todo',
@@ -145,143 +160,6 @@ describe('DraggableTodoItem', () => {
           }),
         })
       )
-    })
-  })
-
-  describe('Drag Handle', () => {
-    it('should render a drag handle', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      expect(screen.getByTestId('drag-handle')).toBeInTheDocument()
-    })
-
-    it('should have cursor-grab class on drag handle', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('cursor-grab')
-    })
-
-    it('should have active:cursor-grabbing class on drag handle', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('active:cursor-grabbing')
-    })
-
-    it('should have touch-none class on drag handle for touch devices', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('touch-none')
-    })
-  })
-
-  describe('Phase 5: Drag Handle Hover Visibility', () => {
-    it('should have group class on container for hover effect', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const container = screen.getByTestId('draggable-todo-item')
-      expect(container).toHaveClass('group')
-    })
-
-    it('should have opacity-0 class on drag handle by default (hidden)', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('opacity-0')
-    })
-
-    it('should have group-hover:opacity-100 class on drag handle (visible on hover)', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('group-hover:opacity-100')
-    })
-
-    it('should have transition-opacity for smooth appearance', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveClass('transition-opacity')
-    })
-  })
-
-  describe('Phase 5: Drag Attributes Only on Handle', () => {
-    it('should have role="button" on drag handle, not container', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveAttribute('role', 'button')
-    })
-
-    it('should NOT have role="button" on container', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const container = screen.getByTestId('draggable-todo-item')
-      expect(container).not.toHaveAttribute('role', 'button')
-    })
-
-    it('should have tabIndex on drag handle for keyboard accessibility', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveAttribute('tabIndex', '0')
-    })
-
-    it('should NOT have tabIndex on container', () => {
-      render(
-        <DndProvider>
-          <DraggableTodoItem {...defaultProps} />
-        </DndProvider>
-      )
-
-      const container = screen.getByTestId('draggable-todo-item')
-      expect(container).not.toHaveAttribute('tabIndex')
     })
   })
 
@@ -321,7 +199,7 @@ describe('DraggableTodoItem', () => {
     it('should apply transform style when transform is provided', () => {
       mockReturnValue = {
         ...mockReturnValue,
-        transform: { x: 10, y: 20 },
+        transform: { x: 10, y: 20, scaleX: 1, scaleY: 1 },
       }
 
       render(
@@ -331,7 +209,7 @@ describe('DraggableTodoItem', () => {
       )
 
       const container = screen.getByTestId('draggable-todo-item')
-      expect(container.style.transform).toBe('translate3d(10px, 20px, 0)')
+      expect(container.style.transform).toBe('translate3d(10px, 20px, 0) scale(1, 1)')
     })
 
     it('should not apply transform when transform is null', () => {
@@ -349,29 +227,93 @@ describe('DraggableTodoItem', () => {
       const container = screen.getByTestId('draggable-todo-item')
       expect(container.style.transform).toBe('')
     })
+
+    it('should apply transition style for smooth displacement animation', () => {
+      mockReturnValue = {
+        ...mockReturnValue,
+        transition: 'transform 200ms ease',
+      }
+
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      expect(container.style.transition).toBe('transform 200ms ease')
+    })
   })
 
-  describe('Accessibility', () => {
-    it('should have role button on drag handle for keyboard users', () => {
+  describe('Phase 3: Sortable Drop Indicator (useSortable)', () => {
+    it('should use useSortable hook for sortable drag behavior', () => {
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveAttribute('role', 'button')
+      // useSortable should be called with the todo id
+      expect(capturedSortableArgs).toEqual(
+        expect.objectContaining({
+          id: mockTodo.id,
+        })
+      )
     })
 
-    it('should be focusable via drag handle', () => {
+    it('should apply CSS.Transform for sortable displacement (not CSS.Translate)', () => {
+      // CSS.Transform includes scale for sortable animations
+      mockReturnValue = {
+        ...mockReturnValue,
+        transform: { x: 0, y: 50, scaleX: 1, scaleY: 1 },
+      }
+
       render(
         <DndProvider>
           <DraggableTodoItem {...defaultProps} />
         </DndProvider>
       )
 
-      const dragHandle = screen.getByTestId('drag-handle')
-      expect(dragHandle).toHaveAttribute('tabIndex', '0')
+      const container = screen.getByTestId('draggable-todo-item')
+      // Should use CSS.Transform.toString (includes scale)
+      expect(container.style.transform).toContain('translate3d')
+      expect(container.style.transform).toContain('scale')
+    })
+
+    it('should have transition property enabled for smooth drop indicator animation', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      // Transition should be applied (even if empty string, the property is set)
+      expect(container.style.transition).toBeDefined()
+    })
+
+    it('should maintain consistent styling during sortable drag operations', () => {
+      // When dragging another item, this item should smoothly displace
+      mockReturnValue = {
+        ...mockReturnValue,
+        transform: { x: 0, y: 60, scaleX: 1, scaleY: 1 }, // Displaced down by 60px
+        transition: 'transform 250ms ease',
+        isDragging: false,
+      }
+
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      const container = screen.getByTestId('draggable-todo-item')
+      // Should show displaced position
+      expect(container.style.transform).toBe('translate3d(0px, 60px, 0) scale(1, 1)')
+      // Should have smooth transition
+      expect(container.style.transition).toBe('transform 250ms ease')
+      // Should NOT have opacity-50 (not the item being dragged)
+      expect(container).not.toHaveClass('opacity-50')
     })
   })
 
@@ -418,7 +360,7 @@ describe('DraggableTodoItem', () => {
         </DndProvider>
       )
 
-      expect(capturedDraggableArgs).toEqual(
+      expect(capturedSortableArgs).toEqual(
         expect.objectContaining({
           data: expect.objectContaining({
             todo: expect.objectContaining({
@@ -483,6 +425,101 @@ describe('DraggableTodoItem', () => {
 
       const todoItemMock = screen.getByTestId('todo-item-mock')
       expect(todoItemMock).toHaveAttribute('data-show-delete', 'true')
+    })
+  })
+
+  describe('Phase 2: Ordinal and Drag Handle Props', () => {
+    it('should pass ordinal prop to TodoItem when index is provided', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} index={0} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordinal: 1,
+        })
+      )
+    })
+
+    it('should calculate ordinal correctly (index + 1)', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} index={4} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordinal: 5,
+        })
+      )
+    })
+
+    it('should pass dragHandleProps to TodoItem', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} index={0} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dragHandleProps: expect.objectContaining({
+            role: 'button',
+          }),
+        })
+      )
+    })
+
+    it('should combine attributes and listeners in dragHandleProps', () => {
+      // Set up mock with listeners
+      mockReturnValue = {
+        ...mockReturnValue,
+        listeners: { onPointerDown: vi.fn() },
+      }
+
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} index={0} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dragHandleProps: expect.objectContaining({
+            role: 'button',
+            onPointerDown: expect.any(Function),
+          }),
+        })
+      )
+    })
+
+    it('should NOT render external drag handle (moved to TodoCardHeader)', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} index={0} />
+        </DndProvider>
+      )
+
+      // The drag handle should NOT be rendered at DraggableTodoItem level
+      // It should be passed down to TodoItem -> TodoCard -> TodoCardHeader
+      expect(screen.queryByTestId('drag-handle')).not.toBeInTheDocument()
+    })
+
+    it('should pass ordinal as undefined when index is not provided', () => {
+      render(
+        <DndProvider>
+          <DraggableTodoItem {...defaultProps} />
+        </DndProvider>
+      )
+
+      expect(mockTodoItemRender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordinal: undefined,
+        })
+      )
     })
   })
 })

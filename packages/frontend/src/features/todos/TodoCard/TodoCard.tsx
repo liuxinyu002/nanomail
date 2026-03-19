@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { TodoCardHeader } from './TodoCardHeader'
 import { TodoCardContent } from './TodoCardContent'
-import { TaskDetailExpand } from './TaskDetailExpand'
 import type { Todo } from '@nanomail/shared'
 
 interface TodoCardProps {
@@ -23,6 +22,10 @@ interface TodoCardProps {
   }
   /** Use compact styling for planner/scheduler views */
   compact?: boolean
+  /** Ordinal number for sortable tasks (1, 2, 3...) */
+  ordinal?: number
+  /** Drag handle props from dnd-kit (attributes and listeners) */
+  dragHandleProps?: Record<string, unknown>
   onSaveDescription?: (value: string) => void
   onSaveNotes?: (value: string | null) => void
   onSaveDeadline?: (value: string | null) => void
@@ -37,6 +40,14 @@ interface TodoCardProps {
  * - Hover shadow effect
  * - Click to expand/collapse (except on interactive elements)
  * - Completed state shows line-through and opacity
+ *
+ * Modes:
+ * - **Standard mode** (compact=false): Full card with expandable content area.
+ *   Used in Inbox and Board views. Clicking the card toggles TaskDetailExpand.
+ * - **Compact mode** (compact=true): Minimal card with just checkbox + title.
+ *   Used in Planner views. TaskDetailExpand is intentionally NOT rendered here
+ *   to keep cards small. Instead, clicking a card in Planner opens a popover
+ *   for detail viewing (see PlannerTodoCard for implementation).
  */
 export function TodoCard({
   todo,
@@ -47,10 +58,13 @@ export function TodoCard({
   showDelete = true,
   colorBar,
   compact = false,
+  ordinal,
+  dragHandleProps,
   onSaveDescription,
   onSaveNotes,
   onSaveDeadline,
 }: TodoCardProps) {
+  // Expansion state - only used for non-compact mode (Inbox/Board)
   const [isExpanded, setIsExpanded] = useState(false)
 
   // Derive completed state from status
@@ -85,6 +99,8 @@ export function TodoCard({
   }
 
   // Compact mode: minimal styling for planner/scheduler
+  // Note: TaskDetailExpand is NOT rendered in compact mode to keep cards minimal.
+  // Detail viewing in Planner uses a popover-based approach instead.
   if (compact) {
     // Determine color bar styling - prefer hex color for inline style
     const colorBarStyle = colorBar?.hexColor
@@ -95,10 +111,9 @@ export function TodoCard({
     return (
       <div
         data-testid="todo-card"
-        onClick={handleCardClick}
         className={cn(
           'bg-white border border-gray-100 rounded-sm',
-          'hover:bg-gray-50 transition-colors cursor-pointer',
+          'hover:bg-gray-50 transition-colors',
           className
         )}
       >
@@ -158,18 +173,6 @@ export function TodoCard({
             {todo.description}
           </span>
         </div>
-
-        {/* Expandable detail area */}
-        <TaskDetailExpand
-          description={todo.description}
-          notes={todo.notes}
-          deadline={todo.deadline}
-          isExpanded={isExpanded}
-          readonly={readonly}
-          onSaveDescription={handleSaveDescription}
-          onSaveNotes={handleSaveNotes}
-          onSaveDeadline={handleSaveDeadline}
-        />
       </div>
     )
   }
@@ -195,6 +198,8 @@ export function TodoCard({
         onDelete={onDelete}
         isExpanded={isExpanded}
         showDelete={showDelete && !readonly}
+        ordinal={ordinal}
+        dragHandleProps={dragHandleProps}
       />
 
       <TodoCardContent

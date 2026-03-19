@@ -199,7 +199,7 @@ describe('DayView', () => {
   })
 
   describe('interactions', () => {
-    it('calls onTodoClick when todo card is clicked', async () => {
+    it('opens popover when todo card is clicked (instead of calling onTodoClick)', async () => {
       const user = userEvent.setup()
       const mockTodo = createMockTodo({
         id: 1,
@@ -210,10 +210,16 @@ describe('DayView', () => {
 
       render(<DayView date={mockDate} todos={[mockTodo]} onTodoClick={onTodoClick} />)
 
+      // Popover should not be visible initially
+      expect(screen.queryByTestId('todo-detail-popover')).not.toBeInTheDocument()
+
       const todoCard = screen.getByTestId('planner-todo-card-1')
       await user.click(todoCard)
 
-      expect(onTodoClick).toHaveBeenCalledWith(mockTodo)
+      // Popover should now be visible (new behavior)
+      expect(screen.getByTestId('todo-detail-popover')).toBeInTheDocument()
+      // onTodoClick is no longer called - popover opens instead
+      expect(onTodoClick).not.toHaveBeenCalled()
     })
   })
 

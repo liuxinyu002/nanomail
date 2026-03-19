@@ -531,4 +531,54 @@ describe('TodoItem', () => {
       expect(mockUpdateMutate).not.toHaveBeenCalled()
     })
   })
+
+  describe('Phase 2: Ordinal and Drag Handle Props', () => {
+    it('should render ordinal badge when ordinal prop is provided', () => {
+      renderWithRouter(<TodoItem {...defaultProps} ordinal={1} />)
+
+      expect(screen.getByTestId('ordinal-badge')).toBeInTheDocument()
+      expect(screen.getByTestId('ordinal-badge')).toHaveTextContent('1.')
+    })
+
+    it('should NOT render ordinal badge when ordinal is undefined', () => {
+      renderWithRouter(<TodoItem {...defaultProps} ordinal={undefined} />)
+
+      expect(screen.queryByTestId('ordinal-badge')).not.toBeInTheDocument()
+    })
+
+    it('should render drag handle on hover when dragHandleProps is provided with ordinal', async () => {
+      const dragHandleProps = { 'data-drag': 'true' }
+      renderWithRouter(
+        <TodoItem {...defaultProps} ordinal={1} dragHandleProps={dragHandleProps} />
+      )
+
+      // Initially, badge should be visible
+      expect(screen.getByTestId('ordinal-badge')).toBeInTheDocument()
+
+      // Hover on the header
+      const header = screen.getByTestId('todo-card-header')
+      fireEvent.mouseEnter(header)
+
+      // After hover, drag handle should be visible
+      expect(screen.getByTestId('drag-handle')).toBeInTheDocument()
+    })
+
+    it('should NOT render drag handle when dragHandleProps is undefined', async () => {
+      renderWithRouter(
+        <TodoItem {...defaultProps} ordinal={1} dragHandleProps={undefined} />
+      )
+
+      const header = screen.getByTestId('todo-card-header')
+      fireEvent.mouseEnter(header)
+
+      // No drag handle should appear
+      expect(screen.queryByTestId('drag-handle')).not.toBeInTheDocument()
+    })
+
+    it('should pass ordinal correctly to TodoCardHeader', () => {
+      renderWithRouter(<TodoItem {...defaultProps} ordinal={5} />)
+
+      expect(screen.getByTestId('ordinal-badge')).toHaveTextContent('5.')
+    })
+  })
 })

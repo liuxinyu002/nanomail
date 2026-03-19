@@ -99,14 +99,24 @@ export function TaskDetailExpand({
     }
   }
 
-  // Format deadline for display
+  // Format deadline for display: MM-DD HH:mm
   const formatDeadline = (deadlineStr: string): string => {
     const d = new Date(deadlineStr)
-    return d.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    return `${month}-${day} ${hours}:${minutes}`
+  }
+
+  // Parse date value from ISO string (YYYY-MM-DD format for date input)
+  const getDateValue = (isoString: string | null): string => {
+    if (!isoString) return ''
+    const d = new Date(isoString)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   // Read-only rendering
@@ -215,26 +225,29 @@ export function TaskDetailExpand({
           <div>
             <label htmlFor={deadlineId} className="text-xs text-[#6B7280] uppercase tracking-wide">截止时间</label>
             <div className="flex items-center gap-2 mt-1">
-              <Calendar className="w-4 h-4 text-[#6B7280]" />
+              <Calendar className="w-4 h-4 text-[#6B7280] shrink-0" />
               <input
                 id={deadlineId}
                 type="date"
-                value={deadline ? deadline.split('T')[0] : ''}
+                value={getDateValue(deadline)}
                 onChange={(e) => {
                   const value = e.target.value
+                  // date input returns YYYY-MM-DD, convert to ISO with end of day
                   handleDeadlineChange(value ? `${value}T23:59:59.999Z` : null)
                 }}
                 className={cn(
-                  'text-sm text-[#111827]',
-                  'bg-transparent border-none outline-none',
-                  'focus:bg-white focus:ring-1 focus:ring-[#2563EB] focus:rounded px-1'
+                  'flex-1 min-w-0',
+                  'text-[13px] text-[#111827]',
+                  'bg-white border border-gray-200 rounded px-2 py-1',
+                  'focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]'
                 )}
+                style={{ boxSizing: 'border-box' }}
               />
               {deadline && (
                 <button
                   type="button"
                   onClick={() => handleDeadlineChange(null)}
-                  className="text-xs text-[#6B7280] hover:text-[#EF4444]"
+                  className="text-xs text-[#6B7280] hover:text-[#EF4444] shrink-0"
                 >
                   清除
                 </button>

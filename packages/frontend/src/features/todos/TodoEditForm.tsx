@@ -1,10 +1,7 @@
 import { useState } from 'react'
-import { format } from 'date-fns'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
-import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { useUpdateTodoMutation } from '@/hooks/useTodoMutations'
 import type { TodoItem } from '@/services'
 
@@ -16,11 +13,19 @@ export interface TodoEditFormProps {
   onCancel: () => void
 }
 
+// Parse date value from ISO string (YYYY-MM-DD format for date input)
+function getDateValue(isoString: string | null): string {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function TodoEditForm({ todo, onCancel }: TodoEditFormProps) {
   const [description, setDescription] = useState(todo.description)
-  const [deadline, setDeadline] = useState<Date | null>(
-    todo.deadline ? new Date(todo.deadline) : null
-  )
+  const [deadlineValue, setDeadlineValue] = useState<string>(getDateValue(todo.deadline))
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const updateMutation = useUpdateTodoMutation()
@@ -33,11 +38,13 @@ export function TodoEditForm({ todo, onCancel }: TodoEditFormProps) {
     }
 
     setValidationError(null)
+    // Convert date value (YYYY-MM-DD) to ISO string with end of day
+    const deadlineIso = deadlineValue ? `${deadlineValue}T23:59:59.999Z` : null
     updateMutation.mutate({
       id: todo.id,
       data: {
         description: trimmedDescription.slice(0, MAX_DESCRIPTION_LENGTH),
-        deadline: deadline?.toISOString() || null,
+        deadline: deadlineIso,
       },
     })
     onCancel()
@@ -75,23 +82,14 @@ export function TodoEditForm({ todo, onCancel }: TodoEditFormProps) {
         <Label htmlFor="deadline" className="text-sm font-medium">
           Deadline
         </Label>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              id="deadline"
-              variant="outline"
-              className="w-full mt-1 justify-start text-left font-normal"
-            >
-              {deadline ? format(deadline, 'PPP') : 'Pick a date'}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              selected={deadline}
-              onSelect={(date) => setDeadline(date)}
-            />
-          </PopoverContent>
-        </Popover>
+        <input
+          id="deadline"
+          type="date"
+          value={deadlineValue}
+          onChange={(e) => setDeadlineValue(e.target.value)}
+          className="w-full mt-1 px-2 py-1.5 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+          style={{ boxSizing: 'border-box' }}
+        />
       </div>
 
       <div className="flex justify-end gap-2">

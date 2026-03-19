@@ -23,13 +23,14 @@ export function DeadlineChip({ deadline }: DeadlineChipProps) {
 }
 
 /**
- * Formats a date to Chinese format
- * e.g., "12月25日" or "3月15日"
+ * Formats a date to MM-DD HH:mm format
+ * e.g., "03-19 09:30"
  */
 function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-  })
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hours}:${minutes}`
 }

@@ -483,11 +483,12 @@ describe('TodoItem', () => {
       const card = screen.getByTestId('todo-card')
       await userEvent.click(card)
 
-      // Change deadline
+      // Change deadline - date input format
       const dateInput = screen.getByLabelText(/截止时间/i)
       fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
 
       await waitFor(() => {
+        // date is saved with end of day time
         expect(mockUpdateMutate).toHaveBeenCalledWith({
           id: 1,
           data: { deadline: '2024-12-25T23:59:59.999Z' },

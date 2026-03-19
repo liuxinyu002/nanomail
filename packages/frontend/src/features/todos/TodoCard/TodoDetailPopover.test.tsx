@@ -448,8 +448,8 @@ describe('TodoDetailPopover', () => {
       // Description appears in both header and content
       expect(screen.getAllByText('Full todo').length).toBeGreaterThan(0)
       expect(screen.getByText('With notes')).toBeInTheDocument()
-      // Date should be formatted
-      expect(screen.getByText(/12月/)).toBeInTheDocument()
+      // Date should be formatted: UTC 2024-12-25T23:59:59.999Z = local 2024-12-26 07:59 (UTC+8)
+      expect(screen.getByText('12-26 07:59')).toBeInTheDocument()
     })
 
     it('handles long description text', async () => {

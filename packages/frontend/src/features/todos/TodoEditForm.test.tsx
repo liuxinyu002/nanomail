@@ -96,11 +96,12 @@ describe('TodoEditForm', () => {
       const saveButton = screen.getByRole('button', { name: /save/i })
       fireEvent.click(saveButton)
 
+      // deadline is converted from date value to ISO string with end of day
       expect(mockMutate).toHaveBeenCalledWith({
         id: 1,
         data: {
           description: 'Test todo description',
-          deadline: mockTodo.deadline,
+          deadline: '2024-01-20T23:59:59.999Z',
         },
       })
     })
@@ -142,7 +143,20 @@ describe('TodoEditForm', () => {
         <TodoEditForm todo={todoWithoutDeadline} onCancel={mockOnCancel} />
       )
 
-      expect(screen.getByText(/pick a date/i)).toBeInTheDocument()
+      // datetime-local input should be empty when no deadline
+      const deadlineInput = screen.getByLabelText(/deadline/i)
+      expect(deadlineInput).toHaveValue('')
+    })
+
+    it('handles todo with deadline', () => {
+      renderWithQueryClient(
+        <TodoEditForm todo={mockTodo} onCancel={mockOnCancel} />
+      )
+
+      // date input should have the deadline value
+      const deadlineInput = screen.getByLabelText(/deadline/i)
+      // UTC 2024-01-20T00:00:00.000Z = local 2024-01-20 08:00 (UTC+8)
+      expect(deadlineInput).toHaveValue('2024-01-20')
     })
   })
 })

@@ -200,10 +200,12 @@ describe('TaskDetailExpand', () => {
 
   describe('Editable Mode - Deadline Field', () => {
     it('should display deadline date in input', () => {
+      // UTC 2024-12-25T23:59:59.999Z = local date 2024-12-26 (UTC+8)
       render(<TaskDetailExpand {...defaultProps} deadline="2024-12-25T23:59:59.999Z" />)
 
       const dateInput = screen.getByLabelText(/截止时间/i)
-      expect(dateInput).toHaveValue('2024-12-25')
+      // date input value format: YYYY-MM-DD
+      expect(dateInput).toHaveValue('2024-12-26')
     })
 
     it('should have empty input when deadline is null', () => {
@@ -218,9 +220,11 @@ describe('TaskDetailExpand', () => {
       render(<TaskDetailExpand {...defaultProps} deadline={null} onSaveDeadline={onSaveDeadline} />)
 
       const dateInput = screen.getByLabelText(/截止时间/i)
+      // date input value format: YYYY-MM-DD
       fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
 
       await waitFor(() => {
+        // date is saved with end of day time
         expect(onSaveDeadline).toHaveBeenCalledWith('2024-12-25T23:59:59.999Z')
       })
     })
@@ -271,10 +275,11 @@ describe('TaskDetailExpand', () => {
     })
 
     it('should display formatted deadline in readonly mode', () => {
+      // UTC 2024-03-15T23:59:59.999Z = local time 2024-03-16 07:59:59 (UTC+8)
       render(<TaskDetailExpand {...defaultProps} deadline="2024-03-15T23:59:59.999Z" readonly={true} />)
 
-      // Should show formatted date in Chinese - note: timezone may affect the day
-      expect(screen.getByText(/3月/)).toBeInTheDocument()
+      // Should show formatted date in MM-DD HH:mm format
+      expect(screen.getByText('03-16 07:59')).toBeInTheDocument()
     })
 
     it('should show "无详细信息" when all fields are empty in readonly mode', () => {

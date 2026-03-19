@@ -18,13 +18,11 @@ export function DeadlineDisplay({ deadline }: DeadlineDisplayProps) {
   const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60)
   const isUrgent = !isOverdue && hoursUntil <= 24
 
-  const formatted = deadlineDate.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  const month = String(deadlineDate.getMonth() + 1).padStart(2, '0')
+  const day = String(deadlineDate.getDate()).padStart(2, '0')
+  const hours = String(deadlineDate.getHours()).padStart(2, '0')
+  const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
+  const formatted = `${month}-${day} ${hours}:${minutes}`
 
   return (
     <span

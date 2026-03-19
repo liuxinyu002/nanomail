@@ -630,8 +630,9 @@ describe('TodoCard', () => {
       const card = screen.getByTestId('todo-card')
       await userEvent.click(card)
 
-      // Should show formatted date (Chinese locale)
-      expect(screen.getByText(/12月/)).toBeInTheDocument()
+      // Should show formatted date (MM-DD HH:mm format)
+      // UTC 2024-12-25T23:59:59.999Z = local time 2024-12-26 07:59 (UTC+8)
+      expect(screen.getByText('12-26 07:59')).toBeInTheDocument()
     })
 
     it('should show "无详细信息" when all fields are empty in readonly mode', async () => {
@@ -739,11 +740,12 @@ describe('TodoCard', () => {
       const card = screen.getByTestId('todo-card')
       await userEvent.click(card)
 
-      // Change deadline
+      // Change deadline - date input format
       const dateInput = screen.getByLabelText(/截止时间/i)
       fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
 
       await waitFor(() => {
+        // date is saved with end of day time
         expect(onSaveDeadline).toHaveBeenCalledWith('2024-12-25T23:59:59.999Z')
       })
     })
@@ -974,9 +976,8 @@ describe('TodoCardContent', () => {
         />
       )
 
-      // Chinese locale format: "12月25日"
-      expect(screen.getByText(/12月/)).toBeInTheDocument()
-      expect(screen.getByText(/25/)).toBeInTheDocument()
+      // Format: MM-DD HH:mm (UTC 2024-12-25T00:00:00Z = local 2024-12-25 08:00 UTC+8)
+      expect(screen.getByText('12-25 08:00')).toBeInTheDocument()
     })
 
     it('should render metadata row when collapsed with emailId', () => {
@@ -1069,7 +1070,8 @@ describe('TodoCardContent', () => {
       )
 
       const dateInput = screen.getByLabelText(/截止时间/i)
-      expect(dateInput).toHaveValue('2024-12-25')
+      // date input value: UTC 2024-12-25T23:59:59.999Z = local 2024-12-26 (UTC+8)
+      expect(dateInput).toHaveValue('2024-12-26')
     })
 
     it('should pass isExpanded prop to TaskDetailExpand', () => {
@@ -1186,17 +1188,15 @@ describe('DeadlineChip', () => {
   it('should format date string correctly', () => {
     renderWithRouter(<DeadlineChip deadline="2024-03-15T00:00:00Z" />)
 
-    // Chinese locale format: "3月15日"
-    expect(screen.getByText(/3月/)).toBeInTheDocument()
-    expect(screen.getByText(/15/)).toBeInTheDocument()
+    // Format: MM-DD HH:mm (UTC 2024-03-15T00:00:00Z = local 2024-03-15 08:00 UTC+8)
+    expect(screen.getByText('03-15 08:00')).toBeInTheDocument()
   })
 
   it('should format Date object correctly', () => {
     renderWithRouter(<DeadlineChip deadline={new Date('2024-07-04T00:00:00Z')} />)
 
-    // Chinese locale format: "7月4日"
-    expect(screen.getByText(/7月/)).toBeInTheDocument()
-    expect(screen.getByText(/4/)).toBeInTheDocument()
+    // Format: MM-DD HH:mm
+    expect(screen.getByText('07-04 08:00')).toBeInTheDocument()
   })
 
   it('should have secondary text color', () => {

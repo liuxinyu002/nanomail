@@ -9,7 +9,25 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { TodoService } from '@/services'
 import type { TodoItem } from '@/services'
-import type { UpdateTodoPosition } from '@nanomail/shared'
+import type { UpdateTodoPosition, BoardColumn } from '@nanomail/shared'
+
+/** Fallback color when column not found in cache */
+const FALLBACK_COLOR = '#C9CDD4'
+
+/**
+ * Get column color from React Query cache instead of hardcoded constants.
+ * This ensures optimistic updates use the actual user-customized column colors.
+ */
+function getColumnColorFromCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  columnId: number
+): string | null {
+  const columnsData = queryClient.getQueryData<{ columns: BoardColumn[] }>(['boardColumns'])
+  if (!columnsData?.columns) return null
+
+  const column = columnsData.columns.find(c => c.id === columnId)
+  return column?.color ?? null
+}
 
 /**
  * Context for tracking previous state during optimistic updates
@@ -77,9 +95,18 @@ export function useUpdateTodoPositionMutation() {
             if (!old) return old
             return {
               ...old,
-              todos: old.todos.map((todo) =>
-                todo.id === id ? { ...todo, ...data } : todo
-              ),
+              todos: old.todos.map((todo) => {
+                if (todo.id !== id) return todo
+
+                // If boardColumnId changes, derive new color from cached column data
+                let newColor = todo.color
+                if (data.boardColumnId !== undefined) {
+                  const cachedColor = getColumnColorFromCache(queryClient, data.boardColumnId)
+                  newColor = cachedColor ?? FALLBACK_COLOR
+                }
+
+                return { ...todo, ...data, color: newColor }
+              }),
             }
           }
         )

@@ -20,7 +20,7 @@ export const AppDataSource = new DataSource({
  * Inbox (id: 1) is a system column that cannot be deleted
  */
 const DEFAULT_COLUMNS = [
-  { id: 1, name: '收件箱', color: '#6366f1', order: 0, isSystem: 1 },  // Inbox - system column
+  { id: 1, name: '收件箱', color: '#C9CDD4', order: 0, isSystem: 1 },  // Inbox - system column (Macaron Gray)
   { id: 2, name: '待处理', color: '#f59e0b', order: 1, isSystem: 0 },  // Todo
   { id: 3, name: '进行中', color: '#10b981', order: 2, isSystem: 0 },  // In Progress
   { id: 4, name: '已完成', color: '#3b82f6', order: 3, isSystem: 0 },  // Done

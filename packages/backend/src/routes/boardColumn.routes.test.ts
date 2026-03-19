@@ -79,7 +79,7 @@ describe('BoardColumnRoutes', () => {
         {
           id: 1,
           name: '收件箱',
-          color: '#6366f1',
+          color: '#C9CDD4',
           order: 0,
           isSystem: 1,
           createdAt: new Date('2024-01-15'),
@@ -289,7 +289,7 @@ describe('BoardColumnRoutes', () => {
       const systemColumn = {
         id: 1,
         name: '收件箱',
-        color: '#6366f1',
+        color: '#C9CDD4',
         order: 0,
         isSystem: 1,
         createdAt: new Date(),
@@ -429,7 +429,7 @@ describe('BoardColumnRoutes', () => {
         const systemColumn = {
           id: 1,
           name: 'Inbox',
-          color: '#6366f1',
+          color: '#C9CDD4',
           order: 0,
           isSystem: 1,
           createdAt: new Date(),

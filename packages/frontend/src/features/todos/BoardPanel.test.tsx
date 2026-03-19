@@ -21,7 +21,7 @@ describe('BoardPanel', () => {
     {
       id: 1,
       name: 'Inbox',
-      color: '#6B7280',
+      color: '#C9CDD4',
       order: 0,
       isSystem: true,
       createdAt: new Date('2024-01-01T00:00:00.000Z'),

@@ -6,7 +6,7 @@ describe('BoardColumn Schemas', () => {
     const validColumn = {
       id: 1,
       name: '收件箱',
-      color: '#6366f1',
+      color: '#C9CDD4',
       order: 0,
       isSystem: true,
       createdAt: '2024-01-15T10:00:00Z'

@@ -1185,7 +1185,7 @@ describe('WeekView Integration in PlannerPanel', () => {
       expect(onTodoClick).not.toHaveBeenCalled()
     })
 
-    it('should filter todos correctly - only deadline AND boardColumnId === 2', async () => {
+    it('should filter todos correctly - only deadline matters', async () => {
       const user = userEvent.setup()
       // Use today's date for the todo
       const today = new Date()
@@ -1193,7 +1193,7 @@ describe('WeekView Integration in PlannerPanel', () => {
       const todos: Todo[] = [
         createMockTodo({ id: 1, description: 'Scheduled', deadline: `${todayStr}T10:00:00`, boardColumnId: 2 }),
         createMockTodo({ id: 2, description: 'No deadline', deadline: null, boardColumnId: 2 }),
-        createMockTodo({ id: 3, description: 'Wrong column', deadline: `${todayStr}T10:00:00`, boardColumnId: 1 }),
+        createMockTodo({ id: 3, description: 'Inbox task', deadline: `${todayStr}T10:00:00`, boardColumnId: 1 }),
       ]
       render(<PlannerPanel {...defaultProps} todos={todos} />)
 
@@ -1202,10 +1202,11 @@ describe('WeekView Integration in PlannerPanel', () => {
       const weekButton = within(viewToggle).getByRole('button', { name: /周/i })
       await user.click(weekButton)
 
-      // Only "Scheduled" should be visible (may appear multiple times)
+      // Only todos with deadline should be visible (may appear multiple times)
       expect(screen.getAllByText('Scheduled').length).toBeGreaterThan(0)
       expect(screen.queryByText('No deadline')).not.toBeInTheDocument()
-      expect(screen.queryByText('Wrong column')).not.toBeInTheDocument()
+      // Inbox task also has deadline, so it should be visible
+      expect(screen.getAllByText('Inbox task').length).toBeGreaterThan(0)
     })
   })
 })

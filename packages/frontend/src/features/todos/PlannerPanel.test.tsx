@@ -110,41 +110,39 @@ describe('PlannerPanel', () => {
       vi.useRealTimers()
     })
 
-    it('shows count of scheduled todos (todos with deadline AND boardColumnId === 2)', () => {
+    it('shows count of scheduled todos (todos with deadline)', () => {
       const todos: Todo[] = [
         createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
-        createMockTodo({ id: 2, description: 'Another scheduled', deadline: '2024-01-16T10:00:00', boardColumnId: 2 }),
+        createMockTodo({ id: 2, description: 'Another scheduled', deadline: '2024-01-16T10:00:00', boardColumnId: 1 }),
         createMockTodo({ id: 3, description: 'No deadline', deadline: null, boardColumnId: 2 }),
-        createMockTodo({ id: 4, description: 'Different column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
       ]
       render(<PlannerPanel {...defaultProps} todos={todos} />)
 
-      // Only 2 todos have deadline AND boardColumnId === 2
+      // 2 todos have deadline
       const countElement = screen.getByLabelText(/scheduled tasks/i)
       expect(countElement).toHaveTextContent('2 scheduled')
     })
 
-    it('filters todos to only show those with deadline AND boardColumnId === 2 in DayView', () => {
+    it('filters todos to only show those with deadline in DayView', () => {
       const todos: Todo[] = [
         createMockTodo({ id: 1, description: 'Scheduled todo', deadline: '2024-01-15T10:00:00', boardColumnId: 2 }),
         createMockTodo({ id: 2, description: 'No deadline', deadline: null, boardColumnId: 2 }),
-        createMockTodo({ id: 3, description: 'Wrong column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
-        createMockTodo({ id: 4, description: 'Wrong column 3', deadline: '2024-01-15T10:00:00', boardColumnId: 3 }),
+        createMockTodo({ id: 3, description: 'Inbox task', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
+        createMockTodo({ id: 4, description: 'In progress', deadline: '2024-01-15T10:00:00', boardColumnId: 3 }),
       ]
       render(<PlannerPanel {...defaultProps} todos={todos} />)
 
-      // Only "Scheduled todo" should be visible in the DayView
+      // Only todos with deadline should be visible in the DayView
       // Use test id to get the planner card specifically
       expect(screen.getByTestId('planner-todo-card-1')).toBeInTheDocument()
       expect(screen.queryByTestId('planner-todo-card-2')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('planner-todo-card-3')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('planner-todo-card-4')).not.toBeInTheDocument()
+      expect(screen.getByTestId('planner-todo-card-3')).toBeInTheDocument()
+      expect(screen.getByTestId('planner-todo-card-4')).toBeInTheDocument()
     })
 
     it('shows "0 scheduled" when no matching todos', () => {
       const todos: Todo[] = [
         createMockTodo({ id: 1, description: 'No deadline', deadline: null, boardColumnId: 2 }),
-        createMockTodo({ id: 2, description: 'Wrong column', deadline: '2024-01-15T10:00:00', boardColumnId: 1 }),
       ]
       render(<PlannerPanel {...defaultProps} todos={todos} />)
 

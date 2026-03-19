@@ -15,11 +15,11 @@ describe('ColorPicker', () => {
   })
 
   describe('Macaron Color Configuration', () => {
-    it('should render 6 macaron color options', () => {
+    it('should render 7 macaron color options', () => {
       render(<ColorPicker {...defaultProps} />)
 
       const colorButtons = screen.getAllByRole('button')
-      expect(colorButtons).toHaveLength(6)
+      expect(colorButtons).toHaveLength(7)
     })
 
     it('should have correct macaron color hex values', () => {
@@ -43,22 +43,25 @@ describe('ColorPicker', () => {
 
       const purpleButton = screen.getByRole('button', { name: 'Pastel Purple' })
       expect(purpleButton).toHaveStyle({ backgroundColor: '#D4B8FF' })
+
+      const grayButton = screen.getByRole('button', { name: 'Pastel Gray' })
+      expect(grayButton).toHaveStyle({ backgroundColor: '#C9CDD4' })
     })
 
     it('should use MACARON_COLOR_OPTIONS from constants', () => {
       // Verify MACARON_COLOR_OPTIONS has expected structure
-      expect(MACARON_COLOR_OPTIONS).toHaveLength(6)
+      expect(MACARON_COLOR_OPTIONS).toHaveLength(7)
       expect(MACARON_COLOR_OPTIONS[0].name).toBe('Pastel Red')
       expect(MACARON_COLOR_OPTIONS[0].hex).toBe('#FFB5BA')
     })
   })
 
   describe('Rendering', () => {
-    it('should render all 6 color buttons', () => {
+    it('should render all 7 color buttons', () => {
       render(<ColorPicker {...defaultProps} />)
 
       const colorButtons = screen.getAllByRole('button')
-      expect(colorButtons).toHaveLength(6)
+      expect(colorButtons).toHaveLength(7)
     })
 
     it('should render color buttons with accessible labels (macaron palette)', () => {
@@ -70,6 +73,7 @@ describe('ColorPicker', () => {
       expect(screen.getByRole('button', { name: 'Pastel Green' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Pastel Blue' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Pastel Purple' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Pastel Gray' })).toBeInTheDocument()
     })
 
     it('should have correct background colors on buttons (macaron palette)', () => {
@@ -238,13 +242,13 @@ describe('ColorPicker', () => {
       render(<ColorPicker {...defaultProps} />)
 
       const buttons = screen.getAllByRole('button')
-      expect(buttons).toHaveLength(6)
+      expect(buttons).toHaveLength(7)
     })
 
     it('should have aria-label for each color button (macaron palette)', () => {
       render(<ColorPicker {...defaultProps} />)
 
-      const colorNames = ['Pastel Red', 'Pastel Orange', 'Pastel Yellow', 'Pastel Green', 'Pastel Blue', 'Pastel Purple']
+      const colorNames = ['Pastel Red', 'Pastel Orange', 'Pastel Yellow', 'Pastel Green', 'Pastel Blue', 'Pastel Purple', 'Pastel Gray']
       colorNames.forEach(name => {
         expect(screen.getByRole('button', { name })).toBeInTheDocument()
       })

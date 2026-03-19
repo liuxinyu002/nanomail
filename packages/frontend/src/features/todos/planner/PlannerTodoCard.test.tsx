@@ -138,31 +138,6 @@ describe('PlannerTodoCard', () => {
   })
 
   describe('interactions', () => {
-    it('calls onClick when clicked', async () => {
-      const user = userEvent.setup()
-      const todo = createMockTodo({ id: 1 })
-      const onClick = vi.fn()
-
-      render(<PlannerTodoCard todo={todo} onClick={onClick} />)
-
-      // Click on the wrapper element (planner-todo-card-1)
-      const wrapper = screen.getByTestId('planner-todo-card-1')
-      await user.click(wrapper)
-
-      expect(onClick).toHaveBeenCalledTimes(1)
-    })
-
-    it('does not throw when clicked without onClick handler', async () => {
-      const user = userEvent.setup()
-      const todo = createMockTodo({ id: 1 })
-
-      render(<PlannerTodoCard todo={todo} />)
-
-      const wrapper = screen.getByTestId('planner-todo-card-1')
-      // Should not throw
-      await user.click(wrapper)
-    })
-
     it('has hover styling', () => {
       const todo = createMockTodo({ id: 1 })
       render(<PlannerTodoCard todo={todo} />)
@@ -170,13 +145,84 @@ describe('PlannerTodoCard', () => {
       const card = screen.getByTestId('todo-card')
       expect(card).toHaveClass('hover:bg-gray-50')
     })
+  })
 
-    it('has cursor pointer when clickable', () => {
+  describe('popover integration', () => {
+    it('opens popover when card is clicked (not checkbox)', async () => {
+      const user = userEvent.setup()
+      const todo = createMockTodo({ id: 1, description: 'My Task' })
+      render(<PlannerTodoCard todo={todo} />)
+
+      // Popover should not be visible initially
+      expect(screen.queryByTestId('todo-detail-popover')).not.toBeInTheDocument()
+
+      // Click on the card wrapper (not checkbox)
+      const card = screen.getByTestId('planner-todo-card-1')
+      await user.click(card)
+
+      // Popover should now be visible
+      expect(screen.getByTestId('todo-detail-popover')).toBeInTheDocument()
+    })
+
+    it('does NOT open popover when checkbox is clicked', async () => {
+      const user = userEvent.setup()
       const todo = createMockTodo({ id: 1 })
-      render(<PlannerTodoCard todo={todo} onClick={() => {}} />)
+      render(<PlannerTodoCard todo={todo} />)
 
-      const wrapper = screen.getByTestId('planner-todo-card-1')
-      expect(wrapper).toHaveClass('cursor-pointer')
+      const checkbox = screen.getByRole('checkbox')
+      await user.click(checkbox)
+
+      // Popover should NOT open
+      expect(screen.queryByTestId('todo-detail-popover')).not.toBeInTheDocument()
+      // But mutation should be called
+      expect(mockUpdateMutate).toHaveBeenCalled()
+    })
+
+    it('shows correct todo description in popover', async () => {
+      const user = userEvent.setup()
+      const todo = createMockTodo({ id: 1, description: 'Detailed task description' })
+      render(<PlannerTodoCard todo={todo} />)
+
+      const card = screen.getByTestId('planner-todo-card-1')
+      await user.click(card)
+
+      // Popover should show the description in the header
+      const popover = screen.getByTestId('todo-detail-popover')
+      expect(popover).toHaveTextContent('Detailed task description')
+    })
+
+    it('shows notes in popover when available', async () => {
+      const user = userEvent.setup()
+      const todo = createMockTodo({ id: 1, notes: 'Important notes here' })
+      render(<PlannerTodoCard todo={todo} />)
+
+      const card = screen.getByTestId('planner-todo-card-1')
+      await user.click(card)
+
+      const popover = screen.getByTestId('todo-detail-popover')
+      expect(popover).toHaveTextContent('Important notes here')
+    })
+
+    it('shows deadline in popover when available', async () => {
+      const user = userEvent.setup()
+      const deadlineDate = new Date('2024-12-31T23:59:59Z')
+      const todo = createMockTodo({ id: 1, deadline: deadlineDate })
+      render(<PlannerTodoCard todo={todo} />)
+
+      const card = screen.getByTestId('planner-todo-card-1')
+      await user.click(card)
+
+      const popover = screen.getByTestId('todo-detail-popover')
+      // The deadline should be displayed in the popover
+      expect(popover).toBeInTheDocument()
+    })
+
+    it('popover trigger has correct test id', () => {
+      const todo = createMockTodo({ id: 42 })
+      render(<PlannerTodoCard todo={todo} />)
+
+      // The wrapper should have the test id
+      expect(screen.getByTestId('planner-todo-card-42')).toBeInTheDocument()
     })
   })
 
@@ -230,20 +276,6 @@ describe('PlannerTodoCard', () => {
         id: 1,
         data: { status: 'pending' },
       })
-    })
-
-    it('should NOT trigger onClick when checkbox is clicked', async () => {
-      const user = userEvent.setup()
-      const todo = createMockTodo({ id: 1 })
-      const onClick = vi.fn()
-
-      render(<PlannerTodoCard todo={todo} onClick={onClick} />)
-
-      const checkbox = screen.getByRole('checkbox')
-      await user.click(checkbox)
-
-      // onClick should not be called when clicking checkbox
-      expect(onClick).not.toHaveBeenCalled()
     })
   })
 

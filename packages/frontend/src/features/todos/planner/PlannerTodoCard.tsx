@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { TodoCard } from '../TodoCard'
+import { TodoCard, TodoDetailPopover } from '../TodoCard'
 import { useUpdateTodoMutation } from '@/hooks'
 import type { Todo } from '@nanomail/shared'
 
@@ -9,7 +9,6 @@ const FALLBACK_COLOR = '#9CA3AF'
 
 export interface PlannerTodoCardProps {
   todo: Todo
-  onClick?: () => void
   className?: string
 }
 
@@ -19,8 +18,9 @@ export interface PlannerTodoCardProps {
  * Wraps TodoCard with compact mode and color bar.
  * Color is determined by todo.color field with fallback to gray.
  * Supports toggle completion status.
+ * Clicking the card opens a popover with todo details.
  */
-export function PlannerTodoCard({ todo, onClick, className }: PlannerTodoCardProps) {
+export function PlannerTodoCard({ todo, className }: PlannerTodoCardProps) {
   const updateMutation = useUpdateTodoMutation()
   const color = todo.color ?? FALLBACK_COLOR
   const isCompleted = todo.status === 'completed'
@@ -31,25 +31,21 @@ export function PlannerTodoCard({ todo, onClick, className }: PlannerTodoCardPro
   }, [todo.id, isCompleted, updateMutation])
 
   return (
-    <div
-      data-testid={`planner-todo-card-${todo.id}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      className={cn(onClick && 'cursor-pointer')}
-    >
-      <TodoCard
-        todo={todo}
-        onToggle={handleToggle}
-        readonly
-        compact
-        colorBar={{ hexColor: color }}
-        className={cn(
-          'shadow-none border-gray-100',
-          'hover:bg-gray-50',
-          className
-        )}
-      />
-    </div>
+    <TodoDetailPopover todo={todo}>
+      <div data-testid={`planner-todo-card-${todo.id}`}>
+        <TodoCard
+          todo={todo}
+          onToggle={handleToggle}
+          readonly
+          compact
+          colorBar={{ hexColor: color }}
+          className={cn(
+            'shadow-none border-gray-100',
+            'hover:bg-gray-50',
+            className
+          )}
+        />
+      </div>
+    </TodoDetailPopover>
   )
 }

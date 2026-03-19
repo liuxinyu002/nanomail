@@ -31,39 +31,30 @@ export function InboxPage() {
   const [composeOpen, setComposeOpen] = useState(false)
   const [composeKey, setComposeKey] = useState(0) // Force remount for clean state
 
-  // Local state for AI assist reply (preserved after router state is cleared)
-  const [assistReply, setAssistReply] = useState<{
-    emailId: number
-    instruction: string
-    sender?: string
-  } | null>(null)
+  // Local state for reply action (preserved after router state is cleared)
+  const [replySender, setReplySender] = useState<string | undefined>(undefined)
 
-  // Parse router state for AI assist reply action
-  const { action, instruction } = (location.state as {
+  // Parse router state for reply action
+  const { action } = (location.state as {
     action?: string
-    instruction?: string
   }) ?? {}
 
-  // Fetch email when action is assist_reply to get sender info
-  const { data: assistReplyEmail, isSuccess: isEmailLoaded } = useQuery({
+  // Fetch email when action is reply to get sender info
+  const { data: replyEmail, isSuccess: isEmailLoaded } = useQuery({
     queryKey: ['email', activeId],
     queryFn: () => EmailService.getEmail(activeId!),
-    enabled: !!activeId && action === 'assist_reply',
+    enabled: !!activeId && action === 'reply',
   })
 
-  // Auto-open modal for assist reply action (wait for email data if fetching)
+  // Auto-open modal for reply action (wait for email data if fetching)
   useEffect(() => {
-    if (action === 'assist_reply' && activeId && instruction && isEmailLoaded) {
-      setAssistReply({
-        emailId: activeId,
-        instruction,
-        sender: assistReplyEmail?.sender ?? undefined,
-      })
+    if (action === 'reply' && activeId && isEmailLoaded) {
+      setReplySender(replyEmail?.sender ?? undefined)
       setComposeOpen(true)
       // Clear state to prevent re-trigger on refresh
       navigate(location.pathname, { replace: true })
     }
-  }, [action, activeId, instruction, isEmailLoaded, assistReplyEmail, location.pathname, navigate])
+  }, [action, activeId, isEmailLoaded, replyEmail, location.pathname, navigate])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['emails', 1, 10, classificationFilter],
@@ -118,11 +109,11 @@ export function InboxPage() {
     }
   }, [syncingJobId, refetch])
 
-  // Handle compose modal close - clear assist reply state to prevent data pollution
+  // Handle compose modal close - clear reply sender state to prevent data pollution
   const handleComposeOpenChange = (open: boolean) => {
     setComposeOpen(open)
     if (!open) {
-      setAssistReply(null)
+      setReplySender(undefined)
       // Increment key to force remount on next open (clean state)
       setComposeKey(k => k + 1)
     }
@@ -441,9 +432,7 @@ export function InboxPage() {
         key={composeKey}
         open={composeOpen}
         onOpenChange={handleComposeOpenChange}
-        emailId={assistReply?.emailId}
-        initialInstruction={assistReply?.instruction}
-        sender={assistReply?.sender}
+        sender={replySender}
       />
     </div>
   )

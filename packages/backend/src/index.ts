@@ -2,6 +2,8 @@
 import 'reflect-metadata'
 import express from 'express'
 import cors from 'cors'
+import { promises as fs } from 'fs'
+import path from 'path'
 import { initializeDatabase, closeDatabase, AppDataSource } from './config/database.js'
 import { logger } from './config/logger.js'
 import { EncryptionService } from './services/EncryptionService.js'
@@ -18,7 +20,6 @@ import type { LLMConfig } from './services/llm/types.js'
 import { ToolRegistry } from './services/agent/tools/registry.js'
 import { ContextBuilder } from './services/agent/context/types.js'
 import { MemoryStore } from './services/agent/memory/types.js'
-import { TokenTruncator } from './services/agent/utils/token-truncator.js'
 import { SearchEmailsTool } from './services/agent/tools/search-emails.js'
 import { SettingKeySchema } from '@nanomail/shared'
 
@@ -35,6 +36,23 @@ export const APP_VERSION = '0.1.0'
 
 export function getAppInfo(): string {
   return `Smart Email Agent v${APP_VERSION}`
+}
+
+/**
+ * Load and cache prompt files at startup
+ * This avoids file I/O on every request
+ */
+async function loadAndCachePrompts(contextBuilder: ContextBuilder): Promise<void> {
+  const promptsDir = process.env.PROMPTS_DIR ?? path.resolve(__dirname, 'services/agent/prompts')
+  const todoAgentPath = path.join(promptsDir, 'todo-agent.md')
+
+  try {
+    const todoAgentPrompt = await fs.readFile(todoAgentPath, 'utf-8')
+    contextBuilder.setCachedPrompt('todo-agent', todoAgentPrompt)
+    logger.info({ path: todoAgentPath }, 'Todo agent prompt loaded and cached')
+  } catch (error) {
+    logger.warn({ err: error, path: todoAgentPath }, 'Failed to load todo-agent.md, will fall back to ContextBuilder file loading')
+  }
 }
 
 /**
@@ -126,10 +144,17 @@ export async function createApp(): Promise<{
   const memoryStore = new MemoryStore(workspacePath)
   // ContextBuilder uses prompts directory (configs/prompts by default)
   const contextBuilder = new ContextBuilder()
-  const tokenTruncator = new TokenTruncator()
-  const toolRegistry = new ToolRegistry()
 
-  // Register search emails tool
+  // ToolRegistry: dependencies injected at initialization
+  const toolRegistry = new ToolRegistry({
+    dataSource: AppDataSource,
+    defaultColumnId: 1
+  })
+
+  // Load and cache prompt files at startup
+  await loadAndCachePrompts(contextBuilder)
+
+  // Register search emails tool (todo tools are registered in constructor)
   const searchEmailsTool = SearchEmailsTool.fromDataSource(AppDataSource)
   toolRegistry.register(searchEmailsTool)
 
@@ -168,8 +193,7 @@ export async function createApp(): Promise<{
     llmProvider,
     toolRegistry,
     contextBuilder,
-    memoryStore,
-    tokenTruncator
+    memoryStore
   }))
 
   // Error handler

@@ -5,6 +5,87 @@
 
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import type { DataSource } from 'typeorm'
+
+/**
+ * OpenAI function tool definition type
+ */
+export interface FunctionToolDefinition {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+  [key: string]: unknown
+}
+
+// ============================================
+// Dependency Injection Interface
+// ============================================
+
+/**
+ * Dependencies injected into tool handlers
+ */
+export interface ToolDeps {
+  dataSource: DataSource
+  defaultColumnId?: number // Optional: defaults to 1 if not provided
+}
+
+// ============================================
+// Tool Result Interface
+// ============================================
+
+/**
+ * Standard result format returned by all tools
+ * Used for LLM to understand tool execution outcome
+ */
+export interface ToolResult {
+  success: boolean
+  reason?: 'EMPTY_DESCRIPTION' | 'DESCRIPTION_TOO_LONG' | 'INVALID_DEADLINE_FORMAT' | 'DUPLICATE_DETECTED' | 'TODO_NOT_FOUND' | 'NOTES_TOO_LONG' | 'DATABASE_ERROR'
+  warning?: string
+  message: string
+  todo?: {
+    id: number
+    description: string
+    deadline: string | null
+    status: string
+    boardColumnId: number
+    notes: string | null
+    source: 'email' | 'chat' | 'manual'
+  }
+  existingTodo?: {
+    id: number
+    description: string
+    deadline: string | null
+    status: string
+    notes: string | null
+    source: 'email' | 'chat' | 'manual'
+  }
+}
+
+// ============================================
+// Tool Parameter Interfaces
+// ============================================
+
+export interface CreateTodoParams {
+  description: string
+  deadline?: string | null
+  notes?: string | null
+  forceCreate?: boolean
+}
+
+export interface UpdateTodoParams {
+  id: number
+  description?: string
+  deadline?: string | null
+  status?: 'pending' | 'in_progress' | 'completed'
+  notes?: string | null
+}
+
+export interface DeleteTodoParams {
+  id: number
+}
 
 /**
  * Abstract Tool base class with Zod schema validation
@@ -41,14 +122,17 @@ export abstract class Tool<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
   /**
    * Execute the tool with validated parameters
    * Reference: nanobot/agent/tools/base.py - execute()
+   *
+   * @param params - Validated parameters from Zod schema
+   * @param deps - Optional dependencies (dataSource, caches). Tools requiring deps should check for their presence.
    */
-  abstract execute(params: z.infer<TSchema>): Promise<string>
+  abstract execute(params: z.infer<TSchema>, deps?: ToolDeps): Promise<string>
 
   /**
    * Convert to OpenAI function schema using zod-to-json-schema
    * Reference: nanobot/agent/tools/base.py - to_schema()
    */
-  toSchema(): Record<string, unknown> {
+  toSchema(): FunctionToolDefinition {
     return {
       type: 'function',
       function: {
@@ -56,7 +140,7 @@ export abstract class Tool<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
         description: this.description,
         parameters: zodToJsonSchema(this.schema, {
           removeAdditionalStrategy: 'strict'
-        })
+        }) as Record<string, unknown>
       }
     }
   }

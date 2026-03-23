@@ -16,4 +16,4 @@ export type {
 export type { TodosQuery, TodosResponse } from './todo.routes'
 export type { BoardColumnsResponse } from './boardColumn.routes'
 
-export type { DraftRequest, ProcessEmailsRequest as AgentProcessEmailsRequest, AgentRoutesDeps } from './agent.routes'
+export type { ProcessEmailsRequest as AgentProcessEmailsRequest, AgentRoutesDeps } from './agent.routes'

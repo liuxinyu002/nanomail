@@ -1,43 +1,28 @@
 /**
- * Tests for AgentLoop - ReAct Agent Loop Core
- * TDD: Write tests first, then implement
+ * Tests for AgentLoop V2 - Generalized AI Agent Framework
+ * TDD: Tests written FIRST for the new run() method
  *
- * Reference: nanobot/agent/loop.py
+ * Reference: docs/phase_4_AIAssist_refactor/plan_1_backendAI_refactor_phase2.md
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { AgentLoop } from './agent-loop'
 import {
-  AgentLoop,
-  AgentMessage,
-  ProgressEvent
-} from './agent-loop'
-import {
-  AGENT_PRESETS,
-  DEFAULT_AGENT_CONFIG
+  ConversationEvent,
+  AgentContext,
+  MAX_STEPS,
+  ConversationEventType
 } from './types'
 import type { LLMProvider, LLMResponse, LLMStreamChunk, ToolCallRequest } from '../../llm/types'
 import type { ToolRegistry } from '../tools/registry'
 import type { ContextBuilder } from '../context/types'
 import type { MemoryStore } from '../memory/types'
-import type { TokenTruncator } from '../utils/token-truncator'
-import type { Email } from '../../../entities/Email.entity'
+import type { ChatMessage } from '@nanomail/shared'
 
-// Helper to create mock email
-const createMockEmail = (overrides: Partial<Email> = {}): Email =>
-  ({
-    id: 1,
-    sender: 'john@example.com',
-    subject: 'Test Subject',
-    bodyText: 'This is the email body.',
-    date: new Date('2024-01-15'),
-    snippet: 'This is the email...',
-    hasAttachments: false,
-    isProcessed: false,
-    isSpam: false,
-    ...overrides
-  }) as Email
+// ============================================================================
+// Mock Factories
+// ============================================================================
 
-// Helper to create mock LLM response
 const createMockLLMResponse = (
   content: string | null = 'Test response',
   toolCalls: ToolCallRequest[] = [],
@@ -49,62 +34,58 @@ const createMockLLMResponse = (
   usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
 })
 
-// Helper to create mock stream chunks from a response
+// Mock stream chunks generator
 async function* createMockStreamChunks(
   response: LLMResponse
 ): AsyncGenerator<LLMStreamChunk, void, unknown> {
-  // If there's content, yield it as chunks
   if (response.content) {
-    // Yield content in chunks for realistic streaming
     const words = response.content.split(' ')
     for (let i = 0; i < words.length; i++) {
       const chunk = i === words.length - 1 ? words[i] : words[i] + ' '
       yield { content: chunk, toolCalls: [], isDone: false }
     }
   }
-
-  // Final chunk with tool calls and finish reason
   yield {
     content: null,
     toolCalls: response.toolCalls,
     isDone: true,
-    finishReason: response.finishReason
+    finishReason: response.finishReason ?? 'stop'
   }
 }
 
-// Helper to create mock LLM provider
 const createMockProvider = () => ({
   chat: vi.fn(),
   chatStream: vi.fn(),
   getDefaultModel: vi.fn().mockReturnValue('gpt-4o-mini')
 })
 
-// Helper to create mock tool registry
 const createMockToolRegistry = () => ({
   register: vi.fn(),
   get: vi.fn(),
   has: vi.fn(),
   getDefinitions: vi.fn().mockReturnValue([]),
   execute: vi.fn(),
-  list: vi.fn(),
-  size: vi.fn()
+  list: vi.fn().mockReturnValue(['createTodo', 'updateTodo', 'deleteTodo']),
+  size: vi.fn().mockReturnValue(3)
 })
 
-// Helper to create mock context builder
 const createMockContextBuilder = () => ({
-  buildSystemPrompt: vi.fn().mockResolvedValue('System prompt'),
+  buildSystemPrompt: vi.fn().mockResolvedValue('System prompt for todo-agent'),
   buildMessages: vi.fn().mockResolvedValue([
     { role: 'system', content: 'System prompt' },
     { role: 'user', content: 'Test message' }
   ]),
   buildRuntimeContext: vi.fn().mockReturnValue('[Runtime Context]\nCurrent time: 2024-01-15'),
+  buildSystemMessage: vi.fn().mockReturnValue('System prompt with runtime context'),
   addAssistantMessage: vi.fn(),
   addToolResult: vi.fn(),
   getIdentity: vi.fn().mockResolvedValue('Identity'),
-  loadBootstrapFiles: vi.fn().mockResolvedValue('')
+  loadBootstrapFiles: vi.fn().mockResolvedValue(''),
+  // Phase 4: Cached prompt methods
+  setCachedPrompt: vi.fn(),
+  getCachedPrompt: vi.fn().mockReturnValue(undefined)
 })
 
-// Helper to create mock memory store
 const createMockMemoryStore = () => ({
   getMemoryContext: vi.fn().mockResolvedValue(''),
   getHistory: vi.fn().mockResolvedValue([]),
@@ -112,28 +93,34 @@ const createMockMemoryStore = () => ({
   updateMemory: vi.fn()
 })
 
-// Helper to create mock token truncator
-const createMockTokenTruncator = () => ({
-  estimateTokens: vi.fn((text: string) => Math.ceil(text.length / 4)),
-  truncate: vi.fn((text: string) => ({
-    text,
-    wasTruncated: false,
-    originalTokens: Math.ceil(text.length / 4)
-  })),
-  truncateWithStrategy: vi.fn((text: string) => ({
-    text,
-    wasTruncated: false,
-    originalTokens: Math.ceil(text.length / 4)
-  })),
-  chunkText: vi.fn((text: string) => [text])
+// Helper to create valid AgentContext
+const createAgentContext = (overrides: Partial<AgentContext> = {}): AgentContext => ({
+  role: 'todo-agent',
+  sessionId: 'session-123',
+  messageId: 'msg-456',
+  currentTime: '2024-03-20T10:30:00.000Z',
+  timeZone: 'Asia/Shanghai',
+  ...overrides
 })
 
-describe('AgentLoop', () => {
+// Helper to create ChatMessage array
+const createChatMessages = (messages: Partial<ChatMessage>[] = []): ChatMessage[] => {
+  return messages.map((msg, idx) => ({
+    role: 'user' as const,
+    content: `Message ${idx}`,
+    ...msg
+  }))
+}
+
+// ============================================================================
+// Test Suite
+// ============================================================================
+
+describe('AgentLoop V2 - run()', () => {
   let mockProvider: ReturnType<typeof createMockProvider>
   let mockToolRegistry: ReturnType<typeof createMockToolRegistry>
   let mockContextBuilder: ReturnType<typeof createMockContextBuilder>
   let mockMemoryStore: ReturnType<typeof createMockMemoryStore>
-  let mockTokenTruncator: ReturnType<typeof createMockTokenTruncator>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -141,430 +128,1002 @@ describe('AgentLoop', () => {
     mockToolRegistry = createMockToolRegistry()
     mockContextBuilder = createMockContextBuilder()
     mockMemoryStore = createMockMemoryStore()
-    mockTokenTruncator = createMockTokenTruncator()
   })
 
-  describe('constructor', () => {
-    it('should create agent with default config', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
+  // ==========================================================================
+  // 1. Method Signature Tests
+  // ==========================================================================
 
-      // Agent should be created successfully
-      expect(agent).toBeDefined()
-    })
+  describe('method signature', () => {
+    it('should accept (messages, context, deps) parameters', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
 
-    it('should apply draft preset when specified', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator,
-        config: { preset: 'draft' }
-      })
-
-      expect(agent).toBeDefined()
-      // Preset should set maxIterations to 5
-      expect(agent.getConfig().maxIterations).toBe(AGENT_PRESETS.draft.maxIterations)
-    })
-
-    it('should apply complex preset when specified', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator,
-        config: { preset: 'complex' }
-      })
-
-      expect(agent.getConfig().maxIterations).toBe(AGENT_PRESETS.complex.maxIterations)
-    })
-
-    it('should apply research preset when specified', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator,
-        config: { preset: 'research' }
-      })
-
-      expect(agent.getConfig().maxIterations).toBe(AGENT_PRESETS.research.maxIterations)
-    })
-
-    it('should allow custom config to override preset', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator,
-        config: { preset: 'draft', maxIterations: 15 }
-      })
-
-      // Custom maxIterations should override preset
-      expect(agent.getConfig().maxIterations).toBe(15)
-    })
-
-    it('should use default config values when not specified', () => {
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const config = agent.getConfig()
-      expect(config.model).toBeUndefined() // Default: no model, provider decides
-      expect(config.temperature).toBe(DEFAULT_AGENT_CONFIG.temperature)
-      expect(config.maxTokens).toBe(DEFAULT_AGENT_CONFIG.maxTokens)
-      expect(config.maxIterations).toBe(DEFAULT_AGENT_CONFIG.maxIterations)
-    })
-  })
-
-  describe('run - basic flow', () => {
-    it('should yield done event when LLM returns final answer without tool calls', async () => {
-      const email = createMockEmail()
       mockProvider.chatStream.mockReturnValueOnce(
-        createMockStreamChunks(createMockLLMResponse('This is the final answer.', []))
+        createMockStreamChunks(createMockLLMResponse('Done', []))
       )
 
       const agent = new AgentLoop({
         provider: mockProvider as unknown as LLMProvider,
         toolRegistry: mockToolRegistry as unknown as ToolRegistry,
         contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
+        memoryStore: mockMemoryStore as unknown as MemoryStore
       })
 
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply', email)) {
-        events.push(event)
-      }
-
-      // Should have chunk events and done event
-      expect(events.some((e) => e.type === 'chunk')).toBe(true)
-      expect(events.some((e) => e.type === 'done')).toBe(true)
-      expect(events.find((e) => e.type === 'done')?.content).toBe('This is the final answer.')
-    })
-
-    it('should yield chunk events as content streams', async () => {
-      const email = createMockEmail()
-      mockProvider.chatStream.mockReturnValueOnce(
-        createMockStreamChunks(createMockLLMResponse('Let me think about this...', []))
-      )
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply', email)) {
-        events.push(event)
-      }
-
-      // Should have chunk events for content
-      expect(events.some((e) => e.type === 'chunk')).toBe(true)
-    })
-  })
-
-  describe('run - tool calls', () => {
-    it('should execute tool and yield action/observation events', async () => {
-      const email = createMockEmail()
-      const toolCalls: ToolCallRequest[] = [
-        { id: 'call_1', name: 'search_local_emails', arguments: { query: 'meeting' } }
-      ]
-
-      mockProvider.chatStream
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('I will search for emails.', toolCalls)))
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Based on the search results, here is my reply.', [])))
-
-      mockToolRegistry.execute.mockResolvedValueOnce('[1] ID: 1\nFrom: jane@example.com\nSubject: Meeting')
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply about the meeting', email)) {
-        events.push(event)
-      }
-
-      // Should have action event
-      const actionEvent = events.find((e) => e.type === 'action')
-      expect(actionEvent).toBeDefined()
-      expect(actionEvent?.toolName).toBe('search_local_emails')
-
-      // Should have observation event
-      const observationEvent = events.find((e) => e.type === 'observation')
-      expect(observationEvent).toBeDefined()
-      expect(observationEvent?.content).toContain('jane@example.com')
-
-      // Tool should have been executed
-      expect(mockToolRegistry.execute).toHaveBeenCalledWith('search_local_emails', { query: 'meeting' })
-    })
-
-    it('should handle multiple tool calls in sequence', async () => {
-      const email = createMockEmail()
-      const toolCalls1: ToolCallRequest[] = [
-        { id: 'call_1', name: 'search_local_emails', arguments: { query: 'budget' } }
-      ]
-
-      mockProvider.chatStream
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Searching for budget emails.', toolCalls1)))
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Here is the summary of the budget.', [])))
-
-      mockToolRegistry.execute.mockResolvedValueOnce('Budget results')
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Find budget info', email)) {
-        events.push(event)
-      }
-
-      // Should have one action and one observation
-      expect(events.filter((e) => e.type === 'action')).toHaveLength(1)
-      expect(events.filter((e) => e.type === 'observation')).toHaveLength(1)
-    })
-  })
-
-  describe('run - max iterations', () => {
-    it('should stop after reaching maxIterations', async () => {
-      const email = createMockEmail()
-      const toolCall: ToolCallRequest = { id: 'call_1', name: 'search_local_emails', arguments: { query: 'test' } }
-
-      // Always return tool calls (infinite loop scenario) - use mockImplementation to create fresh generator each call
-      mockProvider.chatStream.mockImplementation(() =>
-        createMockStreamChunks(createMockLLMResponse('Searching...', [toolCall]))
-      )
-      mockToolRegistry.execute.mockResolvedValue('Results')
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator,
-        config: { maxIterations: 3 }
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Test', email)) {
-        events.push(event)
-      }
-
-      // Should end with error event for max iterations
-      const errorEvent = events.find((e) => e.type === 'error')
-      expect(errorEvent).toBeDefined()
-      expect(errorEvent?.content).toContain('maximum number of tool call iterations')
-    })
-  })
-
-  describe('run - error handling', () => {
-    it('should yield error event when LLM call fails', async () => {
-      const email = createMockEmail()
-      // Create an async generator that throws
-      async function* failingStream(): AsyncGenerator<LLMStreamChunk, void, unknown> {
-        throw new Error('API error')
-      }
-      mockProvider.chatStream.mockReturnValueOnce(failingStream())
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply', email)) {
-        events.push(event)
-      }
-
-      const errorEvent = events.find((e) => e.type === 'error')
-      expect(errorEvent).toBeDefined()
-      expect(errorEvent?.content).toContain('API error')
-    })
-
-    it('should yield error event when LLM returns error finish reason', async () => {
-      const email = createMockEmail()
-      mockProvider.chatStream.mockReturnValueOnce(
-        createMockStreamChunks(createMockLLMResponse('Error occurred', [], 'error'))
-      )
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply', email)) {
-        events.push(event)
-      }
-
-      const errorEvent = events.find((e) => e.type === 'error')
-      expect(errorEvent).toBeDefined()
-    })
-  })
-
-  describe('think tag stripping', () => {
-    it('should strip thinking tags from content', async () => {
-      const email = createMockEmail()
-      // Mock response with proper thinking tags (for DeepSeek-R1 style models)
-      // Using the format: <think>thinking content here</think>
-      const mockContent = 'Let me analyze this email.<think>Internal reasoning...</think>Based on my analysis, here is the reply.'
-      mockProvider.chatStream.mockReturnValueOnce(
-        createMockStreamChunks(createMockLLMResponse(mockContent, []))
-      )
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const events: ProgressEvent[] = []
-      for await (const event of agent.run('Draft a reply', email)) {
-        events.push(event)
-      }
-
-      // Thought event should have stripped thinking tags
-      const thoughtEvent = events.find((e) => e.type === 'thought')
-      // Should not contain the thinking tags in the thought event content
-      if (thoughtEvent && thoughtEvent.type === 'thought') {
-        expect(thoughtEvent.content).not.toMatch(/<think>[\s\S]*?<\/think>/)
-      }
-    })
-  })
-
-  describe('message building', () => {
-    it('should build user message with email context', async () => {
-      const email = createMockEmail({
-        sender: 'test@example.com',
-        subject: 'Important Email',
-        bodyText: 'This is a test email body.'
-      })
-      mockProvider.chatStream.mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Done', [])))
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      for await (const _ of agent.run('Draft a reply', email)) {
-        // Process events
-      }
-
-      // Provider should have been called with messages containing email context
-      expect(mockProvider.chatStream).toHaveBeenCalled()
-      const callArgs = mockProvider.chatStream.mock.calls[0][0]
-      expect(callArgs.messages).toBeDefined()
-    })
-
-    it('should truncate long email body to prevent context overflow', async () => {
-      const longBody = 'x'.repeat(50000) // 50k characters
-      const email = createMockEmail({ bodyText: longBody })
-
-      mockProvider.chatStream.mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Done', [])))
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      for await (const _ of agent.run('Draft a reply', email)) {
-        // Process events
-      }
-
-      // Token truncator should have been called
-      expect(mockTokenTruncator.truncate).toHaveBeenCalled()
-    })
-  })
-
-  describe('AsyncGenerator pattern', () => {
-    it('should be an async generator that yields progress events', async () => {
-      const email = createMockEmail()
-      mockProvider.chatStream.mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Response', [])))
-
-      const agent = new AgentLoop({
-        provider: mockProvider as unknown as LLMProvider,
-        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
-        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
-      })
-
-      const generator = agent.run('Test', email)
-
-      // Should be an async iterable
-      expect(generator[Symbol.asyncIterator]).toBeDefined()
+      // Should not throw
+      const generator = agent.run(messages, context, deps)
+      expect(generator).toBeDefined()
       expect(typeof generator[Symbol.asyncIterator]).toBe('function')
     })
 
-    it('should yield events in correct order for tool call flow', async () => {
-      const email = createMockEmail()
-      const toolCall: ToolCallRequest = { id: 'call_1', name: 'search_local_emails', arguments: { query: 'test' } }
+    it('should return AsyncGenerator<ConversationEvent>', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // All events should have ConversationEvent structure
+      events.forEach(event => {
+        expect(event).toHaveProperty('type')
+        expect(event).toHaveProperty('sessionId')
+        expect(event).toHaveProperty('messageId')
+        expect(event).toHaveProperty('timestamp')
+        expect(event).toHaveProperty('data')
+      })
+    })
+  })
+
+  // ==========================================================================
+  // 2. SSE Event Flow Tests
+  // ==========================================================================
+
+  describe('SSE event flow', () => {
+    it('should yield session_start as first event', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+        if (events.length === 1) break // Just check first event
+      }
+
+      expect(events[0].type).toBe('session_start')
+      expect(events[0].sessionId).toBe(context.sessionId)
+      expect(events[0].messageId).toBe(context.messageId)
+    })
+
+    it('should yield session_end as last event', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const lastEvent = events[events.length - 1]
+      expect(lastEvent.type).toBe('session_end')
+    })
+
+    it('should yield result_chunk events during streaming', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('This is a response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const resultChunks = events.filter(e => e.type === 'result_chunk')
+      expect(resultChunks.length).toBeGreaterThan(0)
+    })
+
+    it('should yield tool_call_start and tool_call_end for tool calls', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
 
       mockProvider.chatStream
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('I will search.', [toolCall])))
-        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Final answer', [])))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('I will create a todo.', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Done creating todo.', [])))
 
-      mockToolRegistry.execute.mockResolvedValueOnce('Search results')
+      mockToolRegistry.execute.mockResolvedValueOnce('{"success": true, "id": 1}')
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const toolCallStarts = events.filter(e => e.type === 'tool_call_start')
+      const toolCallEnds = events.filter(e => e.type === 'tool_call_end')
+
+      expect(toolCallStarts.length).toBe(1)
+      expect(toolCallEnds.length).toBe(1)
+      expect(toolCallStarts[0].data).toHaveProperty('toolName', 'createTodo')
+      expect(toolCallEnds[0].data).toHaveProperty('toolOutput')
+    })
+
+    it('should emit events in correct order: session_start -> tool_call_start -> tool_call_end -> result_chunk -> session_end', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Creating...', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Created!', [])))
+
+      mockToolRegistry.execute.mockResolvedValueOnce('{"success": true}')
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const eventTypes = events.map(e => e.type)
+
+      // session_start is first
+      expect(eventTypes[0]).toBe('session_start')
+
+      // session_end is last
+      expect(eventTypes[eventTypes.length - 1]).toBe('session_end')
+
+      // tool_call_start comes before tool_call_end
+      const toolStartIdx = eventTypes.indexOf('tool_call_start')
+      const toolEndIdx = eventTypes.indexOf('tool_call_end')
+      expect(toolStartIdx).toBeLessThan(toolEndIdx)
+
+      // result_chunk comes after tool_call_end
+      const resultChunkIdx = eventTypes.indexOf('result_chunk')
+      expect(resultChunkIdx).toBeGreaterThan(toolEndIdx)
+    })
+  })
+
+  // ==========================================================================
+  // 3. Dynamic Tool Loading Tests
+  // ==========================================================================
+
+  describe('dynamic tool loading', () => {
+    it('should load tools based on AgentRole', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext({ role: 'todo-agent' })
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Should call getDefinitions to load tools
+      expect(mockToolRegistry.getDefinitions).toHaveBeenCalled()
+    })
+
+    it('should include todo-agent tools: createTodo, updateTodo, deleteTodo', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext({ role: 'todo-agent' })
+      const deps = {
+        dataSource: {} as any
+      }
+
+      // Mock tool definitions for todo-agent
+      mockToolRegistry.getDefinitions.mockReturnValue([
+        { type: 'function', function: { name: 'createTodo', description: 'Create a todo' } },
+        { type: 'function', function: { name: 'updateTodo', description: 'Update a todo' } },
+        { type: 'function', function: { name: 'deleteTodo', description: 'Delete a todo' } }
+      ])
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Verify tool definitions were requested
+      expect(mockToolRegistry.getDefinitions).toHaveBeenCalled()
+    })
+  })
+
+  // ==========================================================================
+  // 4. Tool Execution Error Handling Tests
+  // ==========================================================================
+
+  describe('tool execution error handling', () => {
+    it('should catch tool execution errors and feed back to LLM', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      // First call: LLM requests tool call
+      // Second call: LLM receives error and responds
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Creating...', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Sorry, there was an error creating the todo.', [])))
+
+      // Tool execution fails
+      mockToolRegistry.execute.mockRejectedValueOnce(new Error('Database connection failed'))
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should have tool_call_end with error in toolOutput
+      const toolCallEnd = events.find(e => e.type === 'tool_call_end')
+      expect(toolCallEnd).toBeDefined()
+
+      // toolOutput should contain error info
+      const toolOutput = (toolCallEnd?.data as any)?.toolOutput
+      expect(toolOutput).toBeDefined()
+      expect(toolOutput.status).toBe('failed')
+      expect(toolOutput.error).toContain('Database connection failed')
+
+      // Should have result_chunk (LLM response after error)
+      const resultChunks = events.filter(e => e.type === 'result_chunk')
+      expect(resultChunks.length).toBeGreaterThan(0)
+    })
+
+    it('should not terminate loop on tool execution error', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Creating...', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('I handled the error.', [])))
+
+      mockToolRegistry.execute.mockRejectedValueOnce(new Error('Tool failed'))
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should complete normally with session_end
+      const lastEvent = events[events.length - 1]
+      expect(lastEvent.type).toBe('session_end')
+
+      // Should NOT have error event (error is fed to LLM, not emitted)
+      const errorEvents = events.filter(e => e.type === 'error')
+      expect(errorEvents.length).toBe(0)
+    })
+  })
+
+  // ==========================================================================
+  // 5. MAX_STEPS Exceeded Tests
+  // ==========================================================================
+
+  describe('MAX_STEPS exceeded', () => {
+    it('should yield error event with MAX_STEPS_EXCEEDED code when limit reached', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCall: ToolCallRequest = { id: 'call_1', name: 'createTodo', arguments: {} }
+
+      // Always return tool calls (infinite loop)
+      mockProvider.chatStream.mockImplementation(() =>
+        createMockStreamChunks(createMockLLMResponse('Looping...', [toolCall]))
+      )
+      mockToolRegistry.execute.mockResolvedValue('Result')
 
       const agent = new AgentLoop({
         provider: mockProvider as unknown as LLMProvider,
         toolRegistry: mockToolRegistry as unknown as ToolRegistry,
         contextBuilder: mockContextBuilder as unknown as ContextBuilder,
         memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
+        config: { maxIterations: 3 } // Use lower limit for test
       })
 
-      const eventTypes: string[] = []
-      for await (const event of agent.run('Test', email)) {
-        eventTypes.push(event.type)
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
       }
 
-      // Order should be: chunks... -> action -> observation -> chunks... -> done
-      // First we get content chunks, then action, observation, then more chunks, then done
-      expect(eventTypes.some(e => e === 'chunk')).toBe(true)
-      expect(eventTypes.find(e => e === 'action')).toBeDefined()
-      expect(eventTypes.find(e => e === 'observation')).toBeDefined()
-      expect(eventTypes[eventTypes.length - 1]).toBe('done')
+      // Should have error event
+      const errorEvent = events.find(e => e.type === 'error')
+      expect(errorEvent).toBeDefined()
+
+      const errorData = errorEvent?.data as any
+      expect(errorData.code).toBe('MAX_STEPS_EXCEEDED')
+      expect(errorData.message).toContain('AI')
+      expect(errorData.details.steps).toBe(3)
+    })
+
+    it('should use MAX_STEPS constant value', async () => {
+      expect(MAX_STEPS).toBe(20)
+    })
+
+    it('should cap maxIterations at MAX_STEPS (hard limit)', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCall: ToolCallRequest = { id: 'call_1', name: 'createTodo', arguments: {} }
+
+      // Always return tool calls (infinite loop)
+      mockProvider.chatStream.mockImplementation(() =>
+        createMockStreamChunks(createMockLLMResponse('Looping...', [toolCall]))
+      )
+      mockToolRegistry.execute.mockResolvedValue('Result')
+
+      // Request more than MAX_STEPS iterations
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        config: { maxIterations: 50 } // Request 50, but should be capped at 20
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should have MAX_STEPS_EXCEEDED error
+      const errorEvent = events.find(e => e.type === 'error')
+      expect(errorEvent).toBeDefined()
+
+      const errorData = errorEvent?.data as any
+      expect(errorData.code).toBe('MAX_STEPS_EXCEEDED')
+      // Should be capped at MAX_STEPS (20), not 50
+      expect(errorData.details.steps).toBe(MAX_STEPS)
+    })
+  })
+
+  // ==========================================================================
+  // 6. AbortSignal Support Tests
+  // ==========================================================================
+
+  describe('AbortSignal support', () => {
+    it('should check signal.aborted at start of each iteration', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const controller = new AbortController()
+      controller.abort() // Abort immediately
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        signal: controller.signal
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should have session_start but no session_end (aborted before loop)
+      const sessionStarts = events.filter(e => e.type === 'session_start')
+      expect(sessionStarts.length).toBe(1)
+    })
+
+    it('should propagate signal to LLM provider', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const controller = new AbortController()
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        signal: controller.signal
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Verify signal was passed to chatStream
+      expect(mockProvider.chatStream).toHaveBeenCalled()
+      const callArgs = mockProvider.chatStream.mock.calls[0][0]
+      expect(callArgs.signal).toBe(controller.signal)
+    })
+  })
+
+  // ==========================================================================
+  // 7. Context Building Tests
+  // ==========================================================================
+
+  describe('context building', () => {
+    it('should build system prompt with time context', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext({
+        currentTime: '2024-03-20T10:30:00.000Z',
+        timeZone: 'Asia/Shanghai'
+      })
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Should call buildSystemPrompt with role
+      expect(mockContextBuilder.buildSystemPrompt).toHaveBeenCalledWith(
+        context.role,
+        undefined
+      )
+    })
+
+    it('should include sourcePage in context if provided', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext({
+        sourcePage: 'todo-board'
+      })
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Context should be used
+      expect(mockContextBuilder.buildSystemPrompt).toHaveBeenCalled()
+    })
+  })
+
+  // ==========================================================================
+  // 8. Edge Cases Tests
+  // ==========================================================================
+
+  describe('edge cases', () => {
+    it('should handle empty messages array', async () => {
+      const messages: ChatMessage[] = []
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      // Should not throw, but should still yield events
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+    })
+
+    it('should handle null content in messages', async () => {
+      const messages: ChatMessage[] = [
+        { role: 'assistant', content: null, toolCalls: [] }
+      ]
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      // Should not throw
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+    })
+
+    it('should handle LLM error finish reason', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Error', [], 'error'))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const errorEvent = events.find(e => e.type === 'error')
+      expect(errorEvent).toBeDefined()
+    })
+
+    it('should generate valid ISO timestamp in events', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // All timestamps should be valid ISO strings
+      events.forEach(event => {
+        const date = new Date(event.timestamp)
+        expect(date.toISOString()).toBe(event.timestamp)
+      })
+    })
+  })
+
+  // ==========================================================================
+  // 9. ToolDeps Interface Tests
+  // ==========================================================================
+
+  describe('ToolDeps interface', () => {
+    it('should pass deps to tool execution context', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: { name: 'mockDataSource' } as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Creating...', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Done', [])))
+
+      mockToolRegistry.execute.mockResolvedValueOnce('{"success": true}')
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Tool should be executed with deps context
+      expect(mockToolRegistry.execute).toHaveBeenCalled()
+    })
+  })
+
+  // ==========================================================================
+  // 10. Cached Prompt Tests (Phase 4 Fix)
+  // ==========================================================================
+
+  describe('cached prompt usage', () => {
+    it('should use cached prompt when available', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      // Set up cached prompt
+      const cachedPrompt = 'Cached todo-agent prompt from startup'
+      mockContextBuilder.getCachedPrompt.mockReturnValue(cachedPrompt)
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Should check for cached prompt first
+      expect(mockContextBuilder.getCachedPrompt).toHaveBeenCalledWith('todo-agent')
+
+      // Should call buildSystemMessage when cache is available
+      expect(mockContextBuilder.buildSystemMessage).toHaveBeenCalled()
+    })
+
+    it('should fall back to buildSystemPrompt when cache is empty', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      // No cached prompt
+      mockContextBuilder.getCachedPrompt.mockReturnValue(undefined)
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Should check for cached prompt first
+      expect(mockContextBuilder.getCachedPrompt).toHaveBeenCalledWith('todo-agent')
+
+      // Should fall back to buildSystemPrompt when cache is empty
+      expect(mockContextBuilder.buildSystemPrompt).toHaveBeenCalledWith('todo-agent', undefined)
+    })
+
+    it('should include time context in system prompt', async () => {
+      const messages = createChatMessages([{ role: 'user', content: 'Test' }])
+      const context = createAgentContext({
+        currentTime: '2024-03-20T10:30:00.000Z',
+        timeZone: 'Asia/Shanghai'
+      })
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const cachedPrompt = 'Cached prompt'
+      mockContextBuilder.getCachedPrompt.mockReturnValue(cachedPrompt)
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      for await (const _ of agent.run(messages, context, deps)) {
+        // Process events
+      }
+
+      // Should call buildSystemMessage with runtime context including currentTime and timeZone
+      expect(mockContextBuilder.buildSystemMessage).toHaveBeenCalledWith(
+        'todo-agent',
+        expect.objectContaining({
+          currentTime: '2024-03-20T10:30:00.000Z',
+          timeZone: 'Asia/Shanghai'
+        })
+      )
+    })
+  })
+
+  // ==========================================================================
+  // 11. Message Truncation Tests
+  // ==========================================================================
+
+  describe('message truncation', () => {
+    it('should truncate messages when exceeding memory window', async () => {
+      // Create messages that exceed the default memory window (100)
+      const messages: ChatMessage[] = []
+      for (let i = 0; i < 150; i++) {
+        messages.push({ role: 'user', content: `Message ${i}` })
+      }
+
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        config: { memoryWindow: 10 } // Small window to force truncation
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should complete without error
+      expect(events[events.length - 1].type).toBe('session_end')
+    })
+
+    it('should preserve tool_call and tool_output pairing during truncation', async () => {
+      const messages: ChatMessage[] = [
+        { role: 'user', content: 'Create a todo' },
+        {
+          role: 'assistant',
+          content: null,
+          toolCalls: [{
+            id: 'call_123',
+            type: 'function',
+            function: { name: 'createTodo', arguments: '{"title":"Test"}' }
+          }]
+        },
+        { role: 'tool', content: '{"success":true}', toolCallId: 'call_123' },
+        { role: 'user', content: 'Thanks' }
+      ]
+
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      mockProvider.chatStream.mockReturnValueOnce(
+        createMockStreamChunks(createMockLLMResponse('Response', []))
+      )
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        config: { memoryWindow: 3 } // Small window
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should complete without error (no orphan tool messages)
+      expect(events[events.length - 1].type).toBe('session_end')
+    })
+
+    it('should truncate messages after tool execution in loop', async () => {
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Create a todo' }]
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Creating...', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Done!', [])))
+
+      mockToolRegistry.execute.mockResolvedValueOnce('{"success": true}')
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore,
+        config: { memoryWindow: 5 }
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      // Should complete normally with result
+      const resultChunks = events.filter(e => e.type === 'result_chunk')
+      expect(resultChunks.length).toBeGreaterThan(0)
     })
   })
 })

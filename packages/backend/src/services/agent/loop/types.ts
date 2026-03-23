@@ -3,32 +3,81 @@
  * Reference: nanobot/agent/loop.py
  */
 
-import type { ContextMessage } from '../context/types'
+import type { ContextMessage, AgentRole } from '../context/types'
 
 // Re-export ContextMessage as AgentMessage for backward compatibility
 export type AgentMessage = ContextMessage
 
 /**
- * Progress event for streaming
- * Reference: nanobot/agent/loop.py - on_progress callback
+ * Conversation event types for SSE streaming
+ *
+ * NOTE: Business-specific events (todos_created, todos_updated, etc.) are intentionally
+ * omitted to keep AgentLoop generic. Frontend should listen to `tool_call_end` and
+ * parse toolOutput to update local state based on toolName.
  */
-export interface ProgressEvent {
-  type: 'thought' | 'action' | 'observation' | 'chunk' | 'done' | 'error'
-  content: string
-  toolName?: string
-  toolInput?: Record<string, unknown>
-  iteration?: number
+export type ConversationEventType =
+  | 'session_start'      // Session initialized
+  | 'thinking'           // AI reasoning (collapsible in UI)
+  | 'tool_call_start'    // Tool invocation started
+  | 'tool_call_end'      // Tool invocation completed (frontend uses this to update UI)
+  | 'result_chunk'       // Final response chunk (typewriter effect)
+  | 'session_end'        // Session completed
+  | 'error'              // Error occurred
+
+/**
+ * Base event structure for SSE streaming
+ */
+export interface ConversationEvent {
+  type: ConversationEventType
+  sessionId: string      // Unique session identifier
+  messageId: string      // Maps to frontend message bubble
+  timestamp: string      // ISO datetime
+  data: ThinkingData | ToolCallData | ResultChunkData | ErrorData | null
 }
 
 /**
- * Agent state during ReAct loop
+ * AI thinking/reasoning content
  */
-export interface AgentState {
-  iteration: number
-  messages: ContextMessage[]
-  finalContent: string | null
-  toolsUsed: string[]
-  finishReason: 'completed' | 'max_iterations' | 'error'
+export interface ThinkingData {
+  content: string        // Chain-of-thought content
+}
+
+/**
+ * Final response content for user
+ */
+export interface ResultChunkData {
+  content: string        // User-facing message chunk
+}
+
+/**
+ * Tool call data
+ */
+export interface ToolCallData {
+  toolName: string
+  toolInput: Record<string, unknown>
+  toolOutput?: Record<string, unknown>  // Only in tool_call_end
+  truncated?: boolean     // If output was truncated for SSE
+}
+
+/**
+ * Error data
+ */
+export interface ErrorData {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * Agent context passed to AgentLoop.run()
+ */
+export interface AgentContext {
+  role: AgentRole           // 'todo-agent' | 'email-analyzer' | future roles
+  sessionId: string         // Generated UUID
+  messageId: string         // For SSE event mapping
+  currentTime: string       // ISO datetime from request
+  timeZone: string          // User timezone
+  sourcePage?: string       // Optional page context
 }
 
 /**
@@ -45,23 +94,56 @@ export interface AgentConfig {
 }
 
 /**
+ * Agent Loop Constants
+ * All iteration limits defined in one place for clarity
+ */
+
+/** Default iterations for simple tasks (todo management) */
+export const DEFAULT_MAX_ITERATIONS = 5
+
+/** Iterations for complex multi-step tasks */
+export const COMPLEX_MAX_ITERATIONS = 10
+
+/** Iterations for research/exploration tasks (highest allowed) */
+export const RESEARCH_MAX_ITERATIONS = 20
+
+/** Hard limit to prevent infinite loops - no config can exceed this */
+export const MAX_STEPS = 20
+
+/** Default temperature for deterministic outputs */
+export const DEFAULT_TEMPERATURE = 0.7
+
+/** Higher temperature for creative tasks */
+export const CREATIVE_TEMPERATURE = 0.9
+
+/** Lower temperature for precise/factual tasks */
+export const PRECISE_TEMPERATURE = 0.5
+
+/** Default max tokens per response */
+export const DEFAULT_MAX_TOKENS = 8192
+
+/** Default memory window (messages to keep) */
+export const DEFAULT_MEMORY_WINDOW = 100
+
+/**
  * Preset configurations for different use cases
+ * Values derived from constants above for single source of truth
  */
 export const AGENT_PRESETS = {
-  // For email draft generation, simple tool calls
-  draft: {
-    maxIterations: 7,
-    temperature: 0.9
+  // For todo management tasks - simple, fast
+  todo: {
+    maxIterations: DEFAULT_MAX_ITERATIONS,
+    temperature: DEFAULT_TEMPERATURE
   },
-  // For more complex multi-step tasks
+  // For complex multi-step tasks
   complex: {
-    maxIterations: 10,
-    temperature: 0.7
+    maxIterations: COMPLEX_MAX_ITERATIONS,
+    temperature: DEFAULT_TEMPERATURE
   },
-  // For research/exploration tasks
+  // For research/exploration tasks (uses MAX_STEPS)
   research: {
-    maxIterations: 20,
-    temperature: 0.5
+    maxIterations: RESEARCH_MAX_ITERATIONS,
+    temperature: PRECISE_TEMPERATURE
   }
 } as const
 
@@ -72,20 +154,17 @@ export type AgentPreset = keyof typeof AGENT_PRESETS
  * Note: model is intentionally not set here - provider will use dynamic config from database
  */
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  // model: undefined by default, let provider decide from database settings
-  temperature: 0.7,
-  maxTokens: 8192,
-  maxIterations: 5,
-  memoryWindow: 100
+  temperature: DEFAULT_TEMPERATURE,
+  maxTokens: DEFAULT_MAX_TOKENS,
+  maxIterations: DEFAULT_MAX_ITERATIONS,
+  memoryWindow: DEFAULT_MEMORY_WINDOW
 }
 
 /**
- * Interface for email data passed to agent
+ * Tool dependencies passed to AgentLoop.run()
+ * Provides context needed for tool execution
  */
-export interface AgentEmail {
-  id: number
-  sender: string | null
-  subject: string | null
-  bodyText: string | null
-  date: Date
+export interface ToolDeps {
+  dataSource: unknown // TypeORM DataSource
+  defaultColumnId?: number // Default column for new todos (default: 1)
 }

@@ -6,23 +6,19 @@
 import { Router, Request, Response } from 'express'
 import type { DataSource } from 'typeorm'
 import { In } from 'typeorm'
+import { randomUUID } from 'crypto'
 import type { LLMProvider } from '../services/llm/base-provider'
 import type { ToolRegistry } from '../services/agent/tools/registry'
 import type { ContextBuilder } from '../services/agent/context/types'
 import type { MemoryStore } from '../services/agent/memory/types'
-import type { TokenTruncator } from '../services/agent/utils/token-truncator'
-import { AgentLoop } from '../services/agent/loop/agent-loop'
 import { EmailAnalyzer, type EmailData } from '../services/agent/pipeline/email-analyzer'
 import { BatchEmailProcessor } from '../services/agent/pipeline/batch-processor'
+import { AgentLoop } from '../services/agent/loop/agent-loop'
 import { Email } from '../entities/Email.entity'
+import { ChatRequestSchema } from '@nanomail/shared'
+import { createLogger } from '../config/logger'
 
-/**
- * Request type for draft generation
- */
-export interface DraftRequest {
-  emailId: number
-  instruction: string
-}
+const log = createLogger('AgentRoutes')
 
 /**
  * Request type for process emails
@@ -40,7 +36,6 @@ export interface AgentRoutesDeps {
   toolRegistry: ToolRegistry
   contextBuilder: ContextBuilder
   memoryStore: MemoryStore
-  tokenTruncator: TokenTruncator
 }
 
 /**
@@ -55,93 +50,6 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
   const batchProcessor = new BatchEmailProcessor(emailAnalyzer, deps.dataSource, {
     maxConcurrency: 3,
     delayBetweenBatches: 1000
-  })
-
-  /**
-   * POST /api/agent/draft
-   *
-   * SSE endpoint for draft generation
-   * Streams the agent's thought process and final draft
-   */
-  router.post('/draft', async (req: Request, res: Response) => {
-    const { emailId, instruction } = req.body as DraftRequest
-
-    // Validate input
-    if (!emailId) {
-      res.status(400).json({ error: 'Missing emailId' })
-      return
-    }
-
-    if (!instruction) {
-      res.status(400).json({ error: 'Missing instruction' })
-      return
-    }
-
-    // Get email from database
-    const email = await emailRepository.findOne({ where: { id: emailId } })
-    if (!email) {
-      res.status(404).json({ error: `Email with id ${emailId} not found` })
-      return
-    }
-
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no') // Disable nginx buffering
-
-    // Create AbortController for this request
-    const abortController = new AbortController()
-
-    // Listen for client disconnect
-    req.on('close', () => {
-      abortController.abort()
-    })
-
-    // Create agent loop with abort signal
-    const agentLoop = new AgentLoop({
-      provider: deps.llmProvider,
-      toolRegistry: deps.toolRegistry,
-      contextBuilder: deps.contextBuilder,
-      memoryStore: deps.memoryStore,
-      tokenTruncator: deps.tokenTruncator,
-      config: {
-        preset: 'draft'
-      },
-      signal: abortController.signal
-    })
-
-    try {
-      // Run the agent loop and stream events
-      for await (const event of agentLoop.run(instruction, email)) {
-        // Check if client disconnected
-        if (abortController.signal.aborted) {
-          break // Stop streaming, LLM request already cancelled via signal
-        }
-
-        // Send SSE event
-        res.write(`data: ${JSON.stringify(event)}\n\n`)
-
-        // Flush immediately if supported
-        if ('flush' in res && typeof res.flush === 'function') {
-          res.flush()
-        }
-      }
-    } catch (error) {
-      // Handle abort gracefully
-      if (error instanceof Error && error.name === 'AbortError') {
-        return // Client disconnected, clean exit
-      }
-
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'error',
-          content: error instanceof Error ? error.message : 'Unknown error'
-        })}\n\n`
-      )
-    }
-
-    res.end()
   })
 
   /**
@@ -214,6 +122,173 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
       res.status(500).json({
         error: error instanceof Error ? error.message : 'Unknown error during processing'
       })
+    }
+  })
+
+  /**
+   * POST /api/agent/chat
+   *
+   * SSE endpoint for conversational todo management
+   * Streams AI thought process, tool calls, and results
+   */
+  router.post('/chat', async (req: Request, res: Response) => {
+    log.info({ body: req.body }, 'Received chat request')
+
+    // Validate input
+    const validationResult = ChatRequestSchema.safeParse(req.body)
+    if (!validationResult.success) {
+      res.status(400).json({
+        error: 'Invalid request',
+        details: validationResult.error.errors
+      })
+      return
+    }
+
+    const { messages, context } = validationResult.data
+    log.info({ messageCount: messages.length, context }, 'Chat request validated')
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    // CRITICAL: Force flush headers to immediately establish HTTP long connection
+    res.flushHeaders()
+
+    // Generate session and message IDs
+    const sessionId = randomUUID()
+    const messageId = randomUUID()
+
+    // Create AbortController for proper cleanup
+    const abortController = new AbortController()
+    let closed = false
+
+    // Handle client disconnect
+    // Note: In dev mode with Vite proxy, req.on('close') may fire immediately
+    // We use a delay to distinguish between proxy behavior and real disconnects
+    let streamStarted = false
+    let closeTimeout: ReturnType<typeof setTimeout> | null = null
+
+    const handleDisconnect = (source: string) => {
+      log.info({ sessionId, source, streamStarted, closed }, 'Disconnect event fired')
+
+      // If stream has already started and we're just getting a late close event, ignore it
+      if (streamStarted) {
+        log.info({ sessionId, source }, 'Stream already started, ignoring close event')
+        return
+      }
+
+      // Stream hasn't started yet - wait to confirm if this is a real disconnect
+      log.info({ sessionId }, 'Stream not started yet, waiting to confirm disconnect...')
+      closeTimeout = setTimeout(() => {
+        log.info({ sessionId, closed, streamStarted }, 'Close timeout fired')
+        if (!closed && !streamStarted) {
+          closed = true
+          abortController.abort()
+          log.info({ sessionId }, 'Confirmed client disconnect, aborting')
+        } else {
+          log.info({ sessionId, closed, streamStarted }, 'Close timeout ignored - stream already started or closed')
+        }
+      }, 500)
+      log.info({ sessionId, closeTimeoutSet: !!closeTimeout }, 'Close timeout scheduled')
+    }
+
+    req.on('close', () => handleDisconnect('req.close'))
+    res.on('close', () => handleDisconnect('res.close'))
+
+    // Cancel pending close timeout when we successfully write data
+    const checkAndClearTimeout = () => {
+      log.info({ sessionId, closeTimeout: !!closeTimeout, streamStarted }, 'checkAndClearTimeout called')
+
+      // Always set streamStarted to true when we successfully write data
+      // This prevents future close events from triggering false disconnects
+      streamStarted = true
+
+      if (closeTimeout) {
+        clearTimeout(closeTimeout)
+        closeTimeout = null
+        log.info({ sessionId }, 'Stream started, pending close timeout cleared')
+      } else {
+        log.info({ sessionId }, 'Stream started, no pending close timeout')
+      }
+    }
+
+    // Single-user scenario: default to inbox (column_id = 1)
+    // Multi-user scenario would need to get default column from user settings
+    const defaultColumnId = 1
+
+    // Create agent loop with signal for abort support
+    const agentLoop = new AgentLoop({
+      provider: deps.llmProvider,
+      toolRegistry: deps.toolRegistry,
+      contextBuilder: deps.contextBuilder,
+      memoryStore: deps.memoryStore,
+      config: { preset: 'todo' },
+      signal: abortController.signal
+    })
+
+    try {
+      // Send session_start event
+      log.info({ sessionId }, 'Writing session_start event')
+      res.write(`data: ${JSON.stringify({
+        type: 'session_start',
+        sessionId,
+        messageId,
+        timestamp: new Date().toISOString(),
+        data: { sessionId, agentRole: 'todo-agent' }
+      })}\n\n`)
+
+      // Mark stream as started to prevent false disconnect detection
+      log.info({ sessionId }, 'About to call checkAndClearTimeout')
+      checkAndClearTimeout()
+
+      // Run agent and stream events
+      for await (const event of agentLoop.run(messages, {
+        role: 'todo-agent',
+        sessionId,
+        messageId,
+        currentTime: context.currentTime,
+        timeZone: context.timeZone,
+        sourcePage: context.sourcePage
+      })) {
+        // Check abort status before each write
+        if (abortController.signal.aborted || closed) {
+          log.info({ sessionId }, 'Agent loop aborted, stopping stream')
+          break
+        }
+
+        res.write(`data: ${JSON.stringify(event)}\n\n`)
+
+        // Flush for nginx buffering
+        if ('flush' in res && typeof res.flush === 'function') {
+          res.flush()
+        }
+      }
+    } catch (error) {
+      // Don't send error event if client disconnected
+      if (closed || (error instanceof Error && error.name === 'AbortError')) {
+        log.info({ sessionId }, 'Agent loop aborted gracefully')
+        return
+      }
+
+      log.error({ err: error, sessionId }, 'Agent loop error')
+
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        sessionId,
+        messageId,
+        timestamp: new Date().toISOString(),
+        data: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        }
+      })}\n\n`)
+    } finally {
+      // Ensure response ends
+      if (!closed) {
+        res.end()
+      }
     }
   })
 

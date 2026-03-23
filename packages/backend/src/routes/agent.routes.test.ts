@@ -1,19 +1,19 @@
 /**
- * Tests for Agent Routes - SSE Streaming Endpoint
- * TDD: Write tests first, then implement
+ * Tests for Agent Routes - Email Processing Endpoint
+ *
+ * Phase 4 Tests: POST /api/agent/chat SSE endpoint
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 import type { DataSource } from 'typeorm'
-import type { LLMProvider, LLMResponse, LLMStreamChunk } from '../services/llm/types'
+import type { LLMProvider } from '../services/llm/types'
 import type { ToolRegistry } from '../services/agent/tools/registry'
 import type { ContextBuilder } from '../services/agent/context/types'
 import type { MemoryStore } from '../services/agent/memory/types'
-import type { TokenTruncator } from '../services/agent/utils/token-truncator'
 import { Email } from '../entities/Email.entity'
-import { createAgentRoutes, DraftRequest } from './agent.routes'
+import { createAgentRoutes } from './agent.routes'
 
 // Mock factory for Email entity
 const createMockEmail = (overrides: Partial<Email> = {}): Email =>
@@ -55,48 +55,29 @@ const createMockDataSource = (emails: Email[] = []) => {
   } as unknown as DataSource & { getRepository: ReturnType<typeof vi.fn> }
 }
 
-// Helper to create mock stream chunks from a response
-async function* createMockStreamChunks(
-  response: LLMResponse
-): AsyncGenerator<LLMStreamChunk, void, unknown> {
-  // If there's content, yield it as chunks
-  if (response.content) {
-    // Yield content in chunks for realistic streaming
-    const words = response.content.split(' ')
-    for (let i = 0; i < words.length; i++) {
-      const chunk = i === words.length - 1 ? words[i] : words[i] + ' '
-      yield { content: chunk, toolCalls: [], isDone: false }
-    }
-  }
-
-  // Final chunk with tool calls and finish reason
-  yield {
-    content: null,
-    toolCalls: response.toolCalls,
-    isDone: true,
-    finishReason: response.finishReason
-  }
-}
-
 // Mock factory for LLM Provider
 const createMockLLMProvider = () => ({
-  chat: vi.fn(async (): Promise<LLMResponse> => ({
-    content: 'This is a draft response.',
+  chat: vi.fn(async () => ({
+    content: 'This is a response.',
     toolCalls: [],
     finishReason: 'stop' as const,
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
   })),
-  chatStream: vi.fn(async function* (): AsyncGenerator<LLMStreamChunk, void, unknown> {
-    const response: LLMResponse = {
-      content: 'This is a draft response.',
-      toolCalls: [],
-      finishReason: 'stop' as const,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
-    }
-    yield* createMockStreamChunks(response)
-  }),
+  chatStream: vi.fn(),
   getDefaultModel: vi.fn(() => 'gpt-4o-mini')
 })
+
+// Helper to create mock stream chunks
+async function* createMockStreamChunks(
+  content: string,
+  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [],
+  finishReason: 'stop' | 'tool_calls' | 'error' = 'stop'
+): AsyncGenerator<{ content: string | null; toolCalls: typeof toolCalls; isDone: boolean; finishReason?: string }, void, unknown> {
+  if (content) {
+    yield { content, toolCalls: [], isDone: false }
+  }
+  yield { content: null, toolCalls, isDone: true, finishReason }
+}
 
 // Mock factory for Tool Registry
 const createMockToolRegistry = () => ({
@@ -114,9 +95,12 @@ const createMockContextBuilder = () => ({
   buildSystemPrompt: vi.fn(async () => 'System prompt'),
   buildMessages: vi.fn(async () => [
     { role: 'system', content: 'System prompt' },
-    { role: 'user', content: 'Draft a reply' }
+    { role: 'user', content: 'Process email' }
   ]),
   buildRuntimeContext: vi.fn(() => '[Runtime Context]'),
+  buildSystemMessage: vi.fn(() => 'System prompt with runtime context'),
+  setCachedPrompt: vi.fn(),
+  getCachedPrompt: vi.fn(),
   addAssistantMessage: vi.fn(),
   addToolResult: vi.fn(),
   getIdentity: vi.fn(async () => 'Identity'),
@@ -131,22 +115,6 @@ const createMockMemoryStore = () => ({
   updateMemory: vi.fn()
 })
 
-// Mock factory for Token Truncator
-const createMockTokenTruncator = () => ({
-  estimateTokens: vi.fn((text: string) => Math.ceil(text.length / 4)),
-  truncate: vi.fn((text: string) => ({
-    text,
-    wasTruncated: false,
-    originalTokens: Math.ceil(text.length / 4)
-  })),
-  truncateWithStrategy: vi.fn((text: string) => ({
-    text,
-    wasTruncated: false,
-    originalTokens: Math.ceil(text.length / 4)
-  })),
-  chunkText: vi.fn((text: string) => [text])
-})
-
 describe('Agent Routes', () => {
   let app: express.Application
   let mockDataSource: ReturnType<typeof createMockDataSource>
@@ -154,7 +122,6 @@ describe('Agent Routes', () => {
   let mockToolRegistry: ReturnType<typeof createMockToolRegistry>
   let mockContextBuilder: ReturnType<typeof createMockContextBuilder>
   let mockMemoryStore: ReturnType<typeof createMockMemoryStore>
-  let mockTokenTruncator: ReturnType<typeof createMockTokenTruncator>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -165,7 +132,6 @@ describe('Agent Routes', () => {
     mockToolRegistry = createMockToolRegistry()
     mockContextBuilder = createMockContextBuilder()
     mockMemoryStore = createMockMemoryStore()
-    mockTokenTruncator = createMockTokenTruncator()
 
     // Create Express app
     app = express()
@@ -177,147 +143,13 @@ describe('Agent Routes', () => {
         llmProvider: mockLLMProvider as unknown as LLMProvider,
         toolRegistry: mockToolRegistry as unknown as ToolRegistry,
         contextBuilder: mockContextBuilder as unknown as ContextBuilder,
-        memoryStore: mockMemoryStore as unknown as MemoryStore,
-        tokenTruncator: mockTokenTruncator as unknown as TokenTruncator
+        memoryStore: mockMemoryStore as unknown as MemoryStore
       })
     )
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  describe('POST /api/agent/draft', () => {
-    it('should return 400 when emailId is missing', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ instruction: 'Draft a reply' })
-
-      expect(response.status).toBe(400)
-      expect(response.body.error).toContain('emailId')
-    })
-
-    it('should return 400 when instruction is missing', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1 })
-
-      expect(response.status).toBe(400)
-      expect(response.body.error).toContain('instruction')
-    })
-
-    it('should return 404 when email not found', async () => {
-      // Override mock to return null
-      mockDataSource.getRepository().findOne.mockResolvedValueOnce(null)
-
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 999, instruction: 'Draft a reply' })
-
-      expect(response.status).toBe(404)
-      expect(response.body.error).toContain('not found')
-    })
-
-    it('should set correct SSE headers', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply' })
-
-      expect(response.headers['content-type']).toContain('text/event-stream')
-      expect(response.headers['cache-control']).toBe('no-cache')
-      expect(response.headers['connection']).toBe('keep-alive')
-    })
-
-    it('should stream SSE events for successful draft generation', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply' })
-
-      expect(response.status).toBe(200)
-
-      // Parse SSE events from response text
-      const text = response.text
-      expect(text).toContain('data:')
-
-      // Should contain thought, chunk, and done events
-      expect(text).toContain('"type":"thought"')
-      expect(text).toContain('"type":"chunk"')
-      expect(text).toContain('"type":"done"')
-    })
-
-    it('should stream error event when LLM fails', async () => {
-      // Create an async generator that throws
-      mockLLMProvider.chatStream.mockImplementationOnce(async function* () {
-        throw new Error('LLM API error')
-      })
-
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply' })
-
-      expect(response.status).toBe(200)
-
-      const text = response.text
-      expect(text).toContain('"type":"error"')
-      expect(text).toContain('LLM API error')
-    })
-
-    it('should call AgentLoop with correct parameters', async () => {
-      await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply about the meeting' })
-
-      // LLM provider should have been called via chatStream
-      expect(mockLLMProvider.chatStream).toHaveBeenCalled()
-
-      // Should pass messages and tools
-      expect(mockLLMProvider.chatStream).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: expect.any(Array),
-          tools: expect.any(Array)
-        })
-      )
-    })
-  })
-
-  describe('SSE Event Format', () => {
-    it('should format thought events correctly', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply' })
-
-      const text = response.text
-      // Should have valid JSON in data field
-      const lines = text.split('\n').filter((line: string) => line.startsWith('data:'))
-
-      for (const line of lines) {
-        const jsonStr = line.replace('data:', '').trim()
-        if (jsonStr) {
-          const event = JSON.parse(jsonStr)
-          expect(event).toHaveProperty('type')
-          expect(event).toHaveProperty('content')
-        }
-      }
-    })
-
-    it('should include iteration number in events', async () => {
-      const response = await request(app)
-        .post('/api/agent/draft')
-        .send({ emailId: 1, instruction: 'Draft a reply' })
-
-      const text = response.text
-      const lines = text.split('\n').filter((line: string) => line.startsWith('data:'))
-
-      // At least one event should have iteration
-      const hasIteration = lines.some((line: string) => {
-        const jsonStr = line.replace('data:', '').trim()
-        if (!jsonStr) return false
-        const event = JSON.parse(jsonStr)
-        return event.iteration !== undefined
-      })
-
-      expect(hasIteration).toBe(true)
-    })
   })
 
   describe('POST /api/agent/process-emails', () => {
@@ -339,9 +171,21 @@ describe('Agent Routes', () => {
       expect(response.body.error).toContain('empty')
     })
 
+    it('should return 404 when no emails found', async () => {
+      // Clear the default email from mock
+      mockDataSource.getRepository().findBy.mockResolvedValueOnce([])
+
+      const response = await request(app)
+        .post('/api/agent/process-emails')
+        .send({ emailIds: [999] })
+
+      expect(response.status).toBe(404)
+      expect(response.body.error).toContain('No emails found')
+    })
+
     it('should process emails and return results', async () => {
       // Setup multiple emails
-      mockDataSource.getRepository().find.mockResolvedValueOnce([
+      mockDataSource.getRepository().findBy.mockResolvedValueOnce([
         createMockEmail({ id: 1 }),
         createMockEmail({ id: 2 })
       ])
@@ -355,31 +199,88 @@ describe('Agent Routes', () => {
       expect(response.body).toHaveProperty('failed')
       expect(response.body).toHaveProperty('results')
     })
-
-    it('should handle mixed success and failure', async () => {
-      // One exists, one doesn't
-      mockDataSource.getRepository().findOne
-        .mockResolvedValueOnce(createMockEmail({ id: 1 }))
-        .mockResolvedValueOnce(null)
-
-      const response = await request(app)
-        .post('/api/agent/process-emails')
-        .send({ emailIds: [1, 999] })
-
-      expect(response.status).toBe(200)
-      expect(response.body.failed).toBe(1)
-    })
   })
-})
 
-describe('DraftRequest Type', () => {
-  it('should have correct type definition', () => {
-    const validRequest: DraftRequest = {
-      emailId: 1,
-      instruction: 'Draft a reply'
-    }
+  // ==========================================================================
+  // Phase 4: POST /api/agent/chat - SSE Endpoint Tests
+  //
+  // Note: SSE streaming tests are complex with supertest because it waits for
+  // the response to complete. The streaming behavior is better tested at the
+  // AgentLoop level. Here we focus on input validation and SSE setup.
+  // ==========================================================================
 
-    expect(validRequest.emailId).toBe(1)
-    expect(validRequest.instruction).toBe('Draft a reply')
+  describe('POST /api/agent/chat', () => {
+    it('should return 400 for invalid request body (empty messages)', async () => {
+      const response = await request(app)
+        .post('/api/agent/chat')
+        .send({
+          messages: [], // Empty messages array
+          context: {
+            currentTime: '2024-01-15T10:00:00Z',
+            timeZone: 'Asia/Shanghai'
+          }
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('should return 400 for missing context.currentTime', async () => {
+      const response = await request(app)
+        .post('/api/agent/chat')
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          context: {
+            timeZone: 'Asia/Shanghai'
+            // Missing currentTime
+          }
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for invalid currentTime format', async () => {
+      const response = await request(app)
+        .post('/api/agent/chat')
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          context: {
+            currentTime: 'not-a-date', // Invalid format
+            timeZone: 'Asia/Shanghai'
+          }
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for missing context entirely', async () => {
+      const response = await request(app)
+        .post('/api/agent/chat')
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }]
+          // Missing context
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for missing messages array', async () => {
+      const response = await request(app)
+        .post('/api/agent/chat')
+        .send({
+          context: {
+            currentTime: '2024-01-15T10:00:00Z',
+            timeZone: 'Asia/Shanghai'
+          }
+        })
+
+      expect(response.status).toBe(400)
+    })
+
+    // Note: SSE streaming behavior is tested at the AgentLoop level.
+    // Supertest doesn't handle SSE streaming properly - it waits for
+    // the response to complete, but SSE streams don't complete until
+    // the connection is closed. The input validation tests above
+    // verify the endpoint works correctly for synchronous cases.
   })
 })

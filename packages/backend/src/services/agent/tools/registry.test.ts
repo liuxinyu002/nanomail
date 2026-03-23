@@ -65,11 +65,17 @@ class FailingTool extends Tool<typeof FailingToolSchema> {
   }
 }
 
+// Agent role type for role-based tool access
+type AgentRole = 'todo-agent' | 'email-agent' | 'general-agent'
+
 describe('ToolRegistry', () => {
   let registry: ToolRegistry
 
+  // Mock dataSource for ToolRegistry (tools don't need real DB in tests)
+  const mockDataSource = {} as any
+
   beforeEach(() => {
-    registry = new ToolRegistry()
+    registry = new ToolRegistry({ dataSource: mockDataSource, defaultColumnId: 1 })
   })
 
   describe('register', () => {
@@ -132,26 +138,30 @@ describe('ToolRegistry', () => {
   })
 
   describe('getDefinitions', () => {
-    it('should return empty array when no tools registered', () => {
-      expect(registry.getDefinitions()).toEqual([])
+    it('should return default todo tools after construction', () => {
+      // Constructor now auto-registers 3 todo tools
+      const definitions = registry.getDefinitions()
+      expect(definitions).toHaveLength(3)
+      expect(definitions.some(d => (d.function as any).name === 'createTodo')).toBe(true)
     })
 
-    it('should return all tool schemas', () => {
+    it('should return all tool schemas including registered tools', () => {
       registry.register(new EchoTool())
       registry.register(new CalculatorTool())
 
       const definitions = registry.getDefinitions()
 
-      expect(definitions).toHaveLength(2)
+      // 3 default + 2 new = 5
+      expect(definitions).toHaveLength(5)
       expect(definitions[0]).toHaveProperty('type', 'function')
       expect(definitions[0].function).toHaveProperty('name')
     })
 
-    it('should include correct schema for each tool', () => {
+    it('should include correct schema for registered tool', () => {
       registry.register(new EchoTool())
 
       const definitions = registry.getDefinitions()
-      const echoDef = definitions.find(d => d.function.name === 'echo')
+      const echoDef = definitions.find(d => (d.function as any).name === 'echo')
 
       expect(echoDef).toBeDefined()
       expect(echoDef?.function.description).toBe('Echo a message')
@@ -194,7 +204,7 @@ describe('ToolRegistry', () => {
       const result = await registry.execute('failing_tool', { shouldFail: true })
 
       expect(result).toContain('Error')
-      expect(result).toContain('[Analyze the error above')
+      expect(result).toContain('[TOOL CALL ERROR')
     })
 
     it('should add hint on validation error', async () => {
@@ -202,35 +212,164 @@ describe('ToolRegistry', () => {
 
       const result = await registry.execute('echo', {}) // missing required message
 
-      expect(result).toContain('[Analyze the error above')
+      expect(result).toContain('[TOOL CALL ERROR')
     })
   })
 
   describe('list', () => {
-    it('should return empty array when no tools', () => {
-      expect(registry.list()).toEqual([])
+    it('should return default todo tools after construction', () => {
+      // Constructor now auto-registers createTodo, updateTodo, deleteTodo
+      const toolNames = registry.list()
+      expect(toolNames).toContain('createTodo')
+      expect(toolNames).toContain('updateTodo')
+      expect(toolNames).toContain('deleteTodo')
+      expect(toolNames).toHaveLength(3)
     })
 
-    it('should return list of tool names', () => {
+    it('should return list of tool names including registered tools', () => {
       registry.register(new EchoTool())
       registry.register(new CalculatorTool())
 
-      expect(registry.list()).toContain('echo')
-      expect(registry.list()).toContain('calculator')
-      expect(registry.list()).toHaveLength(2)
+      const toolNames = registry.list()
+      expect(toolNames).toContain('echo')
+      expect(toolNames).toContain('calculator')
+      expect(toolNames).toContain('createTodo') // Default tool
+      expect(toolNames).toHaveLength(5)
     })
   })
 
   describe('size', () => {
-    it('should return 0 for empty registry', () => {
-      expect(registry.size()).toBe(0)
+    it('should return 3 for default todo tools after construction', () => {
+      // Constructor now auto-registers 3 todo tools
+      expect(registry.size()).toBe(3)
     })
 
-    it('should return correct count', () => {
+    it('should return correct count including default tools', () => {
       registry.register(new EchoTool())
       registry.register(new CalculatorTool())
 
-      expect(registry.size()).toBe(2)
+      // 3 default + 2 new = 5
+      expect(registry.size()).toBe(5)
+    })
+  })
+
+  describe('getToolsForRole', () => {
+    it('should return empty array for unknown role', () => {
+      const tools = registry.getToolsForRole('unknown-role' as AgentRole)
+      expect(tools).toEqual([])
+    })
+
+    it('should return tools for todo-agent role', () => {
+      registry.register(new EchoTool())
+      registry.register(new CalculatorTool())
+
+      // Note: In the actual implementation, todo-agent would have
+      // createTodo, updateTodo, deleteTodo tools
+      // For this test, we just verify the method exists and returns tools
+      const tools = registry.getToolsForRole('todo-agent' as AgentRole)
+      expect(Array.isArray(tools)).toBe(true)
+    })
+  })
+
+  describe('getToolSchemasForRole', () => {
+    it('should return empty array for unknown role', () => {
+      const schemas = registry.getToolSchemasForRole('unknown-role' as AgentRole)
+      expect(schemas).toEqual([])
+    })
+
+    it('should return tool schemas in OpenAI format for a role', () => {
+      registry.register(new EchoTool())
+      registry.register(new CalculatorTool())
+
+      const schemas = registry.getToolSchemasForRole('todo-agent' as AgentRole)
+
+      expect(Array.isArray(schemas)).toBe(true)
+      // Each schema should have type: 'function'
+      schemas.forEach(schema => {
+        expect(schema).toHaveProperty('type', 'function')
+        expect(schema).toHaveProperty('function')
+      })
+    })
+  })
+
+  // ==========================================================================
+  // Phase 4: Todo Tools Registration Tests
+  // ==========================================================================
+
+  describe('Phase 4: Todo tools registration', () => {
+    it('should have createTodo tool definition available when registered', () => {
+      const createTodoTool = {
+        name: 'createTodo',
+        description: 'Create a todo',
+        schema: z.object({ description: z.string() }),
+        toSchema: () => ({
+          type: 'function',
+          function: { name: 'createTodo', description: 'Create a todo' }
+        }),
+        safeParseParams: (p: any) => ({ success: true, data: p }),
+        execute: async () => '{"success": true}'
+      }
+
+      registry.register(createTodoTool as any)
+      expect(registry.has('createTodo')).toBe(true)
+    })
+
+    it('should have updateTodo tool definition available when registered', () => {
+      const updateTodoTool = {
+        name: 'updateTodo',
+        description: 'Update a todo',
+        schema: z.object({ id: z.number() }),
+        toSchema: () => ({
+          type: 'function',
+          function: { name: 'updateTodo', description: 'Update a todo' }
+        }),
+        safeParseParams: (p: any) => ({ success: true, data: p }),
+        execute: async () => '{"success": true}'
+      }
+
+      registry.register(updateTodoTool as any)
+      expect(registry.has('updateTodo')).toBe(true)
+    })
+
+    it('should have deleteTodo tool definition available when registered', () => {
+      const deleteTodoTool = {
+        name: 'deleteTodo',
+        description: 'Delete a todo',
+        schema: z.object({ id: z.number() }),
+        toSchema: () => ({
+          type: 'function',
+          function: { name: 'deleteTodo', description: 'Delete a todo' }
+        }),
+        safeParseParams: (p: any) => ({ success: true, data: p }),
+        execute: async () => '{"success": true}'
+      }
+
+      registry.register(deleteTodoTool as any)
+      expect(registry.has('deleteTodo')).toBe(true)
+    })
+
+    it('should return all todo tools for todo-agent role', () => {
+      // Register todo tools
+      registry.register({
+        name: 'createTodo',
+        toSchema: () => ({ type: 'function', function: { name: 'createTodo' } })
+      } as any)
+      registry.register({
+        name: 'updateTodo',
+        toSchema: () => ({ type: 'function', function: { name: 'updateTodo' } })
+      } as any)
+      registry.register({
+        name: 'deleteTodo',
+        toSchema: () => ({ type: 'function', function: { name: 'deleteTodo' } })
+      } as any)
+
+      const tools = registry.getToolsForRole('todo-agent')
+
+      // todo-agent should have createTodo, updateTodo, deleteTodo
+      expect(tools.length).toBe(3)
+      expect(tools.map(t => t.name)).toContain('createTodo')
+      expect(tools.map(t => t.name)).toContain('updateTodo')
+      expect(tools.map(t => t.name)).toContain('deleteTodo')
     })
   })
 })

@@ -14,8 +14,9 @@ import { createLogger } from '../../../config/logger'
 
 /**
  * Agent role type
+ * Note: 'draft-agent' has been removed - use 'todo-agent' instead
  */
-export type AgentRole = 'email-analyzer' | 'draft-agent'
+export type AgentRole = 'email-analyzer' | 'todo-agent'
 
 /**
  * Role configuration for prompt assembly
@@ -31,7 +32,8 @@ export interface RoleConfig {
 export interface RuntimeContext {
   channel?: string
   chatId?: string
-  currentTime?: Date
+  currentTime?: Date | string
+  timeZone?: string
 }
 
 /**
@@ -77,6 +79,12 @@ export class ContextBuilder {
   private readonly log: Logger = createLogger('ContextBuilder')
 
   /**
+   * In-memory cache for prompt files
+   * Populated at bootstrap time to avoid file I/O on every request
+   */
+  private promptCache: Map<string, string> = new Map()
+
+  /**
    * Role configuration mapping
    * Files array order follows primacy-recency effect:
    * 1. AGENTS.md first (global rules)
@@ -90,10 +98,9 @@ export class ContextBuilder {
       required: ['AGENTS.md', 'email-analyzer.md']
       // Excludes SOUL.md and MEMORY.md for objectivity
     },
-    'draft-agent': {
-      files: ['AGENTS.md', 'SOUL.md', 'MEMORY.md', 'USER.md', 'draft-agent.md', 'TOOLS.md'],
-      required: ['AGENTS.md', 'draft-agent.md']
-      // SOUL.md and MEMORY.md are optional (user may not have them)
+    'todo-agent': {
+      files: ['AGENTS.md', 'USER.md', 'todo-agent.md', 'TOOLS.md'],
+      required: ['AGENTS.md', 'todo-agent.md']
     }
   }
 
@@ -125,7 +132,7 @@ export class ContextBuilder {
    * Uses Promise.all for concurrent file reads
    */
   async buildSystemPrompt(
-    agentRole: AgentRole = 'email-analyzer',
+    agentRole: AgentRole = 'todo-agent',
     _userId?: string  // Reserved for multi-user support, currently unused
   ): Promise<string> {
     const roleConfig = ContextBuilder.ROLE_CONFIG[agentRole]
@@ -184,12 +191,61 @@ export class ContextBuilder {
     if (!ctx) return ''
 
     const parts: string[] = []
-    const currentTime = ctx.currentTime?.toISOString() ?? new Date().toISOString()
+
+    // CRITICAL: Always include currentTime - required for time parsing
+    // Supports both Date objects and ISO strings
+    const currentTime = ctx.currentTime
+      ? (ctx.currentTime instanceof Date ? ctx.currentTime.toISOString() : ctx.currentTime)
+      : new Date().toISOString()
     parts.push(`Current time: ${currentTime}`)
+
+    if (ctx.timeZone) parts.push(`Time zone: ${ctx.timeZone}`)
     if (ctx.channel) parts.push(`Channel: ${ctx.channel}`)
     if (ctx.chatId) parts.push(`Chat ID: ${ctx.chatId}`)
 
     return `[Runtime Context]\n${parts.join('\n')}`
+  }
+
+  /**
+   * Set a cached prompt (called from bootstrap)
+   * @param name - Prompt name (e.g., 'todo-agent')
+   * @param content - Prompt content
+   */
+  setCachedPrompt(name: string, content: string): void {
+    this.promptCache.set(name, content)
+    this.log.info({ promptName: name }, 'Prompt cached in memory')
+  }
+
+  /**
+   * Get a cached prompt
+   * @param name - Prompt name
+   * @returns Cached prompt content or undefined if not found
+   */
+  getCachedPrompt(name: string): string | undefined {
+    return this.promptCache.get(name)
+  }
+
+  /**
+   * Build complete system message with prompt and runtime context
+   * This is the main method to construct the final system message for LLM.
+   *
+   * @param promptName - Name of cached prompt (e.g., 'todo-agent')
+   * @param ctx - Runtime context with currentTime, timeZone, etc.
+   * @returns Complete system message content
+   */
+  buildSystemMessage(promptName: string, ctx?: RuntimeContext): string {
+    const basePrompt = this.getCachedPrompt(promptName)
+
+    if (!basePrompt) {
+      this.log.error({ promptName }, 'Prompt not found in cache')
+      throw new Error(`Prompt '${promptName}' not found in cache`)
+    }
+
+    const runtimeContext = this.buildRuntimeContext(ctx)
+
+    // Concatenate base prompt with runtime context
+    // LLM will use this to understand current time and parse relative dates
+    return `${basePrompt}\n\n---\n\n${runtimeContext}`
   }
 
   /**

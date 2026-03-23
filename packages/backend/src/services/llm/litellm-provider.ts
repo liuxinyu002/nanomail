@@ -304,7 +304,9 @@ export class LiteLLMProvider extends LLMProvider {
     accumulated: Map<number, ToolCallDelta>,
     tc: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta.ToolCall
   ): void {
-    if (tc.type !== 'function') return
+    // Some providers (e.g., DeepSeek) don't include 'type' field in delta chunks
+    // Only check type if it's explicitly present and not 'function'
+    if (tc.type && tc.type !== 'function') return
 
     const index = tc.index
     const existing = accumulated.get(index)
@@ -316,11 +318,12 @@ export class LiteLLMProvider extends LLMProvider {
       }
     } else {
       // New tool call
-      accumulated.set(index, {
+      const newToolCall = {
         id: tc.id ?? shortToolId(),
         name: tc.function?.name ?? '',
         arguments: tc.function?.arguments ?? ''
-      })
+      }
+      accumulated.set(index, newToolCall)
     }
   }
 
@@ -332,8 +335,13 @@ export class LiteLLMProvider extends LLMProvider {
     for (const tc of accumulated.values()) {
       let args: Record<string, unknown> = {}
       try {
-        args = JSON.parse(tc.arguments) as Record<string, unknown>
-      } catch {
+        if (tc.arguments) {
+          args = JSON.parse(tc.arguments) as Record<string, unknown>
+        } else {
+          log.warn({ id: tc.id, name: tc.name }, '[Tool Call Build] Empty arguments string')
+        }
+      } catch (e) {
+        log.warn({ id: tc.id, name: tc.name, args: tc.arguments, error: e }, '[Tool Call Build] Failed to parse arguments JSON')
         args = {}
       }
       toolCalls.push({
@@ -356,14 +364,20 @@ export class LiteLLMProvider extends LLMProvider {
     // Get client with dynamic config
     const client = await this.getClient()
 
-    // Debug: log actual LLM config being used
+    // Log LLM request config
     const apiKey = client.apiKey
     const baseURL = client.baseURL
-    log.debug({
+
+    log.info({
       model: resolvedModel,
       baseURL,
-      apiKeyConfigured: !!apiKey
-    }, 'LLM request config')
+      apiKeyPrefix: apiKey ? `${apiKey.substring(0, 8)}...` : 'not set',
+      messageCount: params.messages.length,
+      hasTools: !!params.tools,
+      toolCount: params.tools?.length || 0,
+      maxTokens: params.maxTokens ?? 4096,
+      temperature: params.temperature ?? 0.7
+    }, '[LLM Request] Sending chat request')
 
     // Sanitize messages
     const sanitizedMessages = this.sanitizeMessages(params.messages)
@@ -382,8 +396,20 @@ export class LiteLLMProvider extends LLMProvider {
         tool_choice: params.tools ? 'auto' : undefined
       })
 
-      return this.parseResponse(response)
+      const result = this.parseResponse(response)
+
+      // Log LLM response
+      log.info({
+        content: result.content?.substring(0, 200) + (result.content && result.content.length > 200 ? '...' : ''),
+        toolCallCount: result.toolCalls.length,
+        toolCalls: result.toolCalls.map(tc => ({ name: tc.name, args: tc.arguments })),
+        finishReason: result.finishReason,
+        usage: result.usage
+      }, '[LLM Response] Chat response received')
+
+      return result
     } catch (error) {
+      log.error({ err: error, model: resolvedModel, baseURL }, '[LLM Error] Chat request failed')
       // Return error as content for graceful handling
       return {
         content: `Error calling LLM: ${error instanceof Error ? error.message : String(error)}`,
@@ -409,14 +435,18 @@ export class LiteLLMProvider extends LLMProvider {
     // Get client with dynamic config
     const client = await this.getClient()
 
-    // Debug: log actual LLM config being used
+    // Log LLM stream request config
     const apiKey = client.apiKey
     const baseURL = client.baseURL
-    log.debug({
+    log.info({
       model: resolvedModel,
       baseURL,
-      apiKeyConfigured: !!apiKey
-    }, 'LLM stream request config')
+      apiKeyPrefix: apiKey ? `${apiKey.substring(0, 8)}...` : 'not set',
+      messageCount: params.messages.length,
+      hasTools: !!params.tools,
+      maxTokens: params.maxTokens ?? 4096,
+      temperature: params.temperature ?? 0.7
+    }, '[LLM Request] Sending stream request')
 
     // Sanitize messages
     const sanitizedMessages = this.sanitizeMessages(params.messages)
@@ -424,6 +454,9 @@ export class LiteLLMProvider extends LLMProvider {
 
     // Clamp maxTokens to at least 1
     const maxTokens = Math.max(1, params.maxTokens ?? 4096)
+
+    // Track accumulated content for logging
+    let accumulatedContent = ''
 
     try {
       const stream = await client.chat.completions.create({
@@ -463,6 +496,7 @@ export class LiteLLMProvider extends LLMProvider {
 
         // Yield content chunks immediately
         if (delta?.content) {
+          accumulatedContent += delta.content
           yield { content: delta.content, toolCalls: [], isDone: false }
         }
 
@@ -474,10 +508,22 @@ export class LiteLLMProvider extends LLMProvider {
         }
       }
 
+      // Build final tool calls
+      const finalToolCalls = this.buildFinalToolCalls(accumulatedToolCalls)
+
+      // Log LLM stream response
+      log.info({
+        content: accumulatedContent.substring(0, 200) + (accumulatedContent.length > 200 ? '...' : ''),
+        contentLength: accumulatedContent.length,
+        toolCallCount: finalToolCalls.length,
+        toolCalls: finalToolCalls.map(tc => ({ name: tc.name, args: tc.arguments })),
+        finishReason
+      }, '[LLM Response] Stream completed')
+
       // Final chunk with accumulated tool calls
       yield {
         content: null,
-        toolCalls: this.buildFinalToolCalls(accumulatedToolCalls),
+        toolCalls: finalToolCalls,
         isDone: true,
         finishReason
       }
@@ -489,7 +535,7 @@ export class LiteLLMProvider extends LLMProvider {
       }
 
       // Log error for debugging
-      log.error({ err: error }, 'Stream error')
+      log.error({ err: error, model: resolvedModel, baseURL }, '[LLM Error] Stream request failed')
 
       // Yield error as final chunk
       yield {

@@ -12,22 +12,36 @@ import { BoardColumn } from './BoardColumn.entity'
 export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 
 /**
+ * Todo source - tracks where the todo was created from
+ * - email: extracted from email content
+ * - chat: created by AI assistant
+ * - manual: manually created by user
+ */
+export type TodoSource = 'email' | 'chat' | 'manual'
+
+/**
  * Todo Entity
  *
  * Note: urgency field is deprecated - task status is now determined by boardColumnId
  * - boardColumnId: The column the todo belongs to (Inbox, Todo, In Progress, Done, etc.)
  * - position: Order within the column for drag-and-drop sorting
+ * - emailId: Nullable to support standalone todos (e.g., created by AI assistant)
+ * - source: Tracks where the todo originated from
  */
 @Entity('todos')
 export class Todo {
   @PrimaryGeneratedColumn('increment')
   id!: number
 
-  @Column({ type: 'integer' })
-  emailId!: number
+  /**
+   * Email ID that this todo is associated with
+   * Nullable to support standalone todos created by AI assistant
+   */
+  @Column({ type: 'integer', nullable: true })
+  emailId!: number | null
 
   @ManyToOne(() => Email, (email) => email.todos)
-  email!: Relation<Email>
+  email!: Relation<Email> | null
 
   @Column({ type: 'text' })
   description!: string
@@ -71,6 +85,15 @@ export class Todo {
    */
   @Column({ type: 'text', nullable: true })
   notes!: string | null
+
+  /**
+   * Source tracking - where the todo was created from
+   * - email: extracted from email content
+   * - chat: created by AI assistant during conversation
+   * - manual: manually created by user
+   */
+  @Column({ type: 'varchar', length: 20, default: 'manual' })
+  source!: TodoSource
 
   @CreateDateColumn({ type: 'datetime' })
   createdAt!: Date

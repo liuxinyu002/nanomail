@@ -18,7 +18,7 @@ export interface TodosQuery {
 export interface TodosResponse {
   todos: Array<{
     id: number
-    emailId: number
+    emailId: number | null
     description: string
     status: TodoStatus
     deadline: string | null
@@ -26,6 +26,7 @@ export interface TodosResponse {
     position: number
     notes: string | null
     color: string | null
+    source: string
     createdAt: string
   }>
 }
@@ -51,6 +52,7 @@ function formatTodo(todo: Todo): TodosResponse['todos'][0] {
     position: todo.position,
     notes: todo.notes,
     color: todo.boardColumn?.color ?? null,
+    source: todo.source,
     createdAt: todo.createdAt.toISOString(),
   }
 }

@@ -78,6 +78,7 @@ export interface ProviderSpec {
   readonly isGateway: boolean // Routes any model (e.g., OpenRouter)
   readonly isLocal: boolean // Local deployment (Ollama, vLLM)
   readonly supportsPromptCaching: boolean
+  readonly defaultContextWindow?: number // Fallback context window for unknown models
 }
 
 /**
@@ -135,4 +136,31 @@ export interface LLMProviderConfig {
   defaultModel?: string
   /** Dynamic config getter - takes precedence over static config */
   getConfig?: GetConfigFn
+}
+
+/**
+ * Model specification with context window information
+ * Used for token-based truncation decisions
+ */
+export interface ModelSpec {
+  readonly id: string
+  readonly contextWindow: number
+  readonly maxOutputTokens?: number
+  readonly provider: string
+}
+
+/**
+ * Truncation configuration for message history management
+ */
+export interface TruncationConfig {
+  /** Safety threshold (0.8 = 80% of context window) */
+  readonly safeThreshold: number
+  /** Maximum characters for tool output (~750 tokens at 4 chars/token) */
+  readonly maxToolOutputChars: number
+  /** Number of recent conversation turns to protect from truncation */
+  readonly protectedRecentTurns: number
+  /** Hard limit on total messages */
+  readonly maxMessagesLimit: number
+  /** Character to token estimation ratio */
+  readonly charsPerTokenEstimate: number
 }

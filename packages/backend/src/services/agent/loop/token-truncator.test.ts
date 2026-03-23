@@ -9,6 +9,7 @@ import type { ChatMessage } from '@nanomail/shared'
 
 describe('MessageTokenTruncator', () => {
   let truncator: MessageTokenTruncator
+  let aggressiveTruncator: MessageTokenTruncator
 
   // Simple token counter for testing (1 token per char for simplicity)
   const simpleTokenCounter = (msg: ChatMessage): number => {
@@ -18,7 +19,13 @@ describe('MessageTokenTruncator', () => {
   }
 
   beforeEach(() => {
+    // Default truncator with protected recent turns
     truncator = new MessageTokenTruncator()
+    // Aggressive truncator for testing forced eviction
+    aggressiveTruncator = new MessageTokenTruncator({
+      protectedRecentTurns: 0,  // No protection
+      maxMessagesLimit: 100
+    })
   })
 
   describe('truncate()', () => {
@@ -48,8 +55,8 @@ describe('MessageTokenTruncator', () => {
       // Calculate total tokens
       const totalTokens = messages.reduce((sum, msg) => sum + simpleTokenCounter(msg), 0)
 
-      // Set limit to half of total tokens
-      const result = truncator.truncate(messages, Math.floor(totalTokens / 2), simpleTokenCounter)
+      // Use aggressive truncator (no protection) for this test
+      const result = aggressiveTruncator.truncate(messages, Math.floor(totalTokens / 2), simpleTokenCounter)
 
       // Should remove messages from the head
       expect(result.length).toBeLessThan(messages.length)
@@ -74,10 +81,10 @@ describe('MessageTokenTruncator', () => {
         { role: 'assistant', content: 'You are welcome!' }
       ]
 
-      // Set a limit that requires truncation
+      // Set a limit that requires truncation (use aggressive truncator)
       const maxTokens = simpleTokenCounter(messages[3]) + simpleTokenCounter(messages[4]) + 20
 
-      const result = truncator.truncate(messages, maxTokens, simpleTokenCounter)
+      const result = aggressiveTruncator.truncate(messages, maxTokens, simpleTokenCounter)
 
       // If assistant with toolCalls is removed, corresponding tool messages must also be removed
       const hasToolCall = result.some(m =>
@@ -116,7 +123,7 @@ describe('MessageTokenTruncator', () => {
       ]
 
       // Very small limit to force aggressive truncation
-      const result = truncator.truncate(messages, 50, simpleTokenCounter)
+      const result = aggressiveTruncator.truncate(messages, 50, simpleTokenCounter)
 
       // Validate no orphan tool messages
       const toolCallIds = new Set<string>()
@@ -160,7 +167,7 @@ describe('MessageTokenTruncator', () => {
       // Calculate tokens for just the last message plus some buffer
       const lastMsgTokens = simpleTokenCounter(messages[messages.length - 1])
       const maxTokens = lastMsgTokens + 30
-      const result = truncator.truncate(messages, maxTokens, simpleTokenCounter)
+      const result = aggressiveTruncator.truncate(messages, maxTokens, simpleTokenCounter)
 
       // If any tool message for call_1 exists, call_2's tool message must also exist
       // (since they come from the same assistant message)
@@ -239,8 +246,8 @@ describe('MessageTokenTruncator', () => {
         { role: 'user', content: 'Last user message' }
       ]
 
-      // Force truncation - the orphan tool message will be removed during truncation
-      const result = truncator.truncate(messages, 10, simpleTokenCounter)
+      // Force truncation with aggressive truncator
+      const result = aggressiveTruncator.truncate(messages, 10, simpleTokenCounter)
 
       // The orphan gets removed, leaving the last user message
       expect(result.length).toBeGreaterThanOrEqual(1)
@@ -255,7 +262,7 @@ describe('MessageTokenTruncator', () => {
         { role: 'tool', content: 'orphan', toolCallId: 'missing' }
       ]
 
-      const result = truncator.truncate(messages, 5, simpleTokenCounter)
+      const result = aggressiveTruncator.truncate(messages, 5, simpleTokenCounter)
 
       expect(result).toEqual([])
     })
@@ -289,10 +296,66 @@ describe('MessageTokenTruncator', () => {
         { role: 'user', content: 'Third' }
       ]
 
-      const result = truncator.truncate(messages, 30, simpleTokenCounter)
+      const result = aggressiveTruncator.truncate(messages, 30, simpleTokenCounter)
 
       // Last message should be preserved
       expect(result[result.length - 1].content).toBe('Third')
+    })
+  })
+
+  describe('protected recent turns', () => {
+    it('should protect recent conversation turns from truncation', () => {
+      // Create a longer conversation with 6 turns (12 messages)
+      const messages: ChatMessage[] = []
+      for (let i = 1; i <= 6; i++) {
+        messages.push({ role: 'user', content: `User message ${i}` })
+        messages.push({ role: 'assistant', content: `Assistant response ${i}` })
+      }
+
+      // Calculate total tokens
+      const totalTokens = messages.reduce((sum, msg) => sum + simpleTokenCounter(msg), 0)
+
+      // Use default truncator (protects last 3 turns = 6 messages)
+      const result = truncator.truncate(messages, Math.floor(totalTokens / 2), simpleTokenCounter)
+
+      // Last 3 turns (6 messages) should be preserved
+      const lastMessages = messages.slice(-6)
+      for (const msg of lastMessages) {
+        expect(result.some(r => r.content === msg.content)).toBe(true)
+      }
+    })
+
+    it('should allow aggressive truncation when protectedRecentTurns is 0', () => {
+      const messages: ChatMessage[] = [
+        { role: 'user', content: 'First message' },
+        { role: 'assistant', content: 'First response' },
+        { role: 'user', content: 'Second message' },
+        { role: 'assistant', content: 'Second response' }
+      ]
+
+      const totalTokens = messages.reduce((sum, msg) => sum + simpleTokenCounter(msg), 0)
+
+      // Aggressive truncator should truncate from head
+      const result = aggressiveTruncator.truncate(messages, Math.floor(totalTokens / 2), simpleTokenCounter)
+
+      expect(result.length).toBeLessThan(messages.length)
+    })
+  })
+
+  describe('tool output truncation', () => {
+    it('should truncate large tool output content', () => {
+      const largeOutput = { data: 'x'.repeat(10000) }
+      const truncated = truncator.truncateToolOutputContent(largeOutput, 100)
+
+      expect(truncated.length).toBeLessThanOrEqual(100)
+      expect(truncated).toContain('(truncated)')
+    })
+
+    it('should not truncate small tool output content', () => {
+      const smallOutput = { data: 'small' }
+      const truncated = truncator.truncateToolOutputContent(smallOutput, 1000)
+
+      expect(truncated).toBe(JSON.stringify(smallOutput))
     })
   })
 })

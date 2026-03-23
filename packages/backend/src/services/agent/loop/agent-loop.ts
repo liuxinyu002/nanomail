@@ -8,7 +8,7 @@
  * Supports role-based context building via ContextBuilder.
  */
 
-import type { LLMResponse, ToolCallRequest } from '../../llm/types'
+import type { LLMResponse, ToolCallRequest, TruncationConfig } from '../../llm/types'
 import type { LLMProvider } from '../../llm/base-provider'
 import type { ToolRegistry } from '../tools/registry'
 import type { ContextBuilder, AgentRole } from '../context/types'
@@ -31,7 +31,9 @@ import {
   MAX_STEPS
 } from './types'
 import { createLogger } from '../../../config/logger'
-import { MessageTokenTruncator } from './token-truncator'
+import { MessageTokenTruncator, DEFAULT_TRUNCATION_OPTIONS } from './token-truncator'
+import { TokenEstimator, tokenEstimator } from './token-estimator'
+import { ModelRegistry, modelRegistry, MIN_OUTPUT_RESERVE_TOKENS } from '../../llm/model-registry'
 
 // Re-export ToolDeps for convenience
 export type { ToolDeps } from './types'
@@ -65,81 +67,10 @@ export class AgentLoop {
   private agentRole: AgentRole
   private signal?: AbortSignal
   private readonly log: Logger = createLogger('AgentLoop')
-  private readonly truncator: MessageTokenTruncator = new MessageTokenTruncator()
-
-  /**
-   * Approximate token count for a message
-   * Uses character-based estimation: ~4 chars per token (rough GPT tokenizer estimate)
-   * This is a conservative estimate that works well for truncation purposes
-   *
-   * @param msg - Message to count tokens for
-   * @returns Approximate token count
-   */
-  private countTokens(msg: AgentMessage): number {
-    let count = 0
-
-    // Count content tokens
-    if (msg.content) {
-      count += Math.ceil(msg.content.length / 4)
-    }
-
-    // Count tool calls tokens
-    if (msg.toolCalls) {
-      for (const tc of msg.toolCalls) {
-        count += Math.ceil(tc.name.length / 4)
-        count += Math.ceil(JSON.stringify(tc.arguments).length / 4)
-        count += 10 // overhead for id, structure
-      }
-    }
-
-    // Count tool call id
-    if (msg.toolCallId) {
-      count += Math.ceil(msg.toolCallId.length / 4)
-    }
-
-    // Add role/metadata overhead
-    return count + 10
-  }
-
-  /**
-   * Truncate conversation messages to fit within memory window
-   * Preserves tool_call/tool_output pairing during truncation
-   *
-   * @param messages - Messages to truncate
-   * @returns Truncated messages array
-   */
-  private truncateMessages(messages: AgentMessage[]): AgentMessage[] {
-    if (messages.length <= this.config.memoryWindow) {
-      // Return a copy to avoid reference issues when caller clears the original array
-      return [...messages]
-    }
-
-    // Separate system message (always keep)
-    const systemMessage = messages.find(m => m.role === 'system')
-    const nonSystemMessages = messages.filter(m => m.role !== 'system')
-
-    // Calculate max tokens based on memoryWindow and avg tokens per message
-    // Use a reasonable token budget: memoryWindow * ~500 tokens per message
-    const maxTokens = this.config.memoryWindow * 500
-
-    // Truncate non-system messages
-    const truncated = this.truncator.truncate(
-      nonSystemMessages as unknown as ChatMessage[],
-      maxTokens,
-      (msg) => this.countTokens(msg as unknown as AgentMessage)
-    ) as unknown as AgentMessage[]
-
-    // Log truncation if messages were removed
-    if (truncated.length < nonSystemMessages.length) {
-      this.log.info(
-        { original: nonSystemMessages.length, truncated: truncated.length },
-        'Message history truncated to fit memory window'
-      )
-    }
-
-    // Return with system message at the beginning
-    return systemMessage ? [systemMessage, ...truncated] : truncated
-  }
+  private readonly truncator: MessageTokenTruncator
+  private readonly tokenEstimator: TokenEstimator
+  private readonly modelRegistry: ModelRegistry
+  private readonly truncationConfig: TruncationConfig
 
   constructor(params: {
     provider: LLMProvider
@@ -170,6 +101,24 @@ export class AgentLoop {
     this._memoryStore = params.memoryStore
     this.agentRole = params.agentRole ?? 'todo-agent'
     this.signal = params.signal
+
+    // Initialize truncation components
+    this.tokenEstimator = new TokenEstimator()
+    this.modelRegistry = new ModelRegistry()
+    this.truncator = new MessageTokenTruncator({
+      maxToolOutputChars: 3000,
+      protectedRecentTurns: 3,
+      maxMessagesLimit: this.config.memoryWindow
+    })
+
+    // Truncation configuration
+    this.truncationConfig = {
+      safeThreshold: 0.8,
+      maxToolOutputChars: 3000,
+      protectedRecentTurns: 3,
+      maxMessagesLimit: this.config.memoryWindow,
+      charsPerTokenEstimate: 4
+    }
   }
 
   /**
@@ -184,6 +133,109 @@ export class AgentLoop {
    */
   getAgentRole(): AgentRole {
     return this.agentRole
+  }
+
+  /**
+   * Get context window for the current model
+   */
+  private getContextWindow(): number {
+    const modelId = this.config.model
+    if (!modelId) {
+      return 128000 // Default for most modern models
+    }
+
+    // Detect provider from model ID
+    const provider = this.detectProviderFromModel(modelId)
+    return this.modelRegistry.getContextWindow(modelId, provider)
+  }
+
+  /**
+   * Detect provider from model ID
+   */
+  private detectProviderFromModel(modelId: string): string | undefined {
+    const modelLower = modelId.toLowerCase()
+
+    if (modelLower.includes('claude') || modelLower.includes('anthropic')) {
+      return 'anthropic'
+    }
+    if (modelLower.includes('gpt') || modelLower.includes('o1') || modelLower.includes('o3')) {
+      return 'openai'
+    }
+    if (modelLower.includes('deepseek')) {
+      return 'deepseek'
+    }
+    if (modelLower.includes('gemini')) {
+      return 'gemini'
+    }
+    if (modelLower.includes('llama') || modelLower.includes('mistral') || modelLower.includes('qwen')) {
+      return 'ollama'
+    }
+
+    return undefined
+  }
+
+  /**
+   * Truncate conversation messages to fit within token limits
+   * Uses token-based triggers instead of message count
+   *
+   * @param messages - Messages to truncate
+   * @returns Truncated messages array
+   */
+  private truncateMessages(messages: AgentMessage[]): AgentMessage[] {
+    if (messages.length === 0) return messages
+
+    const config = this.truncationConfig
+
+    // Step 1: Calculate actual token count
+    const totalTokens = this.tokenEstimator.estimateTotalTokens(messages)
+
+    // Step 2: Get model context window, calculate safe limit
+    const contextWindow = this.getContextWindow()
+    const safeLimit = Math.floor(contextWindow * config.safeThreshold) - MIN_OUTPUT_RESERVE_TOKENS
+
+    // Step 3: Check hybrid trigger conditions
+    const needTruncate =
+      messages.length > config.maxMessagesLimit ||  // Message count exceeded
+      totalTokens > safeLimit                        // Token count exceeded
+
+    if (!needTruncate) {
+      // Return a copy to avoid reference issues
+      return [...messages]
+    }
+
+    // Log truncation trigger reason
+    this.log.info(
+      {
+        totalTokens,
+        safeLimit,
+        messageCount: messages.length,
+        maxMessages: config.maxMessagesLimit,
+        triggerReason: messages.length > config.maxMessagesLimit ? 'message_count' : 'token_count',
+        contextWindow
+      },
+      '[Truncation] Starting message truncation'
+    )
+
+    // Step 4: Execute truncation with fallback
+    const truncated = this.truncator.truncateWithFallback(
+      messages as unknown as ChatMessage[],
+      safeLimit,
+      (msg) => this.tokenEstimator.estimateMessageTokens(msg as unknown as AgentMessage)
+    ) as unknown as AgentMessage[]
+
+    // Log result
+    const newTokens = this.tokenEstimator.estimateTotalTokens(truncated)
+    this.log.info(
+      {
+        originalMessages: messages.length,
+        truncatedMessages: truncated.length,
+        originalTokens: totalTokens,
+        truncatedTokens: newTokens
+      },
+      '[Truncation] Completed'
+    )
+
+    return truncated
   }
 
   /**
@@ -440,9 +492,12 @@ export class AgentLoop {
           }
 
           // Add tool result to conversation for next LLM call
+          // Pre-truncate large tool outputs to prevent context overflow
+          const maxToolOutputChars = this.truncationConfig.maxToolOutputChars
+          const toolResultContent = this.truncator.truncateToolOutputContent(toolOutput, maxToolOutputChars)
           const toolResultMessage = {
             role: 'tool' as const,
-            content: JSON.stringify(toolOutput),
+            content: toolResultContent,  // Already truncated string
             toolCallId: toolCall.id
           }
           conversationMessages.push(toolResultMessage)
@@ -452,7 +507,8 @@ export class AgentLoop {
             toolName: toolCall.name,
             toolCallId: toolCall.id,
             toolResult: toolOutput,
-            messagePreview: JSON.stringify(toolOutput).substring(0, 200)
+            messagePreview: toolResultContent.substring(0, 200),
+            wasTruncated: toolResultContent.includes('(truncated)')
           }, '[Tool Result] Sent to LLM')
         }
 

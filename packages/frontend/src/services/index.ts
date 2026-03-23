@@ -23,3 +23,8 @@ export {
   type CreateBoardColumn,
   type UpdateBoardColumn,
 } from './boardColumn.service'
+export {
+  ChatService,
+  type ChatServiceRequest,
+  type ConversationEvent,
+} from './chat.service'

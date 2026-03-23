@@ -3,13 +3,48 @@ import {
   TodoSchema,
   CreateTodoSchema,
   UpdateTodoSchema,
-  TodoDateRangeQuerySchema
+  TodoDateRangeQuerySchema,
+  TodoSourceSchema
 } from './todo'
 
 // Helper to create a 2001 character string for testing max length
 const createLongString = (length: number) => 'a'.repeat(length)
 
 describe('Todo Schemas', () => {
+  describe('TodoSourceSchema', () => {
+    it('should accept "email" as valid source', () => {
+      expect(TodoSourceSchema.parse('email')).toBe('email')
+    })
+
+    it('should accept "chat" as valid source', () => {
+      expect(TodoSourceSchema.parse('chat')).toBe('chat')
+    })
+
+    it('should accept "manual" as valid source', () => {
+      expect(TodoSourceSchema.parse('manual')).toBe('manual')
+    })
+
+    it('should reject invalid source value', () => {
+      expect(() => TodoSourceSchema.parse('invalid')).toThrow()
+    })
+
+    it('should reject empty string', () => {
+      expect(() => TodoSourceSchema.parse('')).toThrow()
+    })
+
+    it('should reject null', () => {
+      expect(() => TodoSourceSchema.parse(null)).toThrow()
+    })
+
+    it('should reject undefined', () => {
+      expect(() => TodoSourceSchema.parse(undefined)).toThrow()
+    })
+
+    it('should expose enum values', () => {
+      expect(TodoSourceSchema.options).toEqual(['email', 'chat', 'manual'])
+    })
+  })
+
   describe('TodoSchema', () => {
     const validTodo = {
       id: 1,
@@ -62,6 +97,60 @@ describe('Todo Schemas', () => {
 
       it('should reject empty string color', () => {
         expect(() => TodoSchema.parse({ ...validTodo, color: '' })).toThrow()
+      })
+    })
+
+    describe('emailId field (nullable for standalone todos)', () => {
+      it('should accept positive integer emailId', () => {
+        const result = TodoSchema.parse({ ...validTodo, emailId: 100 })
+        expect(result.emailId).toBe(100)
+      })
+
+      it('should accept null emailId (for standalone todos)', () => {
+        const result = TodoSchema.parse({ ...validTodo, emailId: null })
+        expect(result.emailId).toBeNull()
+      })
+
+      it('should reject negative emailId', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, emailId: -1 })).toThrow()
+      })
+
+      it('should reject zero emailId', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, emailId: 0 })).toThrow()
+      })
+
+      it('should reject non-integer emailId', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, emailId: 1.5 })).toThrow()
+      })
+
+      it('should reject undefined emailId (must be explicit null)', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, emailId: undefined })).toThrow()
+      })
+    })
+
+    describe('source field', () => {
+      it('should accept "email" source', () => {
+        const result = TodoSchema.parse({ ...validTodo, source: 'email' })
+        expect(result.source).toBe('email')
+      })
+
+      it('should accept "chat" source', () => {
+        const result = TodoSchema.parse({ ...validTodo, source: 'chat' })
+        expect(result.source).toBe('chat')
+      })
+
+      it('should accept "manual" source', () => {
+        const result = TodoSchema.parse({ ...validTodo, source: 'manual' })
+        expect(result.source).toBe('manual')
+      })
+
+      it('should default to "manual" when source not provided', () => {
+        const result = TodoSchema.parse(validTodo)
+        expect(result.source).toBe('manual')
+      })
+
+      it('should reject invalid source value', () => {
+        expect(() => TodoSchema.parse({ ...validTodo, source: 'invalid' })).toThrow()
       })
     })
 
@@ -174,6 +263,52 @@ describe('Todo Schemas', () => {
     it('should accept null deadline', () => {
       const result = CreateTodoSchema.parse({ ...validCreate, deadline: null })
       expect(result.deadline).toBeNull()
+    })
+
+    describe('emailId field (nullable for standalone todos)', () => {
+      it('should accept positive integer emailId', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, emailId: 100 })
+        expect(result.emailId).toBe(100)
+      })
+
+      it('should accept null emailId (for standalone todos created by AI)', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, emailId: null })
+        expect(result.emailId).toBeNull()
+      })
+
+      it('should reject negative emailId', () => {
+        expect(() => CreateTodoSchema.parse({ ...validCreate, emailId: -1 })).toThrow()
+      })
+
+      it('should reject zero emailId', () => {
+        expect(() => CreateTodoSchema.parse({ ...validCreate, emailId: 0 })).toThrow()
+      })
+    })
+
+    describe('source field', () => {
+      it('should accept "email" source', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, source: 'email' })
+        expect(result.source).toBe('email')
+      })
+
+      it('should accept "chat" source (AI-created)', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, source: 'chat' })
+        expect(result.source).toBe('chat')
+      })
+
+      it('should accept "manual" source', () => {
+        const result = CreateTodoSchema.parse({ ...validCreate, source: 'manual' })
+        expect(result.source).toBe('manual')
+      })
+
+      it('should default to "manual" when source not provided', () => {
+        const result = CreateTodoSchema.parse(validCreate)
+        expect(result.source).toBe('manual')
+      })
+
+      it('should reject invalid source value', () => {
+        expect(() => CreateTodoSchema.parse({ ...validCreate, source: 'invalid' })).toThrow()
+      })
     })
 
     it('should omit id field', () => {

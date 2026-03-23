@@ -20,3 +20,5 @@ export {
   useUpdateBoardColumnMutation,
   useDeleteBoardColumnMutation,
 } from './useBoardColumns'
+
+export { useChat, type UIMessage, type ToolCallStatus, type ChatState } from './useChat'

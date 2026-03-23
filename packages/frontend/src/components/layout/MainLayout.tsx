@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
-import { Inbox, CheckSquare, Settings } from 'lucide-react'
+import { Inbox, CheckSquare, Settings, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavItemProps {
@@ -72,6 +72,12 @@ export function MainLayout() {
             icon={<CheckSquare className="h-5 w-5" />}
             label="To-Do"
             path="/todos"
+            expanded={sidebarExpanded}
+          />
+          <NavItem
+            icon={<MessageCircle className="h-5 w-5" />}
+            label="Chat"
+            path="/chat"
             expanded={sidebarExpanded}
           />
           <NavItem

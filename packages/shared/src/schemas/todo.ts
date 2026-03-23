@@ -6,13 +6,22 @@ import { z } from 'zod'
 export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed'])
 
 /**
+ * Schema for Todo source - tracks where the todo was created from
+ * - email: extracted from email content
+ * - chat: created by AI assistant
+ * - manual: manually created by user
+ */
+export const TodoSourceSchema = z.enum(['email', 'chat', 'manual'])
+
+/**
  * Schema for Todo entity
  * Note: urgency field is deprecated - status now determined by boardColumnId
  * Note: color field is derived from related BoardColumn, not stored in database
+ * Note: emailId is nullable to support standalone todos created by AI assistant
  */
 export const TodoSchema = z.object({
   id: z.number().int().positive(),
-  emailId: z.number().int().positive(),
+  emailId: z.number().int().positive().nullable(), // Nullable for standalone todos (AI-created)
   description: z.string().min(1).max(2000),
   status: TodoStatusSchema,
   deadline: z.string().datetime().nullable(),
@@ -20,6 +29,7 @@ export const TodoSchema = z.object({
   position: z.number().int().optional(), // Position within column for ordering
   notes: z.string().max(2000).nullable().default(null), // Optional notes field, max 2000 chars
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().default(null), // Derived from BoardColumn
+  source: TodoSourceSchema.default('manual'), // Track todo origin
   createdAt: z.coerce.date()
 })
 
@@ -57,6 +67,7 @@ export const TodoDateRangeQuerySchema = z.object({
 })
 
 export type TodoStatus = z.infer<typeof TodoStatusSchema>
+export type TodoSource = z.infer<typeof TodoSourceSchema>
 export type Todo = z.infer<typeof TodoSchema>
 export type CreateTodo = z.infer<typeof CreateTodoSchema>
 export type UpdateTodo = z.infer<typeof UpdateTodoSchema>

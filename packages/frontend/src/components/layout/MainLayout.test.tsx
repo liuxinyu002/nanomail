@@ -84,6 +84,19 @@ describe('MainLayout', () => {
       expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument()
     })
 
+    it('should render Chat navigation item', () => {
+      renderWithRouter()
+
+      expect(screen.getByRole('link', { name: /chat/i })).toBeInTheDocument()
+    })
+
+    it('should have correct path for Chat navigation item', () => {
+      renderWithRouter()
+
+      const chatLink = screen.getByRole('link', { name: /chat/i })
+      expect(chatLink).toHaveAttribute('href', '/chat')
+    })
+
     it('should show icons for all navigation items', () => {
       renderWithRouter()
 

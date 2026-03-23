@@ -28,6 +28,18 @@ export interface TodosQuery {
 /**
  * Todo Service - handles all todo-related API calls
  */
+
+/**
+ * Convenience alias for plan compatibility.
+ * Provides a simpler update interface with string ID conversion.
+ * TODO: Consider consolidating with TodoService for consistency.
+ */
+export const todoService = {
+  update: async (id: string, data: UpdateTodo): Promise<TodoItem> => {
+    return TodoService.updateTodo(Number(id), data)
+  },
+}
+
 export const TodoService = {
   /**
    * Fetch todos with optional filters

@@ -4,6 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { InboxPage } from '@/pages/InboxPage'
 import { TodosPage } from '@/pages/TodosPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { ChatPage } from '@/pages/ChatPage'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="inbox/:emailId" element={<InboxPage />} />
           <Route path="todos" element={<TodosPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="chat" element={<ChatPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

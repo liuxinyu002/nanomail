@@ -23,9 +23,23 @@ interface MockTodoRepository {
   remove: ReturnType<typeof vi.fn>
 }
 
-const createMockDataSource = (todoRepo: MockTodoRepository): DataSource => {
+interface MockBoardColumnRepository {
+  findOne: ReturnType<typeof vi.fn>
+}
+
+const createMockDataSource = (
+  todoRepo: MockTodoRepository,
+  boardColumnRepo?: MockBoardColumnRepository
+): DataSource => {
   return {
-    getRepository: vi.fn(() => todoRepo)
+    getRepository: vi.fn((entity: unknown) => {
+      // Return different repos based on entity
+      const entityName = typeof entity === 'function' ? entity.name : String(entity)
+      if (entityName === 'BoardColumn') {
+        return boardColumnRepo || { findOne: vi.fn().mockResolvedValue(null) }
+      }
+      return todoRepo
+    })
   } as unknown as DataSource
 }
 
@@ -125,6 +139,7 @@ describe('parseDateTime', () => {
 
 describe('formatTodoForResponse', () => {
   it('should format todo with all fields', () => {
+    const fixedDate = new Date('2024-01-01T00:00:00.000Z')
     const todo = createMockTodo({
       id: 42,
       description: 'Complete project',
@@ -132,19 +147,23 @@ describe('formatTodoForResponse', () => {
       status: 'in_progress',
       boardColumnId: 2,
       notes: 'Important notes',
-      source: 'chat'
+      source: 'chat',
+      createdAt: fixedDate
     })
 
-    const result = formatTodoForResponse(todo)
+    const result = formatTodoForResponse(todo, '#f59e0b')
 
     expect(result).toEqual({
       id: 42,
+      emailId: null,
       description: 'Complete project',
       deadline: '2024-03-20T10:00:00.000Z',
       status: 'in_progress',
       boardColumnId: 2,
       notes: 'Important notes',
-      source: 'chat'
+      color: '#f59e0b',
+      source: 'chat',
+      createdAt: '2024-01-01T00:00:00.000Z'
     })
   })
 
@@ -153,7 +172,7 @@ describe('formatTodoForResponse', () => {
       deadline: null
     })
 
-    const result = formatTodoForResponse(todo)
+    const result = formatTodoForResponse(todo, null)
 
     expect(result.deadline).toBeNull()
   })
@@ -163,7 +182,7 @@ describe('formatTodoForResponse', () => {
       notes: null
     })
 
-    const result = formatTodoForResponse(todo)
+    const result = formatTodoForResponse(todo, null)
 
     expect(result.notes).toBeNull()
   })
@@ -216,6 +235,7 @@ describe('CreateTodoSchema', () => {
 
 describe('createTodoTool', () => {
   let mockRepo: MockTodoRepository
+  let mockBoardColumnRepo: MockBoardColumnRepository
   let mockDataSource: DataSource
 
   beforeEach(() => {
@@ -225,7 +245,10 @@ describe('createTodoTool', () => {
       findOne: vi.fn(),
       remove: vi.fn()
     }
-    mockDataSource = createMockDataSource(mockRepo)
+    mockBoardColumnRepo = {
+      findOne: vi.fn().mockResolvedValue({ id: 1, color: '#C9CDD4' })
+    }
+    mockDataSource = createMockDataSource(mockRepo, mockBoardColumnRepo)
   })
 
   afterEach(() => {
@@ -366,14 +389,8 @@ describe('createTodoTool', () => {
     })
 
     it('should bypass duplicate check with forceCreate=true', async () => {
-      const recentTodo = createMockTodo({
-        id: 99,
-        description: 'Test todo',
-        createdAt: new Date(Date.now() - 1000)
-      })
-      // findOne should NOT be called when forceCreate is true
-      mockRepo.findOne.mockResolvedValue(recentTodo)
-
+      // mockRepo.findOne should NOT be called for duplicate check when forceCreate is true
+      // but mockBoardColumnRepo.findOne will be called to get color
       const newTodo = createMockTodo({ id: 100 })
       mockRepo.create.mockReturnValue(newTodo)
       mockRepo.save.mockResolvedValue(newTodo)
@@ -384,7 +401,10 @@ describe('createTodoTool', () => {
       )
 
       expect(result).toContain('success')
+      // todoRepo.findOne should NOT be called for duplicate check
       expect(mockRepo.findOne).not.toHaveBeenCalled()
+      // boardColumnRepo.findOne SHOULD be called to get color
+      expect(mockBoardColumnRepo.findOne).toHaveBeenCalledWith({ where: { id: 1 } })
     })
 
     it('should support notes field', async () => {
@@ -550,6 +570,7 @@ describe('UpdateTodoSchema', () => {
 
 describe('updateTodoTool', () => {
   let mockRepo: MockTodoRepository
+  let mockBoardColumnRepo: MockBoardColumnRepository
   let mockDataSource: DataSource
 
   beforeEach(() => {
@@ -559,7 +580,10 @@ describe('updateTodoTool', () => {
       findOne: vi.fn(),
       remove: vi.fn()
     }
-    mockDataSource = createMockDataSource(mockRepo)
+    mockBoardColumnRepo = {
+      findOne: vi.fn().mockResolvedValue({ id: 1, color: '#C9CDD4' })
+    }
+    mockDataSource = createMockDataSource(mockRepo, mockBoardColumnRepo)
   })
 
   afterEach(() => {
@@ -795,6 +819,7 @@ describe('DeleteTodoSchema', () => {
 
 describe('deleteTodoTool', () => {
   let mockRepo: MockTodoRepository
+  let mockBoardColumnRepo: MockBoardColumnRepository
   let mockDataSource: DataSource
 
   beforeEach(() => {
@@ -804,7 +829,10 @@ describe('deleteTodoTool', () => {
       findOne: vi.fn(),
       remove: vi.fn()
     }
-    mockDataSource = createMockDataSource(mockRepo)
+    mockBoardColumnRepo = {
+      findOne: vi.fn().mockResolvedValue({ id: 1, color: '#C9CDD4' })
+    }
+    mockDataSource = createMockDataSource(mockRepo, mockBoardColumnRepo)
   })
 
   afterEach(() => {

@@ -11,6 +11,7 @@ import timezone from 'dayjs/plugin/timezone'
 import { MoreThan, In } from 'typeorm'
 import { Tool, type ToolDeps, type ToolResult } from './types'
 import { Todo } from '../../../entities/Todo.entity'
+import { BoardColumn } from '../../../entities/BoardColumn.entity'
 
 // Initialize dayjs plugins
 dayjs.extend(customParseFormat)
@@ -49,24 +50,31 @@ export function parseDateTime(input: string): { isValid: boolean; toDate(): Date
 
 /**
  * Format todo for JSON response
+ * Includes all fields required by TodoSchema for frontend validation
  */
-export function formatTodoForResponse(todo: Todo): {
+export function formatTodoForResponse(todo: Todo, color: string | null): {
   id: number
+  emailId: number | null
   description: string
   deadline: string | null
   status: string
   boardColumnId: number
   notes: string | null
+  color: string | null
   source: 'email' | 'chat' | 'manual'
+  createdAt: string
 } {
   return {
     id: todo.id,
+    emailId: todo.emailId,
     description: todo.description,
     deadline: todo.deadline?.toISOString() ?? null,
     status: todo.status,
     boardColumnId: todo.boardColumnId,
     notes: todo.notes ?? null,
-    source: todo.source
+    color: color,
+    source: todo.source,
+    createdAt: todo.createdAt.toISOString()
   }
 }
 
@@ -216,7 +224,7 @@ export class CreateTodoTool extends Tool<typeof CreateTodoSchema> {
             success: false,
             reason: 'DUPLICATE_DETECTED',
             message: `检测到重复待办${warningContext}（ID: ${existingDuplicate.id}）。请询问用户是否确认要再次创建。如果用户确认，请在下次调用时将 forceCreate 参数设置为 true。`,
-            existingTodo: formatTodoForResponse(existingDuplicate)
+            existingTodo: formatTodoForResponse(existingDuplicate, null)
           })
         }
       }
@@ -233,10 +241,15 @@ export class CreateTodoTool extends Tool<typeof CreateTodoSchema> {
       })
       await todoRepo.save(todo)
 
+      // Fetch BoardColumn color for complete TodoSchema response
+      const boardColumnRepo = dataSource.getRepository(BoardColumn)
+      const boardColumn = await boardColumnRepo.findOne({ where: { id: todo.boardColumnId } })
+      const color = boardColumn?.color ?? null
+
       return JSON.stringify({
         success: true,
         message: `Todo created successfully with ID ${todo.id}`,
-        todo: formatTodoForResponse(todo)
+        todo: formatTodoForResponse(todo, color)
       })
     } catch (error) {
       return JSON.stringify({
@@ -346,10 +359,15 @@ export class UpdateTodoTool extends Tool<typeof UpdateTodoSchema> {
 
       await todoRepo.save(todo)
 
+      // Fetch BoardColumn color for complete TodoSchema response
+      const boardColumnRepo = dataSource.getRepository(BoardColumn)
+      const boardColumn = await boardColumnRepo.findOne({ where: { id: todo.boardColumnId } })
+      const color = boardColumn?.color ?? null
+
       return JSON.stringify({
         success: true,
         message: `Todo ${id} updated successfully`,
-        todo: formatTodoForResponse(todo)
+        todo: formatTodoForResponse(todo, color)
       })
     } catch (error) {
       return JSON.stringify({
@@ -393,8 +411,13 @@ export class DeleteTodoTool extends Tool<typeof DeleteTodoSchema> {
         })
       }
 
+      // Fetch BoardColumn color before deletion
+      const boardColumnRepo = dataSource.getRepository(BoardColumn)
+      const boardColumn = await boardColumnRepo.findOne({ where: { id: todo.boardColumnId } })
+      const color = boardColumn?.color ?? null
+
       // Store info before deletion
-      const deletedInfo = formatTodoForResponse(todo)
+      const deletedInfo = formatTodoForResponse(todo, color)
 
       await todoRepo.remove(todo)
 

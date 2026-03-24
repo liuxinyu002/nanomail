@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChatService, type ConversationEvent, type ChatServiceRequest } from '@/services/chat.service'
 import type { ChatMessage, ChatContext } from '@nanomail/shared'
 
-// ============ Types ============
-
 export interface ToolCallStatus {
   id: string
   toolName: string
@@ -28,11 +26,8 @@ export interface ChatState {
   error: string | null
 }
 
-// ============ Constants ============
-
 const SESSION_STORAGE_KEY = 'nanomail_chat_messages'
-
-// ============ Helper Functions ============
+const TODO_TOOL_STORAGE_WHITELIST = new Set(['create_todo', 'update_todo', 'delete_todo'])
 
 function createUIMessage(
   role: 'user' | 'assistant',
@@ -62,24 +57,28 @@ function createUIMessage(
   return msg
 }
 
-/**
- * Prunes toolCalls by removing large input/output payloads.
- * This prevents QuotaExceededError when saving to sessionStorage.
- * Tool call metadata (id, toolName, status, message) is preserved for UI display.
- */
 function pruneToolCalls(toolCalls: ToolCallStatus[]): ToolCallStatus[] {
-  return toolCalls.map(tc => ({
-    id: tc.id,
-    toolName: tc.toolName,
-    status: tc.status,
-    message: tc.message,
-  }))
+  return toolCalls.map(tc => {
+    if (TODO_TOOL_STORAGE_WHITELIST.has(tc.toolName)) {
+      return {
+        id: tc.id,
+        toolName: tc.toolName,
+        status: tc.status,
+        message: tc.message,
+        input: tc.input,
+        output: tc.output,
+      }
+    }
+
+    return {
+      id: tc.id,
+      toolName: tc.toolName,
+      status: tc.status,
+      message: tc.message,
+    }
+  })
 }
 
-/**
- * Prunes messages by stripping toolCall input/output payloads.
- * This reduces sessionStorage footprint by 70-90% for typical tool outputs.
- */
 function pruneMessagesForStorage(messages: UIMessage[]): UIMessage[] {
   return messages.map(msg => ({
     ...msg,
@@ -147,14 +146,6 @@ function inferToolStatus(toolOutput?: Record<string, unknown>): {
   }
 }
 
-// ============ StreamingBuffer Class ============
-
-/**
- * Streaming performance optimizer:
- * Batches content updates to minimize React re-renders.
- * Uses requestAnimationFrame for batching during streaming,
- * and supports synchronous flushing for immediate updates.
- */
 class StreamingBuffer {
   private pendingContent: string = ''
   private rafId: number | null = null
@@ -202,8 +193,6 @@ class StreamingBuffer {
     this.pendingContent = ''
   }
 }
-
-// ============ Main Hook ============
 
 export function useChat() {
   const [messages, setMessages] = useState<UIMessage[]>([])
@@ -372,7 +361,9 @@ export function useChat() {
     }
 
     const historyMessages = messagesRef.current.filter(
-      m => m.role === 'user' || m.role === 'tool' || (m.role === 'assistant' && m.content)
+      m => m.role === 'user'
+        || m.role === 'tool'
+        || (m.role === 'assistant' && (m.content || (m.toolCalls && m.toolCalls.length > 0)))
     )
     const allHistoryMessages = toChatMessages(historyMessages)
     request.messages = [...allHistoryMessages, { role: 'user' as const, content }]
@@ -386,7 +377,6 @@ export function useChat() {
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // User stopped generation - keep partial response
       } else {
         const message = err instanceof Error ? err.message : 'An unexpected error occurred'
         setError(message)

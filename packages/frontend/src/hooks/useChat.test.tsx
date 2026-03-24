@@ -678,14 +678,14 @@ describe('useChat', () => {
       expect(savedData).toHaveLength(2)
     })
 
-    it('should prune toolCalls input/output before saving to sessionStorage', async () => {
+    it('should preserve input/output for todo tools when saving to sessionStorage', async () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
             toolName: 'create_todo',
-            toolInput: { largeData: 'x'.repeat(10000) },
+            toolInput: { description: 'Create one' },
           },
         },
         {
@@ -694,7 +694,41 @@ describe('useChat', () => {
             toolCallId: 'call-1',
             toolName: 'create_todo',
             toolInput: {},
-            toolOutput: { result: 'y'.repeat(10000) },
+            toolOutput: { todo: { id: 1, description: 'Create one' } },
+          },
+        },
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-2',
+            toolName: 'update_todo',
+            toolInput: { id: 1, status: 'completed' },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-2',
+            toolName: 'update_todo',
+            toolInput: {},
+            toolOutput: { todo: { id: 1, description: 'Create one', status: 'completed' } },
+          },
+        },
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-3',
+            toolName: 'delete_todo',
+            toolInput: { id: 1 },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-3',
+            toolName: 'delete_todo',
+            toolInput: {},
+            toolOutput: { success: true, message: 'Deleted' },
           },
         },
         { type: 'session_end', data: null },
@@ -704,10 +738,9 @@ describe('useChat', () => {
       const { result } = renderHook(() => useChat())
 
       await act(async () => {
-        await result.current.sendMessage('Create todo')
+        await result.current.sendMessage('Manage todos')
       })
 
-      // Wait for sessionStorage.setItem to be called
       await waitFor(() => {
         expect(sessionStorageMock.setItem).toHaveBeenCalled()
       })
@@ -715,20 +748,116 @@ describe('useChat', () => {
       const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
 
-      expect(assistantMessage).toBeDefined()
-      expect(assistantMessage.toolCalls).toBeDefined()
-      expect(assistantMessage.toolCalls).toHaveLength(1)
-
-      // input and output should be stripped
-      expect(assistantMessage.toolCalls[0].input).toBeUndefined()
-      expect(assistantMessage.toolCalls[0].output).toBeUndefined()
-      // metadata should be preserved
-      expect(assistantMessage.toolCalls[0].id).toBe('call-1')
-      expect(assistantMessage.toolCalls[0].toolName).toBe('create_todo')
-      expect(assistantMessage.toolCalls[0].status).toBe('success')
+      expect(assistantMessage.toolCalls).toHaveLength(3)
+      expect(assistantMessage.toolCalls[0]).toMatchObject({
+        id: 'call-1',
+        toolName: 'create_todo',
+        status: 'success',
+        input: { description: 'Create one' },
+        output: { todo: { id: 1, description: 'Create one' } },
+      })
+      expect(assistantMessage.toolCalls[1]).toMatchObject({
+        id: 'call-2',
+        toolName: 'update_todo',
+        status: 'success',
+        input: { id: 1, status: 'completed' },
+        output: { todo: { id: 1, description: 'Create one', status: 'completed' } },
+      })
+      expect(assistantMessage.toolCalls[2]).toMatchObject({
+        id: 'call-3',
+        toolName: 'delete_todo',
+        status: 'success',
+        input: { id: 1 },
+        output: { success: true, message: 'Deleted' },
+      })
     })
 
-    it('should preserve error status and message when pruning tool calls for sessionStorage', async () => {
+    it('should still prune non-todo tool input/output before saving to sessionStorage', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'search_mail',
+            toolInput: { query: 'invoice', largeData: 'x'.repeat(1000) },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'search_mail',
+            toolInput: {},
+            toolOutput: { result: 'Found emails', payload: 'y'.repeat(1000) },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Search mail')
+      })
+
+      await waitFor(() => {
+        expect(sessionStorageMock.setItem).toHaveBeenCalled()
+      })
+
+      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
+
+      expect(assistantMessage.toolCalls[0]).toMatchObject({
+        id: 'call-1',
+        toolName: 'search_mail',
+        status: 'success',
+      })
+      expect(assistantMessage.toolCalls[0].input).toBeUndefined()
+      expect(assistantMessage.toolCalls[0].output).toBeUndefined()
+    })
+
+    it('should restore persisted todo tool payloads from sessionStorage', () => {
+      const cachedMessages: UIMessage[] = [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'Create a todo',
+          timestamp: '2024-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Done',
+          timestamp: '2024-01-01T00:00:01.000Z',
+          toolCalls: [
+            {
+              id: 'call-1',
+              toolName: 'create_todo',
+              status: 'success',
+              input: { description: 'Create one' },
+              output: { todo: { id: 1, description: 'Create one' } },
+            },
+            {
+              id: 'call-2',
+              toolName: 'search_mail',
+              status: 'success',
+            },
+          ],
+        },
+      ]
+      sessionStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
+
+      const { result } = renderHook(() => useChat())
+
+      expect(result.current.messages).toEqual(cachedMessages)
+      expect(result.current.messages[1].toolCalls?.[0].input).toEqual({ description: 'Create one' })
+      expect(result.current.messages[1].toolCalls?.[0].output).toEqual({ todo: { id: 1, description: 'Create one' } })
+      expect(result.current.messages[1].toolCalls?.[1].input).toBeUndefined()
+      expect(result.current.messages[1].toolCalls?.[1].output).toBeUndefined()
+    })
+
+    it('should preserve error status, message, and todo payload for whitelisted tool calls', async () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
@@ -764,10 +893,12 @@ describe('useChat', () => {
       const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
 
-      expect(assistantMessage.toolCalls[0].status).toBe('error')
-      expect(assistantMessage.toolCalls[0].message).toBe('Failed')
-      expect(assistantMessage.toolCalls[0].input).toBeUndefined()
-      expect(assistantMessage.toolCalls[0].output).toBeUndefined()
+      expect(assistantMessage.toolCalls[0]).toMatchObject({
+        status: 'error',
+        message: 'Failed',
+        input: { description: 'Test' },
+        output: { error: 'Failed', status: 'failed' },
+      })
     })
 
     it('should handle QuotaExceededError gracefully', async () => {
@@ -866,6 +997,68 @@ describe('useChat', () => {
 
       expect(result.current.messages[0].content).toBe('First')
       expect(result.current.messages[2].content).toBe('Second')
+    })
+
+    it('should include assistant tool calls when sending a follow-up message after a tool-only turn', async () => {
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: { description: 'Tool only todo' },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: { todo: { id: 1, description: 'Tool only todo' } },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      mockStreamChat.mockClear()
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
+
+      await act(async () => {
+        await result.current.sendMessage('What happened?')
+      })
+
+      expect(mockStreamChat).toHaveBeenCalledTimes(1)
+      const request = mockStreamChat.mock.calls[0][0]
+
+      expect(request.messages).toEqual([
+        expect.objectContaining({ role: 'user', content: 'Create a todo' }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            expect.objectContaining({
+              id: 'call-1',
+              function: {
+                name: 'create_todo',
+                arguments: JSON.stringify({ description: 'Tool only todo' }),
+              },
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          role: 'tool',
+          content: JSON.stringify({ todo: { id: 1, description: 'Tool only todo' } }),
+          toolCallId: 'call-1',
+        }),
+        expect.objectContaining({ role: 'user', content: 'What happened?' }),
+      ])
     })
   })
 })

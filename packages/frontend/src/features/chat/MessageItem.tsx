@@ -18,14 +18,12 @@ interface MessageItemProps {
 export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemProps) {
   const isUser = message.role === 'user'
 
-  // Extract todos from tool calls for TodoCardWidget
   const todosFromToolCalls = useMemo(
     () => extractTodosFromToolCalls(message.toolCalls),
     [message.toolCalls]
   )
   const hasStructuredTodoWidget = todosFromToolCalls.length > 0
 
-  // Create Set of todo IDs for MarkdownRenderer deduplication
   const todoIds = useMemo(
     () => new Set(todosFromToolCalls.map(t => String(t.id))),
     [todosFromToolCalls]
@@ -33,13 +31,12 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
 
   return (
     <div className="py-4 animate-in fade-in duration-150 ease-out">
-      {/* Message Header: Avatar + Label */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="mb-2 flex items-center gap-2">
         <div className={cn(
-          "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+          'w-7 h-7 rounded-full flex items-center justify-center shrink-0',
           isUser
-            ? "bg-blue-600"
-            : "bg-blue-50 border border-blue-600/10"
+            ? 'bg-blue-600'
+            : 'bg-blue-50 border border-blue-600/10'
         )}>
           {isUser ? (
             <User className="h-4 w-4 text-white" />
@@ -55,10 +52,9 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
         )}
       </div>
 
-      {/* Message Content: Full width, no bubble */}
       <div className="ml-9">
         {isUser ? (
-          <p className="text-gray-800 whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap text-gray-800">{message.content}</p>
         ) : (
           <>
             <MarkdownRenderer
@@ -66,16 +62,15 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
               onTodoToggle={onTodoUpdate}
               todoIds={todoIds}
             />
-            {/* Structured todo widget - rendered when tool returns todo data */}
+            {message.toolCalls && message.toolCalls.length > 0 && (
+              <ToolCallAccordion toolCalls={message.toolCalls} />
+            )}
             {hasStructuredTodoWidget && (
               <TodoCardWidget
                 todos={todosFromToolCalls}
                 onUpdate={onTodoUpdate}
+                readonly
               />
-            )}
-            {/* Tool calls accordion */}
-            {message.toolCalls && message.toolCalls.length > 0 && (
-              <ToolCallAccordion toolCalls={message.toolCalls} />
             )}
           </>
         )}
@@ -84,43 +79,32 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
   )
 }
 
-/**
- * Helper to extract todos from tool call output.
- * Uses flatMap to aggregate todos from ALL tool calls, not just the first one.
- *
- * CRITICAL: Previously this used a for-loop that returned on first match,
- * missing todos from subsequent tool calls in the same message.
- *
- * Validates each todo using TodoSchema.safeParse() to ensure runtime safety.
- * Invalid items are skipped with a warning logged to the console.
- */
 function extractTodosFromToolCalls(toolCalls?: ToolCallStatus[]): Todo[] {
   if (!toolCalls) return []
 
-  const todos: Todo[] = []
+  const todosById = new Map<string, Todo>()
 
-  for (const tc of toolCalls) {
-    // Handle { todos: [...] } output
-    if (tc.output?.todos && Array.isArray(tc.output.todos)) {
-      for (const item of tc.output.todos) {
-        const result = TodoSchema.safeParse(item)
-        if (result.success) {
-          todos.push(result.data)
-        } else {
-          console.warn('Invalid todo item in tool call output:', result.error.errors)
-        }
-      }
+  for (const toolCall of toolCalls) {
+    if (toolCall.status !== 'success') continue
+    if (toolCall.toolName !== 'create_todo' && toolCall.toolName !== 'update_todo') continue
+    if (!toolCall.output) continue
+
+    const candidates: unknown[] = []
+
+    if (Array.isArray(toolCall.output.todos)) {
+      candidates.push(...toolCall.output.todos)
     }
-    // Handle single todo output
-    if (tc.output?.todo && !Array.isArray(tc.output.todo)) {
-      const result = TodoSchema.safeParse(tc.output.todo)
-      if (result.success) {
-        todos.push(result.data)
-      } else {
-        console.warn('Invalid todo item in tool call output:', result.error.errors)
-      }
+
+    if (toolCall.output.todo && !Array.isArray(toolCall.output.todo)) {
+      candidates.push(toolCall.output.todo)
+    }
+
+    for (const candidate of candidates) {
+      const result = TodoSchema.safeParse(candidate)
+      if (!result.success) continue
+      todosById.set(String(result.data.id), result.data)
     }
   }
 
-  return todos
+  return Array.from(todosById.values())
 }

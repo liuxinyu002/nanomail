@@ -8,51 +8,61 @@ interface ToolCallAccordionProps {
   toolCalls: ToolCallStatus[]
 }
 
-/**
- * ToolCallAccordion - Collapsible container for multiple tool calls
- *
- * Features:
- * - Collapsed: Show summary (e.g., "Performed 3 actions")
- * - Expanded: Show individual ToolStatusBadge components
- * - Auto-expand while any tool is pending
- * - Auto-collapse when all tools complete (800ms delay)
- */
+function buildSummary(toolCalls: ToolCallStatus[]): string {
+  const counts = toolCalls.reduce(
+    (acc, toolCall) => {
+      switch (toolCall.toolName) {
+        case 'create_todo':
+          acc.create += 1
+          break
+        case 'update_todo':
+          acc.update += 1
+          break
+        case 'delete_todo':
+          acc.delete += 1
+          break
+        default:
+          acc.other += 1
+          break
+      }
+      return acc
+    },
+    { create: 0, update: 0, delete: 0, other: 0 }
+  )
+
+  const segments = [
+    counts.create > 0 ? `创建 ${counts.create} 项` : null,
+    counts.update > 0 ? `修改 ${counts.update} 项` : null,
+    counts.delete > 0 ? `删除 ${counts.delete} 项` : null,
+    counts.other > 0 ? `其他 ${counts.other} 项` : null,
+  ].filter(Boolean)
+
+  return segments.join(' · ') || `其他 ${toolCalls.length} 项`
+}
+
 export function ToolCallAccordion({ toolCalls }: ToolCallAccordionProps) {
   const hasPending = toolCalls?.some(tc => tc.status === 'pending') ?? false
   const [expanded, setExpanded] = useState(hasPending)
 
-  // Auto-expand when pending, auto-collapse when all complete
   useEffect(() => {
     if (hasPending) {
       setExpanded(true)
     } else if (expanded && !hasPending) {
-      // Small delay before collapsing to let user see completion
       const timer = setTimeout(() => setExpanded(false), 800)
       return () => clearTimeout(timer)
     }
   }, [hasPending, expanded])
 
-  // Handle empty/undefined
   if (!toolCalls || toolCalls.length === 0) return null
 
-  // Single tool call: show inline without accordion
   if (toolCalls.length === 1) {
     return <ToolStatusBadge {...toolCalls[0]} />
   }
 
-  // Multiple tool calls: collapsible accordion
-  const successCount = toolCalls.filter(tc => tc.status === 'success').length
-  const pendingCount = toolCalls.filter(tc => tc.status === 'pending').length
-  const errorCount = toolCalls.filter(tc => tc.status === 'error').length
-
-  const summary = pendingCount > 0
-    ? `Processing ${pendingCount} action${pendingCount > 1 ? 's' : ''}...`
-    : errorCount > 0
-      ? `Completed with ${errorCount} error${errorCount > 1 ? 's' : ''}`
-      : `Performed ${successCount} action${successCount > 1 ? 's' : ''}`
+  const summary = buildSummary(toolCalls)
 
   return (
-    <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+    <div className="mt-2 overflow-hidden rounded-lg border border-gray-200">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-sm text-gray-600"
@@ -62,12 +72,12 @@ export function ToolCallAccordion({ toolCalls }: ToolCallAccordionProps) {
           {summary}
         </span>
         <ChevronDown className={cn(
-          "h-4 w-4 transition-transform",
-          expanded && "rotate-180"
+          'h-4 w-4 transition-transform',
+          expanded && 'rotate-180'
         )} />
       </button>
       {expanded && (
-        <div className="p-2 space-y-1 bg-white">
+        <div className="bg-white p-2 space-y-1">
           {toolCalls.map(tc => (
             <ToolStatusBadge key={tc.id} {...tc} />
           ))}

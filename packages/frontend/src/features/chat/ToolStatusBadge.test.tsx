@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { ToolStatusBadge } from './ToolStatusBadge'
 import type { ToolCallStatus } from '@/hooks/useChat'
 
-// Helper to create a partial ToolCallStatus for testing
 function createToolCall(overrides: Partial<ToolCallStatus> = {}): ToolCallStatus {
   return {
     id: 'test-id',
@@ -14,177 +13,100 @@ function createToolCall(overrides: Partial<ToolCallStatus> = {}): ToolCallStatus
 }
 
 describe('ToolStatusBadge', () => {
-  describe('basic rendering', () => {
-    it('should render the tool name', () => {
-      render(<ToolStatusBadge {...createToolCall({ toolName: 'create_todo' })} />)
+  it('maps todo tool names to Chinese labels', () => {
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'create_todo', status: 'success' })} />)
 
-      expect(screen.getByText(/create_todo/)).toBeInTheDocument()
-    })
-
-    it('should have inline-flex layout', () => {
-      const { container } = render(<ToolStatusBadge {...createToolCall()} />)
-
-      const badge = container.querySelector('.inline-flex')
-      expect(badge).toBeInTheDocument()
-      expect(badge).toHaveClass('inline-flex')
-    })
-
-    it('should have correct padding and styling', () => {
-      const { container } = render(<ToolStatusBadge {...createToolCall()} />)
-
-      const badge = container.querySelector('.inline-flex')
-      expect(badge).toBeInTheDocument()
-      expect(badge).toHaveClass('px-2', 'py-1', 'rounded')
-    })
+    expect(screen.getByText('创建待办')).toBeInTheDocument()
   })
 
-  describe('status: pending', () => {
-    it('should show spinning loader icon when pending', () => {
-      const { container } = render(
-        <ToolStatusBadge {...createToolCall({ status: 'pending' })} />
-      )
+  it('shows pending todo label with ellipsis', () => {
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'update_todo', status: 'pending' })} />)
 
-      const spinner = container.querySelector('.animate-spin')
-      expect(spinner).toBeInTheDocument()
-    })
-
-    it('should show ellipsis after tool name when pending', () => {
-      render(
-        <ToolStatusBadge {...createToolCall({ toolName: 'create_todo', status: 'pending' })} />
-      )
-
-      expect(screen.getByText('create_todo...')).toBeInTheDocument()
-    })
-
-    it('should have gray color scheme when pending', () => {
-      const { container } = render(
-        <ToolStatusBadge {...createToolCall({ status: 'pending' })} />
-      )
-
-      const badge = container.querySelector('.inline-flex')
-      expect(badge).toBeInTheDocument()
-      expect(badge).toHaveClass('bg-gray-50', 'text-gray-600')
-    })
+    expect(screen.getByText('修改待办中...')).toBeInTheDocument()
   })
 
-  describe('status: success', () => {
-    it('should show checkmark icon when success', () => {
-      const { container } = render(
-        <ToolStatusBadge {...createToolCall({ status: 'success' })} />
-      )
+  it('uses macaron color chips for todo tools', () => {
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'delete_todo', status: 'success' })} />)
 
-      // Check icon is present (it should have text-green-600 class)
-      const icon = container.querySelector('.text-green-600')
-      expect(icon).toBeInTheDocument()
-    })
-
-    it('should display message when provided on success', () => {
-      render(
-        <ToolStatusBadge
-          {...createToolCall({
-            toolName: 'create_todo',
-            status: 'success',
-            message: 'Todo created successfully'
-          })}
-        />
-      )
-
-      expect(screen.getByText('Todo created successfully')).toBeInTheDocument()
-    })
-
-    it('should display tool name when no message on success', () => {
-      render(
-        <ToolStatusBadge {...createToolCall({ toolName: 'update_todo', status: 'success' })} />
-      )
-
-      expect(screen.getByText('update_todo')).toBeInTheDocument()
-    })
+    const badge = screen.getByText('删除待办').closest('div')
+    expect(badge).toHaveStyle({ backgroundColor: '#FFB5BA' })
   })
 
-  describe('status: error', () => {
-    it('should show X icon when error', () => {
-      const { container } = render(
-        <ToolStatusBadge {...createToolCall({ status: 'error' })} />
-      )
+  it('keeps non-todo tools in gray style', () => {
+    const { container } = render(
+      <ToolStatusBadge {...createToolCall({ toolName: 'search_mail', status: 'success' })} />
+    )
 
-      const icon = container.querySelector('.text-red-600')
-      expect(icon).toBeInTheDocument()
-    })
-
-    it('should display tool name inline when an error message is provided', () => {
-      render(
-        <ToolStatusBadge
-          {...createToolCall({
-            toolName: 'delete_todo',
-            status: 'error',
-            message: 'Failed to delete'
-          })}
-        />
-      )
-
-      expect(screen.getByText('delete_todo')).toBeInTheDocument()
-      expect(screen.queryByText('Failed to delete')).not.toBeInTheDocument()
-    })
-
-    it('should reveal error details after expanding the disclosure', () => {
-      render(
-        <ToolStatusBadge
-          {...createToolCall({
-            toolName: 'delete_todo',
-            status: 'error',
-            message: 'Failed to delete'
-          })}
-        />
-      )
-
-      fireEvent.click(screen.getByText('Show error details'))
-
-      expect(screen.getByText('Failed to delete')).toBeInTheDocument()
-    })
-
-    it('should render error details in a wrapped preformatted block', () => {
-      const { container } = render(
-        <ToolStatusBadge
-          {...createToolCall({
-            status: 'error',
-            message: 'Very long error message that should wrap properly'
-          })}
-        />
-      )
-
-      fireEvent.click(screen.getByText('Show error details'))
-
-      const details = container.querySelector('pre')
-      expect(details).toHaveClass('overflow-x-auto', 'whitespace-pre-wrap', 'break-words')
-    })
-
-    it('should display tool name when no message on error', () => {
-      render(
-        <ToolStatusBadge {...createToolCall({ toolName: 'delete_todo', status: 'error' })} />
-      )
-
-      expect(screen.getByText('delete_todo')).toBeInTheDocument()
-    })
+    const badge = container.querySelector('.inline-flex')
+    expect(badge).toHaveClass('bg-gray-50', 'text-gray-600')
+    expect(screen.getByText('search_mail')).toBeInTheDocument()
   })
 
-  describe('icon sizes', () => {
-    it('should have small icons (h-3 w-3)', () => {
-      const { container } = render(
-        <ToolStatusBadge {...createToolCall({ status: 'pending' })} />
-      )
+  it('shows output.message as lightweight fallback for todo tools without cards', () => {
+    render(
+      <ToolStatusBadge
+        {...createToolCall({
+          toolName: 'delete_todo',
+          status: 'success',
+          output: { message: '已删除 1 条待办' },
+        })}
+      />
+    )
 
-      const icon = container.querySelector('svg')
-      expect(icon).toHaveClass('h-3', 'w-3')
-    })
+    expect(screen.getByText('删除待办')).toBeInTheDocument()
+    expect(screen.getByText('已删除 1 条待办')).toBeInTheDocument()
   })
 
-  describe('text styling', () => {
-    it('should have small text', () => {
-      const { container } = render(<ToolStatusBadge {...createToolCall()} />)
+  it('falls back to string output.result when output.message is missing', () => {
+    render(
+      <ToolStatusBadge
+        {...createToolCall({
+          toolName: 'delete_todo',
+          status: 'success',
+          output: { result: '删除完成' },
+        })}
+      />
+    )
 
-      const badge = container.querySelector('.inline-flex')
-      expect(badge).toBeInTheDocument()
-      expect(badge).toHaveClass('text-xs')
-    })
+    expect(screen.getByText('删除完成')).toBeInTheDocument()
+  })
+
+  it('does not duplicate error message inline when expandable details are shown', () => {
+    render(
+      <ToolStatusBadge
+        {...createToolCall({
+          toolName: 'delete_todo',
+          status: 'error',
+          message: '删除失败',
+        })}
+      />
+    )
+
+    expect(screen.getByText('删除待办')).toBeInTheDocument()
+    expect(screen.queryByText('删除失败')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('显示错误详情'))
+    expect(screen.getByText('删除失败')).toBeInTheDocument()
+  })
+
+  it('does not render fallback text when create_todo already returns structured todo payload', () => {
+    render(
+      <ToolStatusBadge
+        {...createToolCall({
+          toolName: 'create_todo',
+          status: 'success',
+          output: {
+            message: '已创建待办',
+            todo: {
+              id: 1,
+              description: 'Test todo',
+            },
+          },
+        })}
+      />
+    )
+
+    expect(screen.getByText('创建待办')).toBeInTheDocument()
+    expect(screen.queryByText('已创建待办')).not.toBeInTheDocument()
   })
 })

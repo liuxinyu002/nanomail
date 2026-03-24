@@ -82,9 +82,9 @@ export function ChatInput({
           disabled={disabled}
           rows={1}
           className={cn(
-            'flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2',
+            'flex-1 resize-none rounded-lg border px-3 py-2',
             'min-h-[40px] max-h-[120px] overflow-y-auto',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+            'border-gray-200 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600',
             'disabled:bg-gray-100 disabled:cursor-not-allowed',
             'text-sm leading-relaxed'
           )}
@@ -108,7 +108,12 @@ export function ChatInput({
             onClick={handleSubmit}
             disabled={isSendDisabled}
             aria-label="Send message"
-            className="shrink-0"
+            className={cn(
+              "shrink-0 transition-colors",
+              isSendDisabled
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-gray-100"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            )}
           >
             <Send className="h-4 w-4" />
           </Button>
@@ -116,7 +121,7 @@ export function ChatInput({
       </div>
 
       {/* Keyboard hint */}
-      <p className="text-xs text-gray-400 mt-2 text-center">
+      <p className="text-[11px] text-gray-500 mt-2 text-center">
         {isStreaming ? (
           <span className="flex items-center justify-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />

@@ -2,8 +2,9 @@ import { useCallback } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
-import { Sparkles, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CoffeeIcon } from '@/components/icons'
 
 export function ChatPage() {
   const { messages, isStreaming, error, sendMessage, stopGeneration, clearSession } = useChat()
@@ -14,11 +15,13 @@ export function ChatPage() {
   }, [])
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
-          <Sparkles className="h-5 w-5 text-blue-600" />
+          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-600/10">
+            <CoffeeIcon className="h-[18px] w-[18px]" />
+          </div>
           <h1 className="text-lg font-semibold text-gray-900">AI Assistant</h1>
         </div>
         {messages.length > 0 && (
@@ -26,7 +29,7 @@ export function ChatPage() {
             variant="ghost"
             size="sm"
             onClick={clearSession}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
           >
             <Trash2 className="h-4 w-4 mr-1" />
             Clear
@@ -44,12 +47,12 @@ export function ChatPage() {
       )}
 
       {/* Message List - scrollable middle area */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-gray-50">
         <MessageList messages={messages} isStreaming={isStreaming} onTodoUpdate={handleTodoUpdate} />
       </div>
 
       {/* Chat Input - fixed at bottom */}
-      <div className="border-t border-gray-200">
+      <div className="border-t border-gray-200 bg-white shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.05)]">
         <ChatInput
           onSend={sendMessage}
           onStop={stopGeneration}

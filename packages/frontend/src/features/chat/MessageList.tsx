@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import type { UIMessage } from '@/hooks/useChat'
 import { MessageItem } from './MessageItem'
-import { Sparkles } from 'lucide-react'
+import { CoffeeIcon } from '@/components/icons'
 
 const SCROLL_THRESHOLD = 100  // px from bottom to consider "near bottom"
 
@@ -72,19 +72,21 @@ export function MessageList({ messages, isStreaming, onTodoUpdate }: MessageList
   }, [isStreaming])
 
   return (
-    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto h-full">
       {messages.length === 0 ? (
         <EmptyState />
       ) : (
-        <div ref={contentRef} className="max-w-3xl mx-auto px-4 divide-y divide-gray-100">
-          {messages.map(msg => (
-            <MessageItem
-              key={msg.id}
-              message={msg}
-              isStreaming={isStreaming && msg.role === 'assistant' && !msg.content}
-              onTodoUpdate={onTodoUpdate}
-            />
-          ))}
+        <div ref={contentRef} className="max-w-3xl mx-auto px-4 py-8">
+          <div className="flex flex-col gap-8">
+            {messages.map(msg => (
+              <MessageItem
+                key={msg.id}
+                message={msg}
+                isStreaming={isStreaming && msg.role === 'assistant' && !msg.content}
+                onTodoUpdate={onTodoUpdate}
+              />
+            ))}
+          </div>
           <div ref={bottomRef} />
         </div>
       )}
@@ -95,7 +97,9 @@ export function MessageList({ messages, isStreaming, onTodoUpdate }: MessageList
 function EmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center h-full text-gray-500">
-      <Sparkles className="h-12 w-12 mb-4 text-gray-300" />
+      <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-600/10 mb-4">
+        <CoffeeIcon className="h-8 w-8" />
+      </div>
       <h2 className="text-lg font-medium mb-2">How can I help you today?</h2>
       <p className="text-sm text-gray-400">Ask me to create, update, or search your todos.</p>
     </div>

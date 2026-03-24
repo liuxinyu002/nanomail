@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import type { UIMessage, ToolCallStatus } from '@/hooks/useChat'
 import { TodoSchema, type Todo } from '@nanomail/shared'
 import { cn } from '@/lib/utils'
-import { User, Sparkles } from 'lucide-react'
+import { User } from 'lucide-react'
+import { CoffeeIcon } from '@/components/icons'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { TodoCardWidget } from './TodoCardWidget'
 import { ToolCallAccordion } from './ToolCallAccordion'
@@ -36,15 +37,17 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
       <div className="flex items-center gap-2 mb-2">
         <div className={cn(
           "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-          isUser ? "bg-blue-600" : "bg-purple-100"
+          isUser
+            ? "bg-blue-600"
+            : "bg-blue-50 border border-blue-600/10"
         )}>
           {isUser ? (
             <User className="h-4 w-4 text-white" />
           ) : (
-            <Sparkles className="h-4 w-4 text-purple-600" />
+            <CoffeeIcon className="h-4 w-4 text-blue-600" />
           )}
         </div>
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-semibold text-gray-900">
           {isUser ? 'You' : 'AI Assistant'}
         </span>
         {isStreaming && !message.content && (

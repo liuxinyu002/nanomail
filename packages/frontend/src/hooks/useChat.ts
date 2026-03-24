@@ -15,9 +15,10 @@ export interface ToolCallStatus {
 
 export interface UIMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'tool'
   content: string
   toolCalls?: ToolCallStatus[]
+  toolCallId?: string
   timestamp: string
 }
 
@@ -33,13 +34,32 @@ const SESSION_STORAGE_KEY = 'nanomail_chat_messages'
 
 // ============ Helper Functions ============
 
-function createUIMessage(role: 'user' | 'assistant', content: string): UIMessage {
-  return {
+function createUIMessage(
+  role: 'user' | 'assistant',
+  content: string
+): UIMessage
+function createUIMessage(
+  role: 'tool',
+  content: string,
+  toolCallId: string
+): UIMessage
+function createUIMessage(
+  role: 'user' | 'assistant' | 'tool',
+  content: string,
+  toolCallId?: string
+): UIMessage {
+  const msg: UIMessage = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role,
     content,
     timestamp: new Date().toISOString(),
   }
+
+  if (role === 'tool' && toolCallId) {
+    msg.toolCallId = toolCallId
+  }
+
+  return msg
 }
 
 /**
@@ -53,7 +73,6 @@ function pruneToolCalls(toolCalls: ToolCallStatus[]): ToolCallStatus[] {
     toolName: tc.toolName,
     status: tc.status,
     message: tc.message,
-    // Explicitly omit `input` and `output` to reduce storage size
   }))
 }
 
@@ -66,6 +85,66 @@ function pruneMessagesForStorage(messages: UIMessage[]): UIMessage[] {
     ...msg,
     toolCalls: msg.toolCalls ? pruneToolCalls(msg.toolCalls) : undefined,
   }))
+}
+
+function inferToolStatus(toolOutput?: Record<string, unknown>): {
+  status: 'success' | 'error'
+  message?: string
+} {
+  if (!toolOutput) {
+    return { status: 'success' }
+  }
+
+  const resultMessage = typeof toolOutput.result === 'string' ? toolOutput.result : undefined
+  const isExplicitFailure = toolOutput.status === 'failed'
+  const isBusinessFailure = toolOutput.success === false
+  const isErrorResult = typeof resultMessage === 'string' && resultMessage.startsWith('Error:')
+
+  if (!isExplicitFailure && !isBusinessFailure && !isErrorResult) {
+    return { status: 'success' }
+  }
+
+  if (typeof toolOutput.message === 'string' && toolOutput.message.length > 0) {
+    return {
+      status: 'error',
+      message: toolOutput.message,
+    }
+  }
+
+  if (typeof toolOutput.error === 'string') {
+    return {
+      status: 'error',
+      message: toolOutput.error,
+    }
+  }
+
+  if (toolOutput.error && typeof toolOutput.error === 'object') {
+    const nestedMessage = (toolOutput.error as Record<string, unknown>).message
+
+    if (typeof nestedMessage === 'string' && nestedMessage.length > 0) {
+      return {
+        status: 'error',
+        message: nestedMessage,
+      }
+    }
+
+    return {
+      status: 'error',
+      message: JSON.stringify(toolOutput.error),
+    }
+  }
+
+  if (isErrorResult) {
+    return {
+      status: 'error',
+      message: resultMessage,
+    }
+  }
+
+  return {
+    status: 'error',
+    message: 'Tool execution failed',
+  }
 }
 
 // ============ StreamingBuffer Class ============
@@ -91,7 +170,7 @@ class StreamingBuffer {
   }
 
   private scheduleFlush() {
-    if (this.rafId !== null) return // Already scheduled
+    if (this.rafId !== null) return
 
     this.rafId = requestAnimationFrame(() => {
       this.rafId = null
@@ -99,9 +178,6 @@ class StreamingBuffer {
     })
   }
 
-  /**
-   * Flush pending content synchronously (used in finally block)
-   */
   flush() {
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId)
@@ -139,16 +215,13 @@ export function useChat() {
   const streamingBufferRef = useRef<StreamingBuffer | null>(null)
   const messagesRef = useRef<UIMessage[]>([])
 
-  // Keep ref in sync with state
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
 
-  // Initialize streaming buffer on mount
   useEffect(() => {
     streamingBufferRef.current = new StreamingBuffer()
 
-    // Set up the flush callback to update React state
     streamingBufferRef.current.onFlush((content) => {
       const assistantMsg = currentAssistantMessageRef.current
       if (!assistantMsg) return
@@ -163,7 +236,6 @@ export function useChat() {
     return () => streamingBufferRef.current?.clear()
   }, [])
 
-  // Restore from session storage on mount
   useEffect(() => {
     try {
       const cached = sessionStorage.getItem(SESSION_STORAGE_KEY)
@@ -178,8 +250,6 @@ export function useChat() {
     }
   }, [])
 
-  // Save to session storage when messages change
-  // CRITICAL: Prune toolCalls before saving to prevent QuotaExceededError
   useEffect(() => {
     if (messages.length > 0) {
       try {
@@ -191,7 +261,6 @@ export function useChat() {
     }
   }, [messages])
 
-  // Build chat context
   const buildContext = useCallback((): ChatContext => {
     return {
       currentTime: new Date().toISOString(),
@@ -200,35 +269,50 @@ export function useChat() {
     }
   }, [])
 
-  // Convert UIMessage to ChatMessage for API
   const toChatMessages = useCallback((uiMessages: UIMessage[]): ChatMessage[] => {
-    return uiMessages.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-    }))
+    return uiMessages.map(msg => {
+      const chatMsg: ChatMessage = {
+        role: msg.role,
+        content: msg.content,
+      }
+
+      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        chatMsg.toolCalls = msg.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.toolName,
+            arguments: JSON.stringify(tc.input || {}),
+          },
+        }))
+      }
+
+      if (msg.role === 'tool' && msg.toolCallId) {
+        chatMsg.toolCallId = msg.toolCallId
+      }
+
+      return chatMsg
+    })
   }, [])
 
-  // Handle SSE events
-  // Backend format: { type: '...', data: { ... }, sessionId, messageId, timestamp }
   const handleEvent = useCallback((event: ConversationEvent) => {
     const assistantMsg = currentAssistantMessageRef.current
 
     switch (event.type) {
       case 'result_chunk':
-        // Buffer chunks for batched updates
         streamingBufferRef.current?.append(event.data.content)
         break
 
-      case 'tool_call_start':
-        // Flush any pending content before adding tool call
+      case 'tool_call_start': {
         streamingBufferRef.current?.flush()
 
         const toolCall: ToolCallStatus = {
-          id: crypto.randomUUID(), // Generate ID since backend doesn't send one
+          id: event.data.toolCallId,
           toolName: event.data.toolName,
           status: 'pending',
           input: event.data.toolInput,
         }
+
         if (assistantMsg) {
           setMessages(prev => prev.map(msg =>
             msg.id === assistantMsg.id
@@ -237,21 +321,31 @@ export function useChat() {
           ))
         }
         break
+      }
 
       case 'tool_call_end':
         if (assistantMsg) {
+          const { status, message } = inferToolStatus(event.data.toolOutput)
+
           setMessages(prev => prev.map(msg =>
             msg.id === assistantMsg.id
               ? {
                   ...msg,
                   toolCalls: msg.toolCalls?.map(tc =>
-                    tc.toolName === event.data.toolName
-                      ? { ...tc, status: 'success' as const, output: event.data.toolOutput }
+                    tc.id === event.data.toolCallId
+                      ? { ...tc, status, message, output: event.data.toolOutput }
                       : tc
                   ),
                 }
               : msg
           ))
+
+          const toolMessage = createUIMessage(
+            'tool',
+            JSON.stringify(event.data.toolOutput),
+            event.data.toolCallId
+          )
+          setMessages(prev => [...prev, toolMessage])
         }
         break
 
@@ -261,34 +355,28 @@ export function useChat() {
     }
   }, [])
 
-  // Send message
   const sendMessage = useCallback(async (content: string) => {
     setError(null)
 
-    // Add user message
     const userMessage = createUIMessage('user', content)
     setMessages(prev => [...prev, userMessage])
 
-    // Initialize assistant message placeholder
     const assistantMessage = createUIMessage('assistant', '')
     currentAssistantMessageRef.current = assistantMessage
     setMessages(prev => [...prev, assistantMessage])
 
-    // Build request - use ref to get latest messages synchronously
     const request: ChatServiceRequest = {
-      messages: [], // Will be built below
+      messages: [],
       context: buildContext(),
       stream: true,
     }
 
-    // Get all history messages from ref (includes user and assistant messages)
     const historyMessages = messagesRef.current.filter(
-      m => m.role === 'user' || (m.role === 'assistant' && m.content)
+      m => m.role === 'user' || m.role === 'tool' || (m.role === 'assistant' && m.content)
     )
     const allHistoryMessages = toChatMessages(historyMessages)
     request.messages = [...allHistoryMessages, { role: 'user' as const, content }]
 
-    // Start streaming
     setIsStreaming(true)
     abortControllerRef.current = new AbortController()
 
@@ -304,19 +392,16 @@ export function useChat() {
         setError(message)
       }
     } finally {
-      // Flush any remaining buffered content before ending
       streamingBufferRef.current?.flush()
       setIsStreaming(false)
       currentAssistantMessageRef.current = null
     }
   }, [toChatMessages, buildContext, handleEvent])
 
-  // Stop generation
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort()
   }, [])
 
-  // Clear session
   const clearSession = useCallback(() => {
     setMessages([])
     setError(null)

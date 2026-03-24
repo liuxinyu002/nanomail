@@ -17,8 +17,8 @@ export interface ChatServiceRequest {
 export type ConversationEvent =
   | { type: 'session_start'; data: { sessionId: string } }
   | { type: 'thinking'; data: { content: string } }
-  | { type: 'tool_call_start'; data: { toolName: string; toolInput: Record<string, unknown> } }
-  | { type: 'tool_call_end'; data: { toolName: string; toolInput: Record<string, unknown>; toolOutput: Record<string, unknown> } }
+  | { type: 'tool_call_start'; data: { toolCallId: string; toolName: string; toolInput: Record<string, unknown> } }
+  | { type: 'tool_call_end'; data: { toolCallId: string; toolName: string; toolInput: Record<string, unknown>; toolOutput: Record<string, unknown> } }
   | { type: 'result_chunk'; data: { content: string } }
   | { type: 'session_end'; data: null }
   | { type: 'error'; data: { code: string; message: string } }

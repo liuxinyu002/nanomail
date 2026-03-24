@@ -166,7 +166,7 @@ describe('useChat', () => {
 
       mockStreamChat.mockImplementationOnce(async function* () {
         await generatorPromise
-        yield { type: 'session_end' }
+        yield { type: 'session_end', data: null }
       })
 
       const { result } = renderHook(() => useChat())
@@ -184,7 +184,7 @@ describe('useChat', () => {
     })
 
     it('should call ChatService.streamChat with correct parameters', async () => {
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -209,10 +209,10 @@ describe('useChat', () => {
 
     it('should accumulate result_chunk events to assistant message', async () => {
       const events: ConversationEvent[] = [
-        { type: 'result_chunk', content: 'Hello' },
-        { type: 'result_chunk', content: ' world' },
-        { type: 'result_chunk', content: '!' },
-        { type: 'session_end' },
+        { type: 'result_chunk', data: { content: 'Hello' } },
+        { type: 'result_chunk', data: { content: ' world' } },
+        { type: 'result_chunk', data: { content: '!' } },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -230,11 +230,13 @@ describe('useChat', () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
-          toolCallId: 'call-1',
-          toolName: 'create_todo',
-          input: { description: 'Test' },
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: { description: 'Test' },
+          },
         },
-        { type: 'session_end' },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -258,16 +260,22 @@ describe('useChat', () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
-          toolCallId: 'call-1',
-          toolName: 'create_todo',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+          },
         },
         {
           type: 'tool_call_end',
-          toolCallId: 'call-1',
-          output: { success: true },
-          message: 'Created successfully',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: { success: true, id: 1 },
+          },
         },
-        { type: 'session_end' },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -280,17 +288,239 @@ describe('useChat', () => {
       const assistantMessage = result.current.messages[1]
       expect(assistantMessage.toolCalls).toHaveLength(1)
       expect(assistantMessage.toolCalls?.[0].status).toBe('success')
-      expect(assistantMessage.toolCalls?.[0].output).toEqual({ success: true })
-      expect(assistantMessage.toolCalls?.[0].message).toBe('Created successfully')
+      expect(assistantMessage.toolCalls?.[0].output).toEqual({ success: true, id: 1 })
+
+      // Should also create a tool message
+      const toolMessage = result.current.messages.find(m => m.role === 'tool')
+      expect(toolMessage).toBeDefined()
+      expect(toolMessage?.toolCallId).toBe('call-1')
+    })
+
+    it('should mark tool calls as error when tool execution fails', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: { description: 'Test' },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: {
+              error: 'Database connection failed',
+              status: 'failed',
+            },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls).toHaveLength(1)
+      expect(assistantMessage.toolCalls?.[0].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Database connection failed')
+      expect(assistantMessage.toolCalls?.[0].output).toEqual({
+        error: 'Database connection failed',
+        status: 'failed',
+      })
+    })
+
+    it('should use a fallback message when failed tool output has no error text', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: { status: 'failed' },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls?.[0].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Tool execution failed')
+    })
+
+    it('should extract nested error messages from failed tool output', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: {
+              error: { message: 'Connection timeout', code: 'ETIMEDOUT' },
+              status: 'failed',
+            },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls?.[0].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Connection timeout')
+    })
+
+    it('should mark success false tool output as error', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: {
+              success: false,
+              reason: 'TODO_NOT_FOUND',
+              message: 'Todo with ID 1 does not exist',
+            },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Update todo 1')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls?.[0].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Todo with ID 1 does not exist')
+    })
+
+    it('should mark error result strings as error', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: {
+              result: 'Error: Tool "create_todo" validation failed',
+            },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create todo')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls?.[0].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Error: Tool "create_todo" validation failed')
+    })
+
+    it('should preserve mixed success and error tool call statuses', async () => {
+      const events: ConversationEvent[] = [
+        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {}, toolOutput: { success: true } } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {} } },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-2',
+            toolName: 'update_todo',
+            toolInput: {},
+            toolOutput: { error: 'Not found', status: 'failed' },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Do stuff')
+      })
+
+      const assistantMessage = result.current.messages[1]
+      expect(assistantMessage.toolCalls).toHaveLength(2)
+      expect(assistantMessage.toolCalls?.[0].status).toBe('success')
+      expect(assistantMessage.toolCalls?.[1].status).toBe('error')
+      expect(assistantMessage.toolCalls?.[1].message).toBe('Not found')
     })
 
     it('should handle multiple tool calls', async () => {
       const events: ConversationEvent[] = [
-        { type: 'tool_call_start', toolCallId: 'call-1', toolName: 'create_todo' },
-        { type: 'tool_call_end', toolCallId: 'call-1', message: 'Done 1' },
-        { type: 'tool_call_start', toolCallId: 'call-2', toolName: 'update_todo' },
-        { type: 'tool_call_end', toolCallId: 'call-2', message: 'Done 2' },
-        { type: 'session_end' },
+        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {}, toolOutput: { done: true } } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {}, toolOutput: { done: true } } },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -308,8 +538,8 @@ describe('useChat', () => {
 
     it('should handle error event', async () => {
       const events: ConversationEvent[] = [
-        { type: 'error', error: 'Something went wrong' },
-        { type: 'session_end' },
+        { type: 'error', data: { code: 'ERR', message: 'Something went wrong' } },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -348,7 +578,7 @@ describe('useChat', () => {
       mockStreamChat.mockImplementationOnce(async function* (_request, signal) {
         capturedSignal = signal
         await generatorPromise
-        yield { type: 'session_end' }
+        yield { type: 'session_end', data: null }
       })
 
       const { result } = renderHook(() => useChat())
@@ -376,7 +606,7 @@ describe('useChat', () => {
 
     it('should keep partial response after stopping', async () => {
       mockStreamChat.mockImplementationOnce(async function* () {
-        yield { type: 'result_chunk', content: 'Partial' }
+        yield { type: 'result_chunk', data: { content: 'Partial' } }
         // Simulate abort
         const error = new Error('Aborted')
         error.name = 'AbortError'
@@ -397,7 +627,7 @@ describe('useChat', () => {
 
   describe('clearSession', () => {
     it('should clear messages and error', async () => {
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -428,7 +658,7 @@ describe('useChat', () => {
 
   describe('sessionStorage backup', () => {
     it('should save messages to sessionStorage on change', async () => {
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -452,17 +682,22 @@ describe('useChat', () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
-          toolCallId: 'call-1',
-          toolName: 'create_todo',
-          input: { largeData: 'x'.repeat(10000) },
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: { largeData: 'x'.repeat(10000) },
+          },
         },
         {
           type: 'tool_call_end',
-          toolCallId: 'call-1',
-          output: { result: 'y'.repeat(10000) },
-          message: 'Done',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: { result: 'y'.repeat(10000) },
+          },
         },
-        { type: 'session_end' },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -491,7 +726,48 @@ describe('useChat', () => {
       expect(assistantMessage.toolCalls[0].id).toBe('call-1')
       expect(assistantMessage.toolCalls[0].toolName).toBe('create_todo')
       expect(assistantMessage.toolCalls[0].status).toBe('success')
-      expect(assistantMessage.toolCalls[0].message).toBe('Done')
+    })
+
+    it('should preserve error status and message when pruning tool calls for sessionStorage', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: { description: 'Test' },
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'create_todo',
+            toolInput: {},
+            toolOutput: { error: 'Failed', status: 'failed' },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const { result } = renderHook(() => useChat())
+
+      await act(async () => {
+        await result.current.sendMessage('Create todo')
+      })
+
+      await waitFor(() => {
+        expect(sessionStorageMock.setItem).toHaveBeenCalled()
+      })
+
+      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
+
+      expect(assistantMessage.toolCalls[0].status).toBe('error')
+      expect(assistantMessage.toolCalls[0].message).toBe('Failed')
+      expect(assistantMessage.toolCalls[0].input).toBeUndefined()
+      expect(assistantMessage.toolCalls[0].output).toBeUndefined()
     })
 
     it('should handle QuotaExceededError gracefully', async () => {
@@ -502,7 +778,7 @@ describe('useChat', () => {
         throw error
       })
 
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -518,10 +794,10 @@ describe('useChat', () => {
   describe('StreamingBuffer', () => {
     it('should batch result_chunk updates and flush on completion', async () => {
       const events: ConversationEvent[] = [
-        { type: 'result_chunk', content: 'A' },
-        { type: 'result_chunk', content: 'B' },
-        { type: 'result_chunk', content: 'C' },
-        { type: 'session_end' },
+        { type: 'result_chunk', data: { content: 'A' } },
+        { type: 'result_chunk', data: { content: 'B' } },
+        { type: 'result_chunk', data: { content: 'C' } },
+        { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
@@ -538,7 +814,7 @@ describe('useChat', () => {
 
   describe('edge cases', () => {
     it('should handle empty message', async () => {
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -551,8 +827,8 @@ describe('useChat', () => {
 
     it('should handle sending multiple messages in sequence', async () => {
       mockStreamChat
-        .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', content: 'Response 1' }, { type: 'session_end' }]))
-        .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', content: 'Response 2' }, { type: 'session_end' }]))
+        .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', data: { content: 'Response 1' } }, { type: 'session_end', data: null }]))
+        .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', data: { content: 'Response 2' } }, { type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -574,7 +850,7 @@ describe('useChat', () => {
     })
 
     it('should preserve message order', async () => {
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat())
 
@@ -582,7 +858,7 @@ describe('useChat', () => {
         await result.current.sendMessage('First')
       })
 
-      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end' }]))
+      mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       await act(async () => {
         await result.current.sendMessage('Second')

@@ -451,6 +451,7 @@ export class AgentLoop {
             messageId,
             timestamp: timestamp(),
             data: {
+              toolCallId: toolCall.id,
               toolName: toolCall.name,
               toolInput: toolCall.arguments as Record<string, unknown>
             } as ToolCallData
@@ -485,6 +486,7 @@ export class AgentLoop {
             messageId,
             timestamp: timestamp(),
             data: {
+              toolCallId: toolCall.id,
               toolName: toolCall.name,
               toolInput: toolCall.arguments as Record<string, unknown>,
               toolOutput

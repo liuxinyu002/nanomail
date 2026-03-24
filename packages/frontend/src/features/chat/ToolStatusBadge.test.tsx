@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ToolStatusBadge } from './ToolStatusBadge'
 import type { ToolCallStatus } from '@/hooks/useChat'
 
@@ -24,14 +24,16 @@ describe('ToolStatusBadge', () => {
     it('should have inline-flex layout', () => {
       const { container } = render(<ToolStatusBadge {...createToolCall()} />)
 
-      const badge = container.firstChild as HTMLElement
+      const badge = container.querySelector('.inline-flex')
+      expect(badge).toBeInTheDocument()
       expect(badge).toHaveClass('inline-flex')
     })
 
     it('should have correct padding and styling', () => {
       const { container } = render(<ToolStatusBadge {...createToolCall()} />)
 
-      const badge = container.firstChild as HTMLElement
+      const badge = container.querySelector('.inline-flex')
+      expect(badge).toBeInTheDocument()
       expect(badge).toHaveClass('px-2', 'py-1', 'rounded')
     })
   })
@@ -59,7 +61,8 @@ describe('ToolStatusBadge', () => {
         <ToolStatusBadge {...createToolCall({ status: 'pending' })} />
       )
 
-      const badge = container.firstChild as HTMLElement
+      const badge = container.querySelector('.inline-flex')
+      expect(badge).toBeInTheDocument()
       expect(badge).toHaveClass('bg-gray-50', 'text-gray-600')
     })
   })
@@ -108,7 +111,7 @@ describe('ToolStatusBadge', () => {
       expect(icon).toBeInTheDocument()
     })
 
-    it('should display error message when provided', () => {
+    it('should display tool name inline when an error message is provided', () => {
       render(
         <ToolStatusBadge
           {...createToolCall({
@@ -119,7 +122,40 @@ describe('ToolStatusBadge', () => {
         />
       )
 
+      expect(screen.getByText('delete_todo')).toBeInTheDocument()
+      expect(screen.queryByText('Failed to delete')).not.toBeInTheDocument()
+    })
+
+    it('should reveal error details after expanding the disclosure', () => {
+      render(
+        <ToolStatusBadge
+          {...createToolCall({
+            toolName: 'delete_todo',
+            status: 'error',
+            message: 'Failed to delete'
+          })}
+        />
+      )
+
+      fireEvent.click(screen.getByText('Show error details'))
+
       expect(screen.getByText('Failed to delete')).toBeInTheDocument()
+    })
+
+    it('should render error details in a wrapped preformatted block', () => {
+      const { container } = render(
+        <ToolStatusBadge
+          {...createToolCall({
+            status: 'error',
+            message: 'Very long error message that should wrap properly'
+          })}
+        />
+      )
+
+      fireEvent.click(screen.getByText('Show error details'))
+
+      const details = container.querySelector('pre')
+      expect(details).toHaveClass('overflow-x-auto', 'whitespace-pre-wrap', 'break-words')
     })
 
     it('should display tool name when no message on error', () => {
@@ -146,7 +182,8 @@ describe('ToolStatusBadge', () => {
     it('should have small text', () => {
       const { container } = render(<ToolStatusBadge {...createToolCall()} />)
 
-      const badge = container.firstChild as HTMLElement
+      const badge = container.querySelector('.inline-flex')
+      expect(badge).toBeInTheDocument()
       expect(badge).toHaveClass('text-xs')
     })
   })

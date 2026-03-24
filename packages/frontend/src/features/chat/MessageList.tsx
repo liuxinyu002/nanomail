@@ -78,14 +78,16 @@ export function MessageList({ messages, isStreaming, onTodoUpdate }: MessageList
       ) : (
         <div ref={contentRef} className="max-w-3xl mx-auto px-4 py-8">
           <div className="flex flex-col gap-8">
-            {messages.map(msg => (
-              <MessageItem
-                key={msg.id}
-                message={msg}
-                isStreaming={isStreaming && msg.role === 'assistant' && !msg.content}
-                onTodoUpdate={onTodoUpdate}
-              />
-            ))}
+            {messages
+              .filter(msg => msg.role !== 'tool')  // Tool messages are for context only, not display
+              .map(msg => (
+                <MessageItem
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isStreaming && msg.role === 'assistant' && !msg.content}
+                  onTodoUpdate={onTodoUpdate}
+                />
+              ))}
           </div>
           <div ref={bottomRef} />
         </div>

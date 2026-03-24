@@ -53,6 +53,7 @@ export interface ResultChunkData {
  * Tool call data
  */
 export interface ToolCallData {
+  toolCallId: string        // Unique ID to link start/end events and tool results
   toolName: string
   toolInput: Record<string, unknown>
   toolOutput?: Record<string, unknown>  // Only in tool_call_end

@@ -65,7 +65,7 @@ export function TodoCardWidget({ todos, onUpdate, onEdit, onDelete, readonly = f
               {todo.description}
             </span>
             {todo.deadline && (
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+              <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
                 {formatDeadline(todo.deadline)}
               </span>
             )}

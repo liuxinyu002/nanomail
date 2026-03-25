@@ -13,6 +13,9 @@ export { InboxPanel, type InboxPanelProps } from './InboxPanel'
 export { PlannerPanel, type PlannerPanelProps } from './PlannerPanel'
 export { BoardPanel, type BoardPanelProps } from './BoardPanel'
 
+// Archive Dialog
+export { ArchiveDialog } from './ArchiveDialog'
+
 // Resizable panels
 export { ResizablePanels, DEFAULT_PANEL_CONFIGS, type PanelConfig, type ResizablePanelsProps } from './ResizablePanels'
 

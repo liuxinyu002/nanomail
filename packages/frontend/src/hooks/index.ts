@@ -4,11 +4,13 @@
 
 export { useTodosByDateRange } from './useTodosByDateRange'
 
-export { useUpdateTodoMutation, useDeleteTodoMutation } from './useTodoMutations'
+export { useUpdateTodoMutation, useDeleteTodoMutation, useRestoreTodoMutation } from './useTodoMutations'
 
 export { useUpdateTodoPositionMutation, useBatchUpdatePositionsMutation } from './useTodoMutations.position'
 
 export { useTodos } from './useTodos'
+
+export { useArchivedTodos, flattenArchivedTodos } from './useArchivedTodos'
 
 export { useEmailDetail } from './useEmailDetail'
 

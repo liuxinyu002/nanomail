@@ -4,6 +4,7 @@
  * Provides optimistic UI updates for:
  * - Updating todos (immediate cache update with rollback on error)
  * - Deleting todos (immediate removal with rollback on error)
+ * - Restoring todos (move completed todo back to pending)
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -86,8 +87,22 @@ export function useUpdateTodoMutation() {
       todoQueries.forEach((query) => {
         queryClient.setQueryData(
           query.queryKey,
-          (old: { todos: TodoItem[] } | undefined) => {
-            if (!old) return old
+          (old: { todos?: TodoItem[] } | undefined) => {
+            if (!old || !old.todos) return old
+
+            // Check if this is an archive query (queryKey[1] === 'archive')
+            const queryKey = query.queryKey as unknown[]
+            const isArchiveQuery = queryKey[1] === 'archive'
+
+            // If marking as completed and this is NOT an archive query, remove from list
+            if (data.status === 'completed' && !isArchiveQuery) {
+              return {
+                ...old,
+                todos: old.todos.filter((todo) => todo.id !== id),
+              }
+            }
+
+            // Otherwise, update the todo in place
             return {
               ...old,
               todos: old.todos.map((todo) => {
@@ -119,6 +134,89 @@ export function useUpdateTodoMutation() {
     },
 
     // Invalidate queries after mutation completes (success or error)
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos'] })
+    },
+  })
+}
+
+/**
+ * Hook for restoring a completed todo to pending status
+ *
+ * @example
+ * ```tsx
+ * const restoreMutation = useRestoreTodoMutation()
+ *
+ * // Restore todo - moves to Inbox
+ * const handleRestore = (todoId: number) => {
+ *   restoreMutation.mutate(todoId, {
+ *     onSuccess: (restoredTodo) => {
+ *       toast.success(`Task restored to Inbox`)
+ *     }
+ *   })
+ * }
+ * ```
+ */
+export function useRestoreTodoMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => TodoService.restoreTodo(id),
+
+    // Optimistic update: add restored todo back to active lists
+    onMutate: async (id) => {
+      // 1. Find all todo queries
+      const queryCache = queryClient.getQueryCache()
+      const todoQueries = queryCache.findAll({ queryKey: ['todos'] })
+
+      // 2. Cancel ongoing queries
+      await Promise.all(todoQueries.map((query) => query.cancel()))
+
+      // 3. Save previous data for rollback
+      const previousData = new Map<string, { todos: TodoItem[] }>()
+      todoQueries.forEach((query) => {
+        const key = JSON.stringify(query.queryKey)
+        const data = query.state.data as { todos: TodoItem[] } | undefined
+        if (data) {
+          previousData.set(key, data)
+        }
+      })
+
+      // 4. Remove restored todo from archive queries, add to active queries
+      todoQueries.forEach((query) => {
+        const queryKey = query.queryKey as unknown[]
+        const isArchiveQuery = queryKey[1] === 'archive'
+
+        queryClient.setQueryData(
+          query.queryKey,
+          (old: { todos?: TodoItem[] } | undefined) => {
+            if (!old || !old.todos) return old
+            if (isArchiveQuery) {
+              // Remove from archive
+              return {
+                ...old,
+                todos: old.todos.filter((todo) => todo.id !== id),
+              }
+            }
+            // The restored todo will be added via server response
+            // We don't add it here to avoid duplication
+            return old
+          }
+        )
+      })
+
+      return { previousData }
+    },
+
+    // Rollback on error
+    onError: (_err, _id, context) => {
+      context?.previousData.forEach((data, key) => {
+        const queryKey = JSON.parse(key)
+        queryClient.setQueryData(queryKey, data)
+      })
+    },
+
+    // Invalidate both active and archive queries
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['todos'] })
     },
@@ -169,8 +267,8 @@ export function useDeleteTodoMutation() {
       todoQueries.forEach((query) => {
         queryClient.setQueryData(
           query.queryKey,
-          (old: { todos: TodoItem[] } | undefined) => {
-            if (!old) return old
+          (old: { todos?: TodoItem[] } | undefined) => {
+            if (!old || !old.todos) return old
             return {
               ...old,
               todos: old.todos.filter((todo) => todo.id !== id),

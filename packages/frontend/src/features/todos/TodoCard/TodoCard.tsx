@@ -26,6 +26,8 @@ interface TodoCardProps {
   ordinal?: number
   /** Drag handle props from dnd-kit (attributes and listeners) */
   dragHandleProps?: Record<string, unknown>
+  /** Whether to show highlight animation (for restored todos) */
+  isHighlighted?: boolean
   onSaveDescription?: (value: string) => void
   onSaveNotes?: (value: string | null) => void
   onSaveDeadline?: (value: string | null) => void
@@ -60,6 +62,7 @@ export function TodoCard({
   compact = false,
   ordinal,
   dragHandleProps,
+  isHighlighted,
   onSaveDescription,
   onSaveNotes,
   onSaveDeadline,
@@ -188,6 +191,8 @@ export function TodoCard({
         'transition-shadow',
         'p-4 mb-2',
         'border border-gray-100',
+        // Highlight animation for restored todos
+        isHighlighted && 'animate-flash-macaron',
         className
       )}
     >

@@ -4,6 +4,7 @@ import express from 'express'
 import { createTodoRoutes } from './todo.routes'
 import type { DataSource, Repository } from 'typeorm'
 import { Todo } from '../entities/Todo.entity'
+import { BoardColumnIds } from '@nanomail/shared'
 
 // Mock query builder for date range tests
 interface MockQueryBuilder {
@@ -13,7 +14,11 @@ interface MockQueryBuilder {
   orderBy: ReturnType<typeof vi.fn>
   addOrderBy: ReturnType<typeof vi.fn>
   getMany: ReturnType<typeof vi.fn>
+  getOne: ReturnType<typeof vi.fn>
+  getRawOne: ReturnType<typeof vi.fn>
   leftJoinAndSelect: ReturnType<typeof vi.fn>
+  limit: ReturnType<typeof vi.fn>
+  select: ReturnType<typeof vi.fn>
 }
 
 describe('TodoRoutes', () => {
@@ -31,7 +36,9 @@ describe('TodoRoutes', () => {
       orderBy: vi.fn().mockReturnThis(),
       addOrderBy: vi.fn().mockReturnThis(),
       getMany: vi.fn(),
+      getOne: vi.fn(),
       leftJoinAndSelect: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
     }
 
     // Create mock repository
@@ -81,7 +88,7 @@ describe('TodoRoutes', () => {
         },
       ]
 
-      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos)
 
       const response = await request(app).get('/api/todos')
 
@@ -105,7 +112,7 @@ describe('TodoRoutes', () => {
           },
         ]
 
-        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+        mockQueryBuilder.getMany.mockResolvedValue(mockTodos as unknown as Todo[])
 
         const response = await request(app).get('/api/todos')
 
@@ -128,7 +135,7 @@ describe('TodoRoutes', () => {
           },
         ]
 
-        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+        mockQueryBuilder.getMany.mockResolvedValue(mockTodos as unknown as Todo[])
 
         const response = await request(app).get('/api/todos')
 
@@ -151,7 +158,7 @@ describe('TodoRoutes', () => {
           },
         ]
 
-        vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+        mockQueryBuilder.getMany.mockResolvedValue(mockTodos)
 
         const response = await request(app).get('/api/todos')
 
@@ -159,16 +166,12 @@ describe('TodoRoutes', () => {
         expect(response.body.todos[0].color).toBeNull()
       })
 
-      it('should request boardColumn relation in find options', async () => {
-        vi.mocked(mockRepository.find).mockResolvedValue([])
+      it('should request boardColumn relation via leftJoinAndSelect', async () => {
+        mockQueryBuilder.getMany.mockResolvedValue([])
 
         await request(app).get('/api/todos')
 
-        expect(mockRepository.find).toHaveBeenCalledWith(
-          expect.objectContaining({
-            relations: expect.arrayContaining(['boardColumn']),
-          })
-        )
+        expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('todo.boardColumn', 'boardColumn')
       })
     })
 
@@ -196,7 +199,7 @@ describe('TodoRoutes', () => {
         },
       ]
 
-      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos)
 
       const response = await request(app).get('/api/todos')
 
@@ -219,7 +222,7 @@ describe('TodoRoutes', () => {
         },
       ]
 
-      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos)
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos)
 
       const response = await request(app).get('/api/todos')
 
@@ -229,84 +232,57 @@ describe('TodoRoutes', () => {
     })
 
     it('should sort by position then deadline with nulls last', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       await request(app).get('/api/todos')
 
-      expect(mockRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          order: expect.objectContaining({
-            position: 'ASC',
-            deadline: expect.objectContaining({
-              direction: 'ASC',
-              nulls: 'LAST'
-            })
-          })
-        })
-      )
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('todo.position', 'ASC')
+      expect(mockQueryBuilder.addOrderBy).toHaveBeenCalledWith('todo.deadline', 'ASC', 'NULLS LAST')
     })
 
     it('should filter by status', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       await request(app)
         .get('/api/todos')
         .query({ status: 'pending' })
 
-      expect(mockRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ status: 'pending' }),
-        })
-      )
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('todo.status = :status', { status: 'pending' })
     })
 
     it('should filter by boardColumnId', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       await request(app)
         .get('/api/todos')
         .query({ boardColumnId: 2 })
 
-      expect(mockRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ boardColumnId: 2 }),
-        })
-      )
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('todo.boardColumnId = :boardColumnId', { boardColumnId: 2 })
     })
 
     it('should filter by emailId', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       await request(app)
         .get('/api/todos')
         .query({ emailId: 1 })
 
-      expect(mockRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ emailId: 1 }),
-        })
-      )
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('todo.emailId = :emailId', { emailId: 1 })
     })
 
     it('should combine multiple filters', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       await request(app)
         .get('/api/todos')
         .query({ status: 'pending', boardColumnId: 2 })
 
-      expect(mockRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            status: 'pending',
-            boardColumnId: 2,
-          }),
-        })
-      )
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('todo.status = :status', { status: 'pending' })
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('todo.boardColumnId = :boardColumnId', { boardColumnId: 2 })
     })
 
     it('should return empty array when no todos', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       const response = await request(app).get('/api/todos')
 
@@ -478,13 +454,13 @@ describe('TodoRoutes', () => {
     })
 
     it('should ignore invalid date format', async () => {
-      vi.mocked(mockRepository.find).mockResolvedValue([])
+      mockQueryBuilder.getMany.mockResolvedValue([])
 
       const response = await request(app)
         .get('/api/todos')
         .query({ startDate: 'invalid', endDate: '2024-03-31' })
 
-      // Should fall back to regular find when date format is invalid
+      // Should fall back to query builder when date format is invalid
       expect(response.status).toBe(200)
     })
 
@@ -1076,7 +1052,7 @@ describe('TodoRoutes', () => {
         },
       ]
 
-      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos as unknown as Todo[])
 
       const response = await request(app).get('/api/todos')
 
@@ -1100,12 +1076,638 @@ describe('TodoRoutes', () => {
         },
       ]
 
-      vi.mocked(mockRepository.find).mockResolvedValue(mockTodos as unknown as Todo[])
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos as unknown as Todo[])
 
       const response = await request(app).get('/api/todos')
 
       expect(response.status).toBe(200)
       expect(response.body.todos[0].notes).toBeNull()
+    })
+  })
+
+  // =====================================================
+  // Phase 3: Archive Box Feature Tests
+  // =====================================================
+
+  describe('GET /api/todos - excludeStatus parameter', () => {
+    it('should filter out completed todos when excludeStatus=completed', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      await request(app)
+        .get('/api/todos')
+        .query({ excludeStatus: 'completed' })
+
+      // Implementation uses query builder with andWhere for excludeStatus
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'todo.status != :excludeStatus',
+        { excludeStatus: 'completed' }
+      )
+    })
+
+    it('should return 400 when both status=completed and excludeStatus=completed are provided', async () => {
+      const response = await request(app)
+        .get('/api/todos')
+        .query({ status: 'completed', excludeStatus: 'completed' })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('conflict')
+    })
+
+    it('should work with excludeStatus combined with other filters', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      await request(app)
+        .get('/api/todos')
+        .query({ excludeStatus: 'completed', boardColumnId: 2 })
+
+      // Should call andWhere for both filters
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'todo.status != :excludeStatus',
+        { excludeStatus: 'completed' }
+      )
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'todo.boardColumnId = :boardColumnId',
+        { boardColumnId: 2 }
+      )
+    })
+  })
+
+  describe('GET /api/todos/archive', () => {
+    it('should return only completed todos', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Completed todo',
+          status: 'completed' as const,
+          deadline: null,
+          boardColumnId: 4,
+          boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+          position: 0,
+          notes: null,
+          source: 'manual' as const,
+          completedAt: new Date('2024-03-20T10:00:00Z'),
+          createdAt: new Date('2024-03-15'),
+        },
+      ]
+
+      mockQueryBuilder.getMany.mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos).toBeDefined()
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        expect.stringContaining('status = :status'),
+        { status: 'completed' }
+      )
+    })
+
+    it('should sort by completedAt DESC then id DESC', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20 })
+
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('todo.completedAt', 'DESC')
+      expect(mockQueryBuilder.addOrderBy).toHaveBeenCalledWith('todo.id', 'DESC')
+    })
+
+    it('should respect limit parameter', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 10 })
+
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(11) // limit + 1 for hasMore detection
+    })
+
+    it('should default limit to 20 if not provided', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      await request(app)
+        .get('/api/todos/archive')
+
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(21) // default 20 + 1
+    })
+
+    it('should reject limit greater than 100', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 101 })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should reject limit less than 1', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 0 })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should use cursor for pagination', async () => {
+      vi.mocked(mockQueryBuilder.getMany).mockResolvedValue([])
+
+      const cursorPayload = { completedAt: '2024-03-20T10:00:00Z', id: 5 }
+      const cursor = Buffer.from(JSON.stringify(cursorPayload)).toString('base64')
+
+      await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20, cursor })
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalled()
+    })
+
+    it('should return nextCursor when there are more results', async () => {
+      const mockTodos = Array.from({ length: 21 }, (_, i) => ({
+        id: i + 1,
+        emailId: 1,
+        description: `Completed todo ${i + 1}`,
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 4,
+        boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date(`2024-03-${20 - Math.floor(i / 5)}T10:00:00Z`),
+        createdAt: new Date('2024-03-15'),
+      }))
+
+      vi.mocked(mockQueryBuilder.getMany).mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.nextCursor).toBeDefined()
+      expect(response.body.hasMore).toBe(true)
+      expect(response.body.todos).toHaveLength(20)
+    })
+
+    it('should return null nextCursor when no more results', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Only completed todo',
+          status: 'completed' as const,
+          deadline: null,
+          boardColumnId: 4,
+          boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+          position: 0,
+          notes: null,
+          source: 'manual' as const,
+          completedAt: new Date('2024-03-20T10:00:00Z'),
+          createdAt: new Date('2024-03-15'),
+        },
+      ]
+
+      vi.mocked(mockQueryBuilder.getMany).mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.nextCursor).toBeNull()
+      expect(response.body.hasMore).toBe(false)
+    })
+
+    it('should return 400 for invalid cursor format', async () => {
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20, cursor: 'invalid-base64!!' })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for cursor with invalid JSON', async () => {
+      const cursor = Buffer.from('not valid json').toString('base64')
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20, cursor })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('should include completedAt in response', async () => {
+      const mockTodos = [
+        {
+          id: 1,
+          emailId: 1,
+          description: 'Completed todo',
+          status: 'completed' as const,
+          deadline: null,
+          boardColumnId: 4,
+          boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+          position: 0,
+          notes: null,
+          source: 'manual' as const,
+          completedAt: new Date('2024-03-20T10:00:00Z'),
+          createdAt: new Date('2024-03-15'),
+        },
+      ]
+
+      vi.mocked(mockQueryBuilder.getMany).mockResolvedValue(mockTodos as unknown as Todo[])
+
+      const response = await request(app)
+        .get('/api/todos/archive')
+        .query({ limit: 20 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.todos[0].completedAt).toBe('2024-03-20T10:00:00.000Z')
+    })
+  })
+
+  describe('PATCH /api/todos/:id/status - completedAt management', () => {
+    it('should set completedAt when status changes to completed', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: null,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+      vi.mocked(mockRepository.save).mockImplementation(async (todo) => todo as unknown as Todo)
+
+      await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'completed' })
+
+      // Verify save was called with completedAt set
+      const saveCall = vi.mocked(mockRepository.save).mock.calls[0][0] as Todo
+      expect(saveCall.completedAt).toBeInstanceOf(Date)
+    })
+
+    it('should NOT overwrite completedAt when status stays completed', async () => {
+      const existingCompletedAt = new Date('2024-03-15T10:00:00Z')
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: existingCompletedAt,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+      vi.mocked(mockRepository.save).mockImplementation(async (todo) => todo as unknown as Todo)
+
+      await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'completed' })
+
+      const saveCall = vi.mocked(mockRepository.save).mock.calls[0][0] as Todo
+      expect(saveCall.completedAt).toEqual(existingCompletedAt)
+    })
+
+    it('should return 400 when trying to change completed status to pending via status endpoint', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+
+      const response = await request(app)
+        .patch('/api/todos/1/status')
+        .send({ status: 'pending' })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('restore')
+    })
+  })
+
+  describe('PATCH /api/todos/:id - completedAt management', () => {
+    it('should set completedAt when status changes to completed via general patch', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: null,
+        createdAt: new Date(),
+      }
+
+      const updatedTodo = {
+        ...mockTodo,
+        status: 'completed',
+        completedAt: new Date(),
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(updatedTodo as unknown as Todo)
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ status: 'completed' })
+
+      expect(response.status).toBe(200)
+      // Verify update was called with completedAt
+      const updateCall = vi.mocked(mockRepository.update).mock.calls[0][1] as Record<string, unknown>
+      expect(updateCall.completedAt).toBeInstanceOf(Date)
+    })
+
+    it('should return 400 when trying to change completed status to pending via general patch', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+
+      const response = await request(app)
+        .patch('/api/todos/1')
+        .send({ status: 'pending' })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('restore')
+    })
+  })
+
+  describe('POST /api/todos/:id/restore', () => {
+    it('should restore a completed todo to pending status', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 4,
+        boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      const restoredTodo = {
+        ...mockTodo,
+        status: 'pending' as const,
+        boardColumnId: BoardColumnIds.INBOX,
+        position: 100 - 1024,
+        completedAt: null,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      // Mock: first findOne for initial todo, second findOne for updated todo
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(restoredTodo as unknown as Todo)
+
+      // Mock finding min position in Inbox
+      const mockMinQb = {
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getRawOne: vi.fn().mockResolvedValue({ min: 100 }),
+      }
+      vi.mocked(mockRepository.createQueryBuilder).mockReturnValueOnce(mockMinQb as unknown as MockQueryBuilder)
+
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      const response = await request(app)
+        .post('/api/todos/1/restore')
+        .send()
+
+      expect(response.status).toBe(200)
+      expect(response.body.status).toBe('pending')
+      expect(response.body.boardColumnId).toBe(BoardColumnIds.INBOX)
+      expect(response.body.completedAt).toBeNull()
+    })
+
+    it('should place restored todo at top of Inbox (position < min)', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 4,
+        boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      const restoredTodo = {
+        ...mockTodo,
+        status: 'pending' as const,
+        boardColumnId: BoardColumnIds.INBOX,
+        position: 100 - 1024,
+        completedAt: null,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(restoredTodo as unknown as Todo)
+
+      // Mock finding min position in Inbox (returns 100)
+      const mockMinQb = {
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getRawOne: vi.fn().mockResolvedValue({ min: 100 }),
+      }
+      vi.mocked(mockRepository.createQueryBuilder).mockReturnValueOnce(mockMinQb as unknown as MockQueryBuilder)
+
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      await request(app)
+        .post('/api/todos/1/restore')
+        .send()
+
+      const updateCall = vi.mocked(mockRepository.update).mock.calls[0][1] as Record<string, unknown>
+      expect(updateCall.position).toBe(100 - 1024) // min(100) - 1024
+    })
+
+    it('should handle empty Inbox (no existing todos)', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 4,
+        boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      const restoredTodo = {
+        ...mockTodo,
+        status: 'pending' as const,
+        boardColumnId: BoardColumnIds.INBOX,
+        position: 0, // default when no existing todos
+        completedAt: null,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(restoredTodo as unknown as Todo)
+
+      // Mock finding min position in Inbox (returns null for empty)
+      const mockMinQb = {
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getRawOne: vi.fn().mockResolvedValue({ min: null }),
+      }
+      vi.mocked(mockRepository.createQueryBuilder).mockReturnValueOnce(mockMinQb as unknown as MockQueryBuilder)
+
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      await request(app)
+        .post('/api/todos/1/restore')
+        .send()
+
+      const updateCall = vi.mocked(mockRepository.update).mock.calls[0][1] as Record<string, unknown>
+      expect(updateCall.position).toBe(0)
+    })
+
+    it('should return 404 for non-existent todo', async () => {
+      vi.mocked(mockRepository.findOne).mockResolvedValue(null)
+
+      const response = await request(app)
+        .post('/api/todos/999/restore')
+        .send()
+
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 400 when trying to restore non-completed todo', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'pending' as const,
+        deadline: null,
+        boardColumnId: 1,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: null,
+        createdAt: new Date(),
+      }
+
+      vi.mocked(mockRepository.findOne).mockResolvedValue(mockTodo as unknown as Todo)
+
+      const response = await request(app)
+        .post('/api/todos/1/restore')
+        .send()
+
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('only be used on completed')
+    })
+
+    it('should NOT shift other todos position', async () => {
+      const mockTodo = {
+        id: 1,
+        emailId: 1,
+        description: 'Test',
+        status: 'completed' as const,
+        deadline: null,
+        boardColumnId: 4,
+        boardColumn: { id: 4, name: 'Done', color: '#10B981' },
+        position: 0,
+        notes: null,
+        source: 'manual' as const,
+        completedAt: new Date('2024-03-15T10:00:00Z'),
+        createdAt: new Date(),
+      }
+
+      const restoredTodo = {
+        ...mockTodo,
+        status: 'pending' as const,
+        boardColumnId: BoardColumnIds.INBOX,
+        position: 99,
+        completedAt: null,
+        boardColumn: { id: 1, name: 'Inbox', color: null },
+      }
+
+      // First findOne: get the todo to restore (line 516-518 in routes)
+      // Second findOne: get the updated todo for response (line 549-552 in routes)
+      vi.mocked(mockRepository.findOne)
+        .mockResolvedValueOnce(mockTodo as unknown as Todo)
+        .mockResolvedValueOnce(restoredTodo as unknown as Todo)
+
+      // Mock the query builder for finding min position (line 532-536 in routes)
+      const mockMinQb = {
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        getRawOne: vi.fn().mockResolvedValue({ min: 100 }),
+      }
+      vi.mocked(mockRepository.createQueryBuilder).mockReturnValueOnce(mockMinQb as unknown as MockQueryBuilder)
+
+      vi.mocked(mockRepository.update).mockResolvedValue({ affected: 1, raw: {} })
+
+      await request(app)
+        .post('/api/todos/1/restore')
+        .send()
+
+      // Verify only ONE update was called (for the restored todo, not batch update)
+      expect(mockRepository.update).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -4,7 +4,12 @@ import {
   CreateTodoSchema,
   UpdateTodoSchema,
   TodoDateRangeQuerySchema,
-  TodoSourceSchema
+  TodoSourceSchema,
+  TodosQuerySchema,
+  ArchivedTodosQuerySchema,
+  ArchiveCursorSchema,
+  ArchiveCursorPayloadSchema,
+  ArchivedTodosResponseSchema
 } from './todo'
 
 // Helper to create a 2001 character string for testing max length
@@ -560,6 +565,390 @@ describe('Todo Schemas', () => {
       // Regex only validates format, not valid dates - this should pass regex but
       // may fail elsewhere in the application. The schema only validates format.
       expect(result.success).toBe(true)
+    })
+  })
+
+  describe('TodosQuerySchema', () => {
+    it('should accept empty query (no filters)', () => {
+      const result = TodosQuerySchema.parse({})
+      expect(result).toEqual({})
+    })
+
+    it('should accept status filter', () => {
+      const result = TodosQuerySchema.parse({ status: 'pending' })
+      expect(result.status).toBe('pending')
+    })
+
+    it('should accept excludeStatus filter', () => {
+      const result = TodosQuerySchema.parse({ excludeStatus: 'completed' })
+      expect(result.excludeStatus).toBe('completed')
+    })
+
+    it('should accept boardColumnId filter', () => {
+      const result = TodosQuerySchema.parse({ boardColumnId: 1 })
+      expect(result.boardColumnId).toBe(1)
+    })
+
+    it('should accept emailId filter', () => {
+      const result = TodosQuerySchema.parse({ emailId: 100 })
+      expect(result.emailId).toBe(100)
+    })
+
+    it('should accept multiple filters', () => {
+      const result = TodosQuerySchema.parse({
+        status: 'pending',
+        boardColumnId: 2,
+        emailId: 100
+      })
+      expect(result.status).toBe('pending')
+      expect(result.boardColumnId).toBe(2)
+      expect(result.emailId).toBe(100)
+    })
+
+    it('should reject invalid status value', () => {
+      const result = TodosQuerySchema.safeParse({ status: 'invalid' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject invalid excludeStatus value', () => {
+      const result = TodosQuerySchema.safeParse({ excludeStatus: 'invalid' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject negative boardColumnId', () => {
+      const result = TodosQuerySchema.safeParse({ boardColumnId: -1 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject zero boardColumnId', () => {
+      const result = TodosQuerySchema.safeParse({ boardColumnId: 0 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject negative emailId', () => {
+      const result = TodosQuerySchema.safeParse({ emailId: -1 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject unknown fields', () => {
+      const result = TodosQuerySchema.safeParse({ unknownField: 'value' })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('ArchivedTodosQuerySchema', () => {
+    it('should accept valid limit', () => {
+      const result = ArchivedTodosQuerySchema.parse({ limit: 20 })
+      expect(result.limit).toBe(20)
+    })
+
+    it('should accept limit with cursor', () => {
+      const cursor = Buffer.from(JSON.stringify({ completedAt: '2024-03-15T10:00:00Z', id: 1 })).toString('base64')
+      const result = ArchivedTodosQuerySchema.parse({ limit: 20, cursor })
+      expect(result.limit).toBe(20)
+      expect(result.cursor).toBe(cursor)
+    })
+
+    it('should reject missing limit', () => {
+      const result = ArchivedTodosQuerySchema.safeParse({})
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject limit less than 1', () => {
+      const result = ArchivedTodosQuerySchema.safeParse({ limit: 0 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject limit greater than 100', () => {
+      const result = ArchivedTodosQuerySchema.safeParse({ limit: 101 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should accept limit of 1', () => {
+      const result = ArchivedTodosQuerySchema.parse({ limit: 1 })
+      expect(result.limit).toBe(1)
+    })
+
+    it('should accept limit of 100', () => {
+      const result = ArchivedTodosQuerySchema.parse({ limit: 100 })
+      expect(result.limit).toBe(100)
+    })
+
+    it('should reject non-integer limit', () => {
+      const result = ArchivedTodosQuerySchema.safeParse({ limit: 20.5 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject invalid cursor (non-base64)', () => {
+      const result = ArchivedTodosQuerySchema.safeParse({ limit: 20, cursor: 'not-valid-base64!@#' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should accept empty cursor string', () => {
+      // Base64 encoding of empty string
+      const result = ArchivedTodosQuerySchema.safeParse({ limit: 20, cursor: '' })
+      // Empty string is valid base64
+      expect(result.success).toBe(true)
+    })
+  })
+
+  describe('ArchiveCursorSchema', () => {
+    it('should accept valid base64 string', () => {
+      const validBase64 = Buffer.from('test').toString('base64')
+      const result = ArchiveCursorSchema.parse(validBase64)
+      expect(result).toBe(validBase64)
+    })
+
+    it('should accept empty string', () => {
+      const result = ArchiveCursorSchema.parse('')
+      expect(result).toBe('')
+    })
+
+    it('should reject non-string values', () => {
+      expect(() => ArchiveCursorSchema.parse(null)).toThrow()
+      expect(() => ArchiveCursorSchema.parse(undefined)).toThrow()
+      expect(() => ArchiveCursorSchema.parse(123)).toThrow()
+    })
+
+    it('should reject invalid base64 characters', () => {
+      expect(() => ArchiveCursorSchema.parse('not-valid-base64!@#$')).toThrow()
+    })
+  })
+
+  describe('ArchiveCursorPayloadSchema', () => {
+    it('should accept valid payload', () => {
+      const payload = {
+        completedAt: '2024-03-15T10:00:00.000Z',
+        id: 1
+      }
+      const result = ArchiveCursorPayloadSchema.parse(payload)
+      expect(result.completedAt).toBe('2024-03-15T10:00:00.000Z')
+      expect(result.id).toBe(1)
+    })
+
+    it('should reject missing completedAt', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({ id: 1 })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject missing id', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({ completedAt: '2024-03-15T10:00:00.000Z' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject invalid datetime format', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({
+        completedAt: '2024-03-15',
+        id: 1
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject non-positive id', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({
+        completedAt: '2024-03-15T10:00:00.000Z',
+        id: 0
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject negative id', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({
+        completedAt: '2024-03-15T10:00:00.000Z',
+        id: -1
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject extra fields', () => {
+      const result = ArchiveCursorPayloadSchema.safeParse({
+        completedAt: '2024-03-15T10:00:00.000Z',
+        id: 1,
+        extraField: 'not allowed'
+      })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('ArchivedTodosResponseSchema', () => {
+    const validTodo = {
+      id: 1,
+      emailId: 100,
+      description: 'Test todo',
+      status: 'completed' as const,
+      deadline: null,
+      boardColumnId: 4,
+      notes: null,
+      color: null,
+      source: 'manual' as const,
+      createdAt: '2024-01-15T10:00:00Z'
+    }
+
+    it('should accept valid response with todos and no cursor', () => {
+      const response = {
+        todos: [validTodo],
+        nextCursor: null,
+        hasMore: false
+      }
+      const result = ArchivedTodosResponseSchema.parse(response)
+      expect(result.todos).toHaveLength(1)
+      expect(result.nextCursor).toBeNull()
+      expect(result.hasMore).toBe(false)
+    })
+
+    it('should accept valid response with cursor', () => {
+      const cursor = Buffer.from(JSON.stringify({ completedAt: '2024-03-15T10:00:00.000Z', id: 1 })).toString('base64')
+      const response = {
+        todos: [validTodo],
+        nextCursor: cursor,
+        hasMore: true
+      }
+      const result = ArchivedTodosResponseSchema.parse(response)
+      expect(result.todos).toHaveLength(1)
+      expect(result.nextCursor).toBe(cursor)
+      expect(result.hasMore).toBe(true)
+    })
+
+    it('should accept empty todos array', () => {
+      const response = {
+        todos: [],
+        nextCursor: null,
+        hasMore: false
+      }
+      const result = ArchivedTodosResponseSchema.parse(response)
+      expect(result.todos).toHaveLength(0)
+      expect(result.nextCursor).toBeNull()
+      expect(result.hasMore).toBe(false)
+    })
+
+    it('should reject missing todos field', () => {
+      const result = ArchivedTodosResponseSchema.safeParse({
+        nextCursor: null,
+        hasMore: false
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject missing nextCursor field', () => {
+      const result = ArchivedTodosResponseSchema.safeParse({
+        todos: [validTodo],
+        hasMore: false
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject missing hasMore field', () => {
+      const result = ArchivedTodosResponseSchema.safeParse({
+        todos: [validTodo],
+        nextCursor: null
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject invalid todo in array', () => {
+      const invalidTodo = { ...validTodo, status: 'invalid' }
+      const result = ArchivedTodosResponseSchema.safeParse({
+        todos: [invalidTodo],
+        nextCursor: null,
+        hasMore: false
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject non-boolean hasMore', () => {
+      const result = ArchivedTodosResponseSchema.safeParse({
+        todos: [validTodo],
+        nextCursor: null,
+        hasMore: 'true'
+      })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('TodoSchema.completedAt field', () => {
+    const validTodo = {
+      id: 1,
+      emailId: 100,
+      description: 'Test todo item',
+      status: 'completed' as const,
+      deadline: '2024-03-15T23:59:59.000Z',
+      boardColumnId: 1,
+      createdAt: '2024-01-15T10:00:00Z'
+    }
+
+    it('should accept valid datetime string for completedAt', () => {
+      const result = TodoSchema.parse({ ...validTodo, completedAt: '2024-03-15T10:00:00.000Z' })
+      expect(result.completedAt).toBe('2024-03-15T10:00:00.000Z')
+    })
+
+    it('should accept null for completedAt', () => {
+      const result = TodoSchema.parse({ ...validTodo, completedAt: null })
+      expect(result.completedAt).toBeNull()
+    })
+
+    it('should accept undefined completedAt (nullable)', () => {
+      const result = TodoSchema.parse({ ...validTodo, completedAt: undefined })
+      expect(result.completedAt).toBeNull()
+    })
+
+    it('should default completedAt to null when not provided', () => {
+      const result = TodoSchema.parse(validTodo)
+      expect(result.completedAt).toBeNull()
+    })
+
+    it('should reject invalid datetime format', () => {
+      const result = TodoSchema.safeParse({ ...validTodo, completedAt: '2024-03-15' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject non-datetime string', () => {
+      const result = TodoSchema.safeParse({ ...validTodo, completedAt: 'not a date' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject number for completedAt', () => {
+      const result = TodoSchema.safeParse({ ...validTodo, completedAt: 1234567890 })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('CreateTodoSchema.completedAt field (server-managed)', () => {
+    const validCreate = {
+      emailId: 100,
+      description: 'Test todo item',
+      status: 'pending' as const,
+      deadline: '2024-03-15T23:59:59.000Z',
+      boardColumnId: 1
+    }
+
+    it('should reject completedAt in create request', () => {
+      const result = CreateTodoSchema.safeParse({ ...validCreate, completedAt: '2024-03-15T10:00:00.000Z' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject completedAt: null in create request', () => {
+      const result = CreateTodoSchema.safeParse({ ...validCreate, completedAt: null })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('UpdateTodoSchema.completedAt field (server-managed)', () => {
+    it('should reject completedAt in update request', () => {
+      const result = UpdateTodoSchema.safeParse({ completedAt: '2024-03-15T10:00:00.000Z' })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject completedAt: null in update request', () => {
+      const result = UpdateTodoSchema.safeParse({ completedAt: null })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject completedAt along with valid fields', () => {
+      const result = UpdateTodoSchema.safeParse({
+        description: 'Updated',
+        completedAt: '2024-03-15T10:00:00.000Z'
+      })
+      expect(result.success).toBe(false)
     })
   })
 })

@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   ManyToOne,
+  Index,
   type Relation
 } from 'typeorm'
 import { Email } from './Email.entity'
@@ -27,8 +28,10 @@ export type TodoSource = 'email' | 'chat' | 'manual'
  * - position: Order within the column for drag-and-drop sorting
  * - emailId: Nullable to support standalone todos (e.g., created by AI assistant)
  * - source: Tracks where the todo originated from
+ * - completedAt: Server-managed timestamp for archive view pagination
  */
 @Entity('todos')
+@Index('idx_todos_archive', ['status', 'completedAt', 'id'])
 export class Todo {
   @PrimaryGeneratedColumn('increment')
   id!: number
@@ -94,6 +97,15 @@ export class Todo {
    */
   @Column({ type: 'varchar', length: 20, default: 'manual' })
   source!: TodoSource
+
+  /**
+   * Timestamp when the todo was marked as completed
+   * Server-managed field, set automatically when status changes to 'completed'
+   * Used for archive view pagination (cursor-based)
+   * Nullable for todos that are not completed yet
+   */
+  @Column({ type: 'datetime', nullable: true, default: null })
+  completedAt!: Date | null
 
   @CreateDateColumn({ type: 'datetime' })
   createdAt!: Date

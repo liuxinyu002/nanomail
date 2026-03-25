@@ -9,6 +9,8 @@ export interface DraggableTodoItemProps {
   /** Index in the list (for ordinal display) */
   index?: number
   showDelete?: boolean
+  /** Whether to show highlight animation (for restored todos) */
+  isHighlighted?: boolean
 }
 
 /**
@@ -22,7 +24,7 @@ export interface DraggableTodoItemProps {
  * Phase 3: Uses useSortable for proper drop indicator/displacement
  * animations during sortable drag operations.
  */
-export function DraggableTodoItem({ todo, index, showDelete }: DraggableTodoItemProps) {
+export function DraggableTodoItem({ todo, index, showDelete, isHighlighted }: DraggableTodoItemProps) {
   const {
     attributes,
     listeners,
@@ -58,6 +60,7 @@ export function DraggableTodoItem({ todo, index, showDelete }: DraggableTodoItem
         showDelete={showDelete}
         ordinal={index !== undefined ? index + 1 : undefined}
         dragHandleProps={{ ...attributes, ...listeners }}
+        isHighlighted={isHighlighted}
       />
     </div>
   )

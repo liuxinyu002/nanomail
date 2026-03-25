@@ -183,13 +183,15 @@ describe('useTodoMutations', () => {
           })
         })
 
+        // When marking as completed, the todo should be REMOVED from active list
+        // (not just updated in place) per plan_13.md Phase 4 cache strategy
         await waitFor(() => {
           const cachedData = queryClient.getQueryData<TodosResponse>([
             'todos',
             '2024-03-01',
             '2024-03-31',
           ])
-          expect(cachedData?.todos[0].status).toBe('completed')
+          expect(cachedData?.todos).toHaveLength(0)
         })
 
         expect(result.current.isPending).toBe(true)

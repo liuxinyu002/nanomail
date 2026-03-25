@@ -10,6 +10,8 @@ export interface TodoItemProps {
   ordinal?: number
   /** Drag handle props from dnd-kit (attributes and listeners) */
   dragHandleProps?: Record<string, unknown>
+  /** Whether to show highlight animation (for restored todos) */
+  isHighlighted?: boolean
 }
 
 /**
@@ -21,7 +23,7 @@ export interface TodoItemProps {
  * - Provides callback handlers for delete action
  * - Handles save mutations for description, notes, and deadline
  */
-export function TodoItem({ todo, showDelete = false, ordinal, dragHandleProps }: TodoItemProps) {
+export function TodoItem({ todo, showDelete = false, ordinal, dragHandleProps, isHighlighted }: TodoItemProps) {
   const updateMutation = useUpdateTodoMutation()
   const deleteMutation = useDeleteTodoMutation()
 
@@ -59,6 +61,7 @@ export function TodoItem({ todo, showDelete = false, ordinal, dragHandleProps }:
       onSaveDeadline={handleSaveDeadline}
       ordinal={ordinal}
       dragHandleProps={dragHandleProps}
+      isHighlighted={isHighlighted}
     />
   )
 }

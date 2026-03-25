@@ -3,7 +3,7 @@
  * Handles API calls for todo operations
  */
 
-import type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo } from '@nanomail/shared'
+import type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo, ArchivedTodosResponse } from '@nanomail/shared'
 
 // Re-export types for convenience
 export type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo } from '@nanomail/shared'
@@ -21,6 +21,7 @@ export interface TodosResponse {
 
 export interface TodosQuery {
   status?: TodoStatus
+  excludeStatus?: TodoStatus
   boardColumnId?: number
   emailId?: number
 }
@@ -45,12 +46,15 @@ export const TodoService = {
    * Fetch todos with optional filters
    */
   async getTodos(query: TodosQuery = {}): Promise<TodosResponse> {
-    const { status, boardColumnId, emailId } = query
+    const { status, excludeStatus, boardColumnId, emailId } = query
 
     const params = new URLSearchParams()
 
     if (status) {
       params.set('status', status)
+    }
+    if (excludeStatus) {
+      params.set('excludeStatus', excludeStatus)
     }
     if (boardColumnId !== undefined) {
       params.set('boardColumnId', String(boardColumnId))
@@ -169,6 +173,40 @@ export const TodoService = {
     if (!response.ok) {
       throw new Error('Failed to batch update positions')
     }
+  },
+
+  /**
+   * Fetch archived (completed) todos with cursor-based pagination
+   */
+  async getArchivedTodos(query: { limit: number; cursor?: string }): Promise<ArchivedTodosResponse> {
+    const params = new URLSearchParams()
+    params.set('limit', String(query.limit))
+    if (query.cursor) {
+      params.set('cursor', query.cursor)
+    }
+
+    const response = await fetch(`/api/todos/archive?${params.toString()}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch archived todos')
+    }
+
+    return response.json()
+  },
+
+  /**
+   * Restore a completed todo to pending status
+   */
+  async restoreTodo(id: number): Promise<TodoItem> {
+    const response = await fetch(`/api/todos/${id}/restore`, {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to restore todo')
+    }
+
+    return response.json()
   },
 
   /**

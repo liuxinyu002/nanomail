@@ -10,6 +10,7 @@ import {
   BoardPanel,
   ResizablePanels,
   DEFAULT_PANEL_CONFIGS,
+  ArchiveDialog,
   type ViewType,
 } from '@/features/todos'
 import type { BoardColumn } from '@nanomail/shared'
@@ -36,6 +37,10 @@ const DEFAULT_COLUMNS: BoardColumn[] = [
 
 export function TodosPage() {
   const [activeViews, setActiveViews] = useState<ViewType[]>(['inbox', 'board'])
+  // Archive dialog state
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
+  // Highlighted todo ID for restore animation
+  const [highlightedTodoId, setHighlightedTodoId] = useState<number | null>(null)
 
   const { data, isLoading, error } = useTodos()
   const { data: columnsData, error: columnsError } = useBoardColumns()
@@ -65,6 +70,17 @@ export function TodosPage() {
       toast.error('Failed to load board columns')
     }
   }, [columnsError])
+
+  // Auto-clear highlighted todo after 2 seconds (cleanup on unmount or value change)
+  useEffect(() => {
+    if (highlightedTodoId === null) return
+
+    const timer = setTimeout(() => {
+      setHighlightedTodoId(null)
+    }, 2000)
+
+    return () => clearTimeout(timer)
+  }, [highlightedTodoId])
 
   /**
    * Handle drag end events from dnd-kit
@@ -199,6 +215,20 @@ export function TodosPage() {
     })
   }
 
+  /**
+   * Handle opening archive dialog
+   */
+  const handleViewArchive = useCallback(() => {
+    setIsArchiveDialogOpen(true)
+  }, [])
+
+  /**
+   * Handle todo restoration - set highlight (auto-clear handled by useEffect)
+   */
+  const handleRestore = useCallback((todoId: number) => {
+    setHighlightedTodoId(todoId)
+  }, [])
+
   const showInbox = activeViews.includes('inbox')
   const showPlanner = activeViews.includes('planner')
   const showBoard = activeViews.includes('board')
@@ -225,6 +255,8 @@ export function TodosPage() {
           key="inbox"
           className="h-full"
           todos={todos}
+          onViewArchive={handleViewArchive}
+          highlightedTodoId={highlightedTodoId}
         />
       )
     }
@@ -251,7 +283,7 @@ export function TodosPage() {
       )
     }
     return children
-  }, [showInbox, showPlanner, showBoard, todos, columns])
+  }, [showInbox, showPlanner, showBoard, todos, columns, handleViewArchive, highlightedTodoId, handleCreateColumn, handleDeleteColumn, handleUpdateColumn])
 
   const isEmpty = todos.length === 0
 
@@ -299,6 +331,13 @@ export function TodosPage() {
           onToggle={handleViewToggle}
         />
       </DndProvider>
+
+      {/* Archive Dialog */}
+      <ArchiveDialog
+        open={isArchiveDialogOpen}
+        onOpenChange={setIsArchiveDialogOpen}
+        onRestore={handleRestore}
+      />
     </div>
   )
 }

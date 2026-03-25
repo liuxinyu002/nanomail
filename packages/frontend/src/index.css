@@ -136,3 +136,19 @@ body {
 .animate-slide-right {
   animation: slide-right var(--animation-duration-normal) ease-out;
 }
+
+/* Flash highlight animation for restored todos (macaron style) */
+@keyframes flash-macaron {
+  0% {
+    background-color: rgba(251, 191, 36, 0.4); /* Amber with opacity */
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.6);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.animate-flash-macaron {
+  animation: flash-macaron 2s ease-out forwards;
+}

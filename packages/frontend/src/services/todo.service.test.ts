@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TodoService } from './todo.service'
 import type { TodosResponse, TodoStatus, TodoItem } from './todo.service'
+import type { ArchivedTodosResponse } from '@nanomail/shared'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
@@ -341,6 +342,169 @@ describe('TodoService', () => {
       })
 
       await expect(TodoService.deleteTodo(1)).rejects.toThrow('Failed to delete todo')
+    })
+  })
+
+  // =====================================================
+  // Phase 4: Archive Feature Tests
+  // =====================================================
+
+  describe('getTodos with excludeStatus', () => {
+    it('should exclude completed todos when excludeStatus=completed', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ todos: [] }),
+      })
+
+      await TodoService.getTodos({ excludeStatus: 'completed' })
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/todos?excludeStatus=completed')
+    })
+
+    it('should combine excludeStatus with other filters', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ todos: [] }),
+      })
+
+      await TodoService.getTodos({ excludeStatus: 'completed', boardColumnId: 1 })
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/todos?excludeStatus=completed&boardColumnId=1')
+    })
+  })
+
+  describe('getArchivedTodos', () => {
+    it('should fetch archived todos with default limit', async () => {
+      const mockResponse: ArchivedTodosResponse = {
+        todos: [],
+        nextCursor: null,
+        hasMore: false,
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await TodoService.getArchivedTodos({ limit: 20 })
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/todos/archive?limit=20')
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should fetch archived todos with cursor', async () => {
+      const cursor = Buffer.from(JSON.stringify({ completedAt: '2024-03-15T10:00:00Z', id: 5 })).toString('base64')
+      const mockResponse: ArchivedTodosResponse = {
+        todos: [],
+        nextCursor: null,
+        hasMore: false,
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await TodoService.getArchivedTodos({ limit: 20, cursor })
+
+      expect(mockFetch).toHaveBeenCalledWith(`/api/todos/archive?limit=20&cursor=${encodeURIComponent(cursor)}`)
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('should return archived todos with nextCursor when hasMore is true', async () => {
+      const nextCursor = Buffer.from(JSON.stringify({ completedAt: '2024-03-14T10:00:00Z', id: 3 })).toString('base64')
+      // Note: Using `as any` because API returns string dates, but TypeScript type expects Date
+      const mockResponse = {
+        todos: [
+          {
+            id: 1,
+            emailId: 1,
+            description: 'Completed task',
+            status: 'completed',
+            deadline: null,
+            boardColumnId: 4,
+            position: 0,
+            notes: null,
+            color: '#10B981',
+            source: 'manual',
+            completedAt: '2024-03-15T10:00:00.000Z',
+            createdAt: '2024-03-01T00:00:00.000Z',
+          },
+        ],
+        nextCursor,
+        hasMore: true,
+      } as any
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await TodoService.getArchivedTodos({ limit: 1 })
+
+      expect(result.hasMore).toBe(true)
+      expect(result.nextCursor).toBe(nextCursor)
+    })
+
+    it('should throw error on failed request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      })
+
+      await expect(TodoService.getArchivedTodos({ limit: 20 })).rejects.toThrow('Failed to fetch archived todos')
+    })
+  })
+
+  describe('restoreTodo', () => {
+    it('should restore a completed todo', async () => {
+      const mockResponse = {
+        id: 1,
+        emailId: 1,
+        description: 'Restored task',
+        status: 'pending',
+        deadline: null,
+        boardColumnId: 1,
+        position: 0,
+        notes: null,
+        color: null,
+        source: 'manual',
+        completedAt: null,
+        createdAt: '2024-03-01T00:00:00.000Z',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await TodoService.restoreTodo(1)
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/todos/1/restore', {
+        method: 'POST',
+      })
+      expect(result.status).toBe('pending')
+      expect(result.boardColumnId).toBe(1)
+    })
+
+    it('should throw error for non-existent todo', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      })
+
+      await expect(TodoService.restoreTodo(999)).rejects.toThrow('Failed to restore todo')
+    })
+
+    it('should throw error when trying to restore non-completed todo', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+      })
+
+      await expect(TodoService.restoreTodo(1)).rejects.toThrow('Failed to restore todo')
     })
   })
 })

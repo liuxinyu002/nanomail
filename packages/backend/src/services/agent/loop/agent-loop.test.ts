@@ -361,9 +361,64 @@ describe('AgentLoop V2 - run()', () => {
       const toolEndIdx = eventTypes.indexOf('tool_call_end')
       expect(toolStartIdx).toBeLessThan(toolEndIdx)
 
-      // result_chunk comes after tool_call_end
-      const resultChunkIdx = eventTypes.indexOf('result_chunk')
-      expect(resultChunkIdx).toBeGreaterThan(toolEndIdx)
+      // Final result_chunk (from second LLM response) comes after tool_call_end
+      const lastResultChunkIdx = eventTypes.lastIndexOf('result_chunk')
+      expect(lastResultChunkIdx).toBeGreaterThan(toolEndIdx)
+    })
+
+    it('should yield result_chunk BEFORE tool_call_start when LLM returns content with tool calls', async () => {
+      // This test verifies the bug fix: when LLM returns both content and tool calls,
+      // the content should be sent to frontend BEFORE tool execution starts
+      const messages = createChatMessages([{ role: 'user', content: 'Create a todo' }])
+      const context = createAgentContext()
+      const deps = {
+        dataSource: {} as any
+      }
+
+      const toolCalls: ToolCallRequest[] = [
+        { id: 'call_1', name: 'createTodo', arguments: { title: 'Test' } }
+      ]
+
+      // LLM returns content "I will create a todo." along with tool call
+      mockProvider.chatStream
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('I will create a todo.', toolCalls)))
+        .mockReturnValueOnce(createMockStreamChunks(createMockLLMResponse('Todo created successfully!', [])))
+
+      mockToolRegistry.execute.mockResolvedValueOnce('{"success": true}')
+
+      const agent = new AgentLoop({
+        provider: mockProvider as unknown as LLMProvider,
+        toolRegistry: mockToolRegistry as unknown as ToolRegistry,
+        contextBuilder: mockContextBuilder as unknown as ContextBuilder,
+        memoryStore: mockMemoryStore as unknown as MemoryStore
+      })
+
+      const events: ConversationEvent[] = []
+      for await (const event of agent.run(messages, context, deps)) {
+        events.push(event)
+      }
+
+      const eventTypes = events.map(e => e.type)
+
+      // Find the FIRST result_chunk (the one accompanying tool call)
+      const firstResultChunkIdx = eventTypes.indexOf('result_chunk')
+      const toolStartIdx = eventTypes.indexOf('tool_call_start')
+
+      // The result_chunk with "I will create a todo." should come BEFORE tool_call_start
+      expect(firstResultChunkIdx).toBeGreaterThan(-1)
+      expect(firstResultChunkIdx).toBeLessThan(toolStartIdx)
+
+      // Verify the first result_chunk contains the expected content
+      const firstResultChunk = events[firstResultChunkIdx]
+      expect((firstResultChunk.data as { content: string }).content).toBe('I will create a todo.')
+
+      // Should have 2 result_chunks: one before tool call, one after (final response)
+      const resultChunks = events.filter(e => e.type === 'result_chunk')
+      expect(resultChunks.length).toBe(2)
+
+      // Verify second result_chunk is the final response
+      const lastResultChunk = resultChunks[resultChunks.length - 1]
+      expect((lastResultChunk.data as { content: string }).content).toBe('Todo created successfully!')
     })
   })
 

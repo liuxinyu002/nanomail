@@ -412,18 +412,20 @@ export class AgentLoop {
           return
         }
 
-        // No tool calls means final answer - yield result_chunks and session_end, then exit
-        if (finalToolCalls.length === 0) {
-          // Yield the final content as result_chunks
-          if (accumulatedContent) {
-            yield {
-              type: 'result_chunk',
-              sessionId,
-              messageId,
-              timestamp: timestamp(),
-              data: { content: accumulatedContent }
-            }
+        // Yield content to frontend BEFORE processing tool calls (if any)
+        // This ensures users see the LLM's thinking/acknowledgment even when tools are being called
+        if (accumulatedContent) {
+          yield {
+            type: 'result_chunk',
+            sessionId,
+            messageId,
+            timestamp: timestamp(),
+            data: { content: accumulatedContent }
           }
+        }
+
+        // No tool calls means final answer - end session and exit
+        if (finalToolCalls.length === 0) {
           yield {
             type: 'session_end',
             sessionId,

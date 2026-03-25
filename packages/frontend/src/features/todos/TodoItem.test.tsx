@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
+import { endOfDay, parseISO } from 'date-fns'
 import { TodoItem, type TodoItemProps } from './TodoItem'
 import type { TodoItem as TodoItemType } from '@/services'
 
@@ -488,10 +489,10 @@ describe('TodoItem', () => {
       fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
 
       await waitFor(() => {
-        // date is saved with end of day time
+        // date is saved as end of day in local timezone, converted to UTC ISO string
         expect(mockUpdateMutate).toHaveBeenCalledWith({
           id: 1,
-          data: { deadline: '2024-12-25T23:59:59.999Z' },
+          data: { deadline: endOfDay(parseISO('2024-12-25')).toISOString() },
         })
       })
     })

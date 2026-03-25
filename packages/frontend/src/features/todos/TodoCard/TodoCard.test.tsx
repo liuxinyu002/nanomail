@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
+import { endOfDay, parseISO } from 'date-fns'
 import { TodoCard } from './TodoCard'
 import { TodoCardHeader } from './TodoCardHeader'
 import { TodoCardContent } from './TodoCardContent'
@@ -745,8 +746,8 @@ describe('TodoCard', () => {
       fireEvent.change(dateInput, { target: { value: '2024-12-25' } })
 
       await waitFor(() => {
-        // date is saved with end of day time
-        expect(onSaveDeadline).toHaveBeenCalledWith('2024-12-25T23:59:59.999Z')
+        // date is saved as end of day in local timezone, converted to UTC ISO string
+        expect(onSaveDeadline).toHaveBeenCalledWith(endOfDay(parseISO('2024-12-25')).toISOString())
       })
     })
 

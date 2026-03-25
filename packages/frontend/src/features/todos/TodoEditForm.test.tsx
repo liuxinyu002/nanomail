@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { endOfDay, parseISO } from 'date-fns'
 import { TodoEditForm } from './TodoEditForm'
 import type { TodoItem } from '@/services'
 
@@ -96,12 +97,12 @@ describe('TodoEditForm', () => {
       const saveButton = screen.getByRole('button', { name: /save/i })
       fireEvent.click(saveButton)
 
-      // deadline is converted from date value to ISO string with end of day
+      // deadline is converted from local date to ISO string representing end of day in local timezone
       expect(mockMutate).toHaveBeenCalledWith({
         id: 1,
         data: {
           description: 'Test todo description',
-          deadline: '2024-01-20T23:59:59.999Z',
+          deadline: endOfDay(parseISO('2024-01-20')).toISOString(),
         },
       })
     })

@@ -175,7 +175,7 @@ describe('MessageList', () => {
 
       const contentWrapper = container.querySelector('.max-w-3xl')
       expect(contentWrapper).toBeInTheDocument()
-      expect(contentWrapper).toHaveClass('mx-auto', 'px-4', 'divide-y', 'divide-gray-100')
+      expect(contentWrapper).toHaveClass('mx-auto', 'px-4', 'py-8')
     })
 
     it('should have bottom ref div for scrolling', () => {

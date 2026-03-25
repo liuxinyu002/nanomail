@@ -3,6 +3,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { useUpdateTodoMutation } from '@/hooks/useTodoMutations'
+import { parseISO, endOfDay, format } from 'date-fns'
 import type { TodoItem } from '@/services'
 
 const MIN_DESCRIPTION_LENGTH = 1
@@ -13,14 +14,14 @@ export interface TodoEditFormProps {
   onCancel: () => void
 }
 
-// Parse date value from ISO string (YYYY-MM-DD format for date input)
+/**
+ * Parse ISO datetime string to local date string (YYYY-MM-DD) for date input.
+ * Uses local time methods to correctly extract the date in user's timezone.
+ */
 function getDateValue(isoString: string | null): string {
   if (!isoString) return ''
   const d = new Date(isoString)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return format(d, 'yyyy-MM-dd')
 }
 
 export function TodoEditForm({ todo, onCancel }: TodoEditFormProps) {
@@ -38,8 +39,10 @@ export function TodoEditForm({ todo, onCancel }: TodoEditFormProps) {
     }
 
     setValidationError(null)
-    // Convert date value (YYYY-MM-DD) to ISO string with end of day
-    const deadlineIso = deadlineValue ? `${deadlineValue}T23:59:59.999Z` : null
+    // Convert local date (YYYY-MM-DD) to ISO string representing end of day in local timezone
+    const deadlineIso = deadlineValue
+      ? endOfDay(parseISO(deadlineValue)).toISOString()
+      : null
     updateMutation.mutate({
       id: todo.id,
       data: {

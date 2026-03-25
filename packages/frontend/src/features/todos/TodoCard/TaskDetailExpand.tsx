@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useId } from 'react'
 import { Calendar } from 'lucide-react'
+import { parseISO, endOfDay, format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 const MAX_TEXT_LENGTH = 2000
@@ -99,24 +100,20 @@ export function TaskDetailExpand({
     }
   }
 
-  // Format deadline for display: MM-DD HH:mm
+  // Format deadline for display: MM-DD HH:mm (using local timezone)
   const formatDeadline = (deadlineStr: string): string => {
     const d = new Date(deadlineStr)
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hours = String(d.getHours()).padStart(2, '0')
-    const minutes = String(d.getMinutes()).padStart(2, '0')
-    return `${month}-${day} ${hours}:${minutes}`
+    return format(d, 'MM-dd HH:mm')
   }
 
-  // Parse date value from ISO string (YYYY-MM-DD format for date input)
+  /**
+   * Parse ISO datetime string to local date string (YYYY-MM-DD) for date input.
+   * Uses local time methods to correctly extract the date in user's timezone.
+   */
   const getDateValue = (isoString: string | null): string => {
     if (!isoString) return ''
     const d = new Date(isoString)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+    return format(d, 'yyyy-MM-dd')
   }
 
   // Read-only rendering
@@ -232,8 +229,11 @@ export function TaskDetailExpand({
                 value={getDateValue(deadline)}
                 onChange={(e) => {
                   const value = e.target.value
-                  // date input returns YYYY-MM-DD, convert to ISO with end of day
-                  handleDeadlineChange(value ? `${value}T23:59:59.999Z` : null)
+                  // Convert local date (YYYY-MM-DD) to ISO string representing end of day in local timezone
+                  const deadlineIso = value
+                    ? endOfDay(parseISO(value)).toISOString()
+                    : null
+                  handleDeadlineChange(deadlineIso)
                 }}
                 className={cn(
                   'flex-1 min-w-0',

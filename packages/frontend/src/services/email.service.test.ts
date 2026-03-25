@@ -47,7 +47,11 @@ describe('EmailService', () => {
 
       const result = await EmailService.getEmails()
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/emails?page=1&limit=10')
+      // fetch is called with URL and options object containing signal (undefined when not provided)
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=1&limit=10',
+        expect.objectContaining({ signal: undefined })
+      )
       expect(result).toEqual(mockResponse)
     })
 
@@ -64,7 +68,10 @@ describe('EmailService', () => {
 
       await EmailService.getEmails({ page: 2, limit: 20 })
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/emails?page=2&limit=20')
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=2&limit=20',
+        expect.objectContaining({ signal: undefined })
+      )
     })
 
     it('should filter by processed status', async () => {
@@ -75,7 +82,10 @@ describe('EmailService', () => {
 
       await EmailService.getEmails({ processed: true })
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/emails?page=1&limit=10&processed=true')
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=1&limit=10&processed=true',
+        expect.objectContaining({ signal: undefined })
+      )
     })
 
     it('should throw error on failed request', async () => {
@@ -86,6 +96,83 @@ describe('EmailService', () => {
       })
 
       await expect(EmailService.getEmails()).rejects.toThrow('Failed to fetch emails')
+    })
+
+    it('should pass signal to fetch for request cancellation', async () => {
+      const mockResponse: EmailsResponse = {
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const controller = new AbortController()
+      const signal = controller.signal
+
+      await EmailService.getEmails({ signal })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=1&limit=10',
+        expect.objectContaining({ signal })
+      )
+    })
+
+    it('should throw AbortError when request is cancelled', async () => {
+      const abortError = new DOMException('The operation was aborted', 'AbortError')
+      mockFetch.mockRejectedValueOnce(abortError)
+
+      const controller = new AbortController()
+      controller.abort()
+
+      await expect(EmailService.getEmails({ signal: controller.signal })).rejects.toThrow(
+        'The operation was aborted'
+      )
+    })
+
+    it('should include signal in fetch options when provided', async () => {
+      const mockResponse: EmailsResponse = {
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const controller = new AbortController()
+      const signal = controller.signal
+
+      await EmailService.getEmails({ page: 2, limit: 20, signal })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=2&limit=20',
+        expect.objectContaining({ signal })
+      )
+    })
+
+    it('should work without signal (backward compatible)', async () => {
+      const mockResponse: EmailsResponse = {
+        emails: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      // Call without signal parameter
+      await EmailService.getEmails({ page: 1, limit: 10 })
+
+      // fetch is called with signal: undefined when not provided
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/emails?page=1&limit=10',
+        expect.objectContaining({ signal: undefined })
+      )
     })
   })
 

@@ -36,6 +36,7 @@ export interface EmailsQuery {
   limit?: number
   processed?: boolean
   classification?: EmailClassification
+  signal?: AbortSignal
 }
 
 export interface ProcessEmailsResponse {
@@ -86,7 +87,7 @@ export const EmailService = {
    * Fetch emails with pagination and optional filters
    */
   async getEmails(query: EmailsQuery = {}): Promise<EmailsResponse> {
-    const { page = 1, limit = 10, processed, classification } = query
+    const { page = 1, limit = 10, processed, classification, signal } = query
 
     const params = new URLSearchParams()
     params.set('page', String(page))
@@ -99,7 +100,9 @@ export const EmailService = {
       params.set('classification', classification)
     }
 
-    const response = await fetch(`/api/emails?${params.toString()}`)
+    const response = await fetch(`/api/emails?${params.toString()}`, {
+      signal,
+    })
 
     if (!response.ok) {
       throw new Error('Failed to fetch emails')

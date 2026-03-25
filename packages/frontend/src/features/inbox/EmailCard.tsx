@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-format'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -27,7 +27,18 @@ export interface EmailCardProps {
   onCardClick?: (id: number) => void
 }
 
-export function EmailCard({
+/**
+ * Memoized email card component.
+ *
+ * Uses React.memo with default shallow comparison to prevent unnecessary re-renders
+ * when the parent component re-renders but props haven't changed.
+ *
+ * IMPORTANT: We intentionally do NOT use a custom comparison function because:
+ * - The email object reference changes when any property changes (immutable updates)
+ * - Primitive props (selected, activeId, selectionDisabled) are compared by value
+ * - Callback references (onSelect, onCardClick) should be stable (useCallback)
+ */
+export const EmailCard = memo(function EmailCard({
   email,
   selected,
   onSelect,
@@ -167,7 +178,7 @@ export function EmailCard({
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 /**
  * Empty state component for inbox

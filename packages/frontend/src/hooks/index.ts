@@ -14,6 +14,8 @@ export { useArchivedTodos, flattenArchivedTodos } from './useArchivedTodos'
 
 export { useEmailDetail } from './useEmailDetail'
 
+export { useInfiniteEmails, type UseInfiniteEmailsOptions, type UseInfiniteEmailsReturn } from './useInfiniteEmails'
+
 export { useSettings } from './useSettings'
 
 export {

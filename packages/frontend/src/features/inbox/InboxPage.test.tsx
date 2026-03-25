@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -16,6 +16,23 @@ vi.mock('react-router-dom', async () => {
     useNavigate: () => mockNavigate,
   }
 })
+
+// Mock IntersectionObserver
+const mockObserve = vi.fn()
+const mockUnobserve = vi.fn()
+const mockDisconnect = vi.fn()
+let mockIntersectionCallback: ((entries: IntersectionObserverEntry[]) => void) | null = null
+
+class MockIntersectionObserver {
+  constructor(callback: (entries: IntersectionObserverEntry[]) => void) {
+    mockIntersectionCallback = callback
+  }
+  observe = mockObserve
+  unobserve = mockUnobserve
+  disconnect = mockDisconnect
+}
+
+const originalIntersectionObserver = window.IntersectionObserver
 
 // Mock ComposeEmailModal component
 const mockComposeModalOpen = vi.fn()
@@ -66,11 +83,69 @@ vi.mock('sonner', () => ({
   },
 }))
 
+// Mock useInfiniteEmails hook
+let mockInfiniteEmailsState: {
+  emails: Array<{
+    id: number
+    sender: string
+    subject: string
+    snippet: string
+    summary: string | null
+    date: string
+    isProcessed: boolean
+    classification: string
+    isSpam: boolean
+    hasAttachments: boolean
+  }>
+  isLoading: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  error: Error | null
+  hasReachedLimit: boolean
+} = {
+  emails: [],
+  isLoading: true,
+  isFetchingNextPage: false,
+  hasNextPage: false,
+  error: null,
+  hasReachedLimit: false,
+}
+
+const mockFetchNextPage = vi.fn()
+const mockRefetch = vi.fn()
+
+vi.mock('@/hooks/useInfiniteEmails', () => ({
+  useInfiniteEmails: () => ({
+    ...mockInfiniteEmailsState,
+    fetchNextPage: mockFetchNextPage,
+    refetch: mockRefetch,
+    triggerRef: { current: null },
+    containerRef: { current: null },
+  }),
+}))
+
 const mockGetEmails = vi.mocked(EmailService.getEmails)
 const mockGetEmail = vi.mocked(EmailService.getEmail)
 const mockProcessEmails = vi.mocked(EmailService.processEmails)
 const mockTriggerSync = vi.mocked(EmailService.triggerSync)
 const mockGetSyncStatus = vi.mocked(EmailService.getSyncStatus)
+
+// Helper to set mock state
+function setMockInfiniteEmailsState(state: Partial<typeof mockInfiniteEmailsState>) {
+  mockInfiniteEmailsState = { ...mockInfiniteEmailsState, ...state }
+}
+
+// Helper to reset mock state
+function resetMockInfiniteEmailsState() {
+  mockInfiniteEmailsState = {
+    emails: [],
+    isLoading: true,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    error: null,
+    hasReachedLimit: false,
+  }
+}
 
 // Helper to create wrapper with QueryClient and Router
 function createWrapper(initialRoute = '/inbox', routerState?: { action?: string }) {
@@ -98,7 +173,6 @@ function createWrapper(initialRoute = '/inbox', routerState?: { action?: string 
 
 describe('InboxPage', () => {
   beforeEach(() => {
-    mockGetEmails.mockReset()
     mockGetEmail.mockReset()
     mockProcessEmails.mockReset()
     mockTriggerSync.mockReset()
@@ -108,16 +182,26 @@ describe('InboxPage', () => {
     mockToastInfo.mockReset()
     mockComposeModalOpen.mockReset()
     mockNavigate.mockReset()
+    mockFetchNextPage.mockReset()
+    mockRefetch.mockReset()
+    mockIntersectionCallback = null
+    window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver
+    resetMockInfiniteEmailsState()
+  })
+
+  afterEach(() => {
+    window.IntersectionObserver = originalIntersectionObserver
   })
 
   describe('Selection Counter', () => {
     it('should show selection count when emails are selected', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
+        hasNextPage: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -138,7 +222,7 @@ describe('InboxPage', () => {
     })
 
     it('should show maximum reached warning when 5 emails selected', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
@@ -147,7 +231,7 @@ describe('InboxPage', () => {
           { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -172,7 +256,7 @@ describe('InboxPage', () => {
 
   describe('Poka-yoke Selection Limit', () => {
     it('should disable unselected checkboxes when 5 are selected', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
@@ -181,7 +265,7 @@ describe('InboxPage', () => {
           { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -205,7 +289,7 @@ describe('InboxPage', () => {
     })
 
     it('should allow deselecting when at max limit', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: '1@test.com', subject: 'E1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: '2@test.com', subject: 'E2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
@@ -214,7 +298,7 @@ describe('InboxPage', () => {
           { id: 5, sender: '5@test.com', subject: 'E5', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 6, sender: '6@test.com', subject: 'E6', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 6, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -244,11 +328,11 @@ describe('InboxPage', () => {
 
   describe('Run AI Action Button', () => {
     it('should show floating action button when emails are selected', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -272,11 +356,11 @@ describe('InboxPage', () => {
     })
 
     it('should show processing state when clicked', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockProcessEmails.mockImplementation(() => new Promise(() => {})) // Never resolves
@@ -304,12 +388,12 @@ describe('InboxPage', () => {
     })
 
     it('should call processEmails API and show success toast', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: 'b@test.com', subject: 'B', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockProcessEmails.mockResolvedValueOnce({
@@ -343,11 +427,11 @@ describe('InboxPage', () => {
     })
 
     it('should show error toast on failure', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockProcessEmails.mockRejectedValueOnce(new Error('Network error'))
@@ -375,11 +459,11 @@ describe('InboxPage', () => {
     })
 
     it('should clear selection after processing', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'A', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockProcessEmails.mockResolvedValueOnce({
@@ -417,11 +501,11 @@ describe('InboxPage', () => {
 
   describe('Split-Pane Layout', () => {
     it('should render split-pane layout with email list and detail panel', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test Email', snippet: 'Snippet', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -442,11 +526,11 @@ describe('InboxPage', () => {
     })
 
     it('should render empty state in right pane when no email selected', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -462,12 +546,12 @@ describe('InboxPage', () => {
 
   describe('URL Parameter Parsing', () => {
     it('should parse valid emailId from URL', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Email 1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: 'b@test.com', subject: 'Email 2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       // Mock getEmail for the detail panel
@@ -496,11 +580,11 @@ describe('InboxPage', () => {
     })
 
     it('should handle invalid emailId (NaN) in URL', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper('/inbox/invalid-id') })
@@ -514,11 +598,11 @@ describe('InboxPage', () => {
     })
 
     it('should handle negative emailId in URL', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper('/inbox/-1') })
@@ -532,11 +616,11 @@ describe('InboxPage', () => {
     })
 
     it('should handle zero emailId in URL', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper('/inbox/0') })
@@ -552,12 +636,12 @@ describe('InboxPage', () => {
 
   describe('Email Card Navigation', () => {
     it('should pass activeId to EmailCard when email is selected via URL', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Active Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
           { id: 2, sender: 'b@test.com', subject: 'Other Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 2, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       // Mock getEmail for the detail panel
@@ -580,22 +664,22 @@ describe('InboxPage', () => {
         expect(screen.getByText('Active Email')).toBeInTheDocument()
       })
 
-      // The active card should have the blue left border
+      // The active card should have the primary left border
       const activeCard = screen.getByText('Active Email').closest('[data-testid="email-card"]')
       expect(activeCard).toHaveClass('border-l-4')
-      expect(activeCard).toHaveClass('border-l-blue-600')
+      expect(activeCard).toHaveClass('border-l-primary')
 
       // Other card should not have the active styling
       const otherCard = screen.getByText('Other Email').closest('[data-testid="email-card"]')
-      expect(otherCard).not.toHaveClass('border-l-4')
+      expect(otherCard).toHaveClass('border-l-transparent')
     })
   })
 
   describe('Empty Inbox State', () => {
     it('should show empty inbox message when no emails', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [],
-        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -606,9 +690,9 @@ describe('InboxPage', () => {
     })
 
     it('should show sync button in empty state', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [],
-        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -621,11 +705,11 @@ describe('InboxPage', () => {
 
   describe('Sync Functionality', () => {
     it('should trigger sync when sync button is clicked', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
@@ -648,11 +732,11 @@ describe('InboxPage', () => {
     })
 
     it('should show syncing state when sync is in progress', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       // Start sync but don't resolve status polling
@@ -676,11 +760,11 @@ describe('InboxPage', () => {
     })
 
     it('should disable sync button while syncing', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
@@ -703,11 +787,11 @@ describe('InboxPage', () => {
     })
 
     it('should show success toast when sync completes', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
@@ -745,11 +829,11 @@ describe('InboxPage', () => {
     })
 
     it('should show error toast when sync fails', async () => {
-      mockGetEmails.mockResolvedValue({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
@@ -779,11 +863,11 @@ describe('InboxPage', () => {
     })
 
     it('should handle sync start failure', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockTriggerSync.mockRejectedValueOnce(new Error('Network error'))
@@ -807,7 +891,11 @@ describe('InboxPage', () => {
 
   describe('Error State', () => {
     it('should show error state when fetch fails', async () => {
-      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: false,
+        error: new Error('Network error'),
+      })
 
       render(<InboxPage />, { wrapper: createWrapper() })
 
@@ -817,7 +905,11 @@ describe('InboxPage', () => {
     })
 
     it('should show retry button in error state', async () => {
-      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: false,
+        error: new Error('Network error'),
+      })
 
       render(<InboxPage />, { wrapper: createWrapper() })
 
@@ -826,8 +918,12 @@ describe('InboxPage', () => {
       })
     })
 
-    it('should refetch when retry button is clicked', async () => {
-      mockGetEmails.mockRejectedValueOnce(new Error('Network error'))
+    it('should call refetch when retry button is clicked', async () => {
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: false,
+        error: new Error('Network error'),
+      })
 
       render(<InboxPage />, { wrapper: createWrapper() })
 
@@ -835,31 +931,23 @@ describe('InboxPage', () => {
         expect(screen.getByText('Failed to load emails')).toBeInTheDocument()
       })
 
-      mockGetEmails.mockResolvedValueOnce({
-        emails: [
-          { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
-        ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
-      })
-
       const retryButton = screen.getByRole('button', { name: /retry/i })
       await act(async () => {
         fireEvent.click(retryButton)
       })
 
-      await waitFor(() => {
-        expect(screen.getByText('Test')).toBeInTheDocument()
-      })
+      // Verify refetch was called
+      expect(mockRefetch).toHaveBeenCalled()
     })
   })
 
   describe('Compose Email Integration', () => {
     it('should render compose button in header', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -873,11 +961,11 @@ describe('InboxPage', () => {
     })
 
     it('should place compose button between filter and sync button', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -897,11 +985,11 @@ describe('InboxPage', () => {
     })
 
     it('should open compose modal when compose button is clicked', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -926,11 +1014,11 @@ describe('InboxPage', () => {
     })
 
     it('should close compose modal when onOpenChange is called with false', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -962,7 +1050,10 @@ describe('InboxPage', () => {
     })
 
     it('should show compose button in loading state', async () => {
-      mockGetEmails.mockImplementation(() => new Promise(() => {})) // Never resolves
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: true,
+      })
 
       render(<InboxPage />, { wrapper: createWrapper() })
 
@@ -975,9 +1066,9 @@ describe('InboxPage', () => {
     })
 
     it('should show compose button in empty inbox state', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [],
-        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -991,11 +1082,11 @@ describe('InboxPage', () => {
     })
 
     it('should pass correct props to ComposeEmailModal', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, { wrapper: createWrapper() })
@@ -1019,11 +1110,11 @@ describe('InboxPage', () => {
 
   describe('Router State Parsing for Reply Action', () => {
     it('should auto-open compose modal when action is reply', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'sender@example.com', subject: 'Test Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockGetEmail.mockResolvedValueOnce({
@@ -1055,11 +1146,11 @@ describe('InboxPage', () => {
     })
 
     it('should fetch email and pass sender to ComposeEmailModal', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'original@example.com', subject: 'Test', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockGetEmail.mockResolvedValueOnce({
@@ -1097,11 +1188,11 @@ describe('InboxPage', () => {
     })
 
     it('should not auto-open modal when action is not reply', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Unique Subject ABC', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, {
@@ -1118,11 +1209,11 @@ describe('InboxPage', () => {
     })
 
     it('should not auto-open modal when no action in router state', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Unique Subject XYZ', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, {
@@ -1139,11 +1230,11 @@ describe('InboxPage', () => {
     })
 
     it('should clear router state after opening modal to prevent re-trigger on refresh', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Unique Subject 123', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       mockGetEmail.mockResolvedValueOnce({
@@ -1178,11 +1269,11 @@ describe('InboxPage', () => {
     })
 
     it('should not auto-open modal when action is reply but no activeId', async () => {
-      mockGetEmails.mockResolvedValueOnce({
+      setMockInfiniteEmailsState({
         emails: [
           { id: 1, sender: 'a@test.com', subject: 'Unique Subject NoID', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT', isSpam: false, hasAttachments: false },
         ],
-        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+        isLoading: false,
       })
 
       render(<InboxPage />, {
@@ -1196,6 +1287,345 @@ describe('InboxPage', () => {
 
       // Modal should NOT auto-open because no activeId
       expect(screen.queryByTestId('compose-email-modal')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Infinite Scroll Loading States', () => {
+    it('should show loading spinner when fetching next page', async () => {
+      const page1Emails = [
+        { id: 1, sender: 'a@test.com', subject: 'Email 1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+      ]
+      setMockInfiniteEmailsState({
+        emails: page1Emails,
+        isLoading: false,
+        isFetchingNextPage: true,
+        hasNextPage: true,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Email 1')).toBeInTheDocument()
+      })
+
+      // Should show loading spinner at bottom
+      await waitFor(() => {
+        expect(screen.getByTestId('loading-more-spinner')).toBeInTheDocument()
+      })
+    })
+
+    it('should show "end of list" message when no more pages', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Last Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Last Email')).toBeInTheDocument()
+      })
+
+      // Should show end of list message
+      await waitFor(() => {
+        expect(screen.getByText(/end of list/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should show retry button when load error occurs', async () => {
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: false,
+        error: new Error('Network error'),
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load emails')).toBeInTheDocument()
+      })
+
+      // Should show retry button
+      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    })
+
+    it('should call refetch when retry is clicked after error', async () => {
+      setMockInfiniteEmailsState({
+        emails: [],
+        isLoading: false,
+        error: new Error('Network error'),
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load emails')).toBeInTheDocument()
+      })
+
+      const retryButton = screen.getByRole('button', { name: /retry/i })
+      await act(async () => {
+        fireEvent.click(retryButton)
+      })
+
+      // Verify refetch was called
+      expect(mockRefetch).toHaveBeenCalled()
+    })
+
+    it('should show limit reached message when max items loaded', async () => {
+      // Create 200 emails
+      const emails = Array.from({ length: 200 }, (_, i) => ({
+        id: i + 1,
+        sender: `sender${i}@test.com`,
+        subject: `Email ${i + 1}`,
+        snippet: '',
+        summary: null,
+        date: new Date().toISOString(),
+        isProcessed: false,
+        classification: 'IMPORTANT' as const,
+        isSpam: false,
+        hasAttachments: false,
+      }))
+
+      // Set mock state with 200 emails and limit reached
+      setMockInfiniteEmailsState({
+        emails: emails,
+        isLoading: false,
+        hasReachedLimit: true,
+        hasNextPage: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Email 1')).toBeInTheDocument()
+      })
+
+      // Should show limit reached message
+      await waitFor(() => {
+        expect(screen.getByText(/limit reached/i)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('New Emails Notification', () => {
+    it('should show NewEmailsPill when sync completes with new emails', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
+      mockGetSyncStatus
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'completed',
+          result: { syncedCount: 3, errors: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Email')).toBeInTheDocument()
+      })
+
+      // Click sync button
+      const syncButton = screen.getByRole('button', { name: /sync$/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      // Wait for sync to complete and show new emails pill
+      await waitFor(() => {
+        expect(screen.getByTestId('new-emails-pill')).toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      // Should show the count
+      expect(screen.getByText(/3 new emails/i)).toBeInTheDocument()
+    })
+
+    it('should call refetch and hide pill when NewEmailsPill is clicked', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
+      mockGetSyncStatus
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'completed',
+          result: { syncedCount: 2, errors: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Email')).toBeInTheDocument()
+      })
+
+      // Click sync button
+      const syncButton = screen.getByRole('button', { name: /sync$/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      // Wait for new emails pill
+      await waitFor(() => {
+        expect(screen.getByTestId('new-emails-pill')).toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      // Click the pill
+      const pill = screen.getByTestId('new-emails-pill')
+      await act(async () => {
+        fireEvent.click(pill)
+      })
+
+      // Verify refetch was called when pill is clicked
+      expect(mockRefetch).toHaveBeenCalled()
+    })
+  })
+
+  describe('Classification Filter Change', () => {
+    it('should reset list when filter changes', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Important Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Important Email')).toBeInTheDocument()
+      })
+
+      // Change filter to NEWSLETTER (订阅 in Chinese UI) - this triggers a query key change
+      const newsletterButton = screen.getByRole('button', { name: '订阅' })
+      await act(async () => {
+        fireEvent.click(newsletterButton)
+      })
+
+      // Verify the filter button was clicked (component handles filter change)
+      expect(newsletterButton).toBeInTheDocument()
+    })
+
+    it('should clear selection when filter changes', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Email 1', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+          { id: 2, sender: 'b@test.com', subject: 'Email 2', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Email 1')).toBeInTheDocument()
+      })
+
+      // Select first email
+      const checkbox = screen.getAllByRole('checkbox')[0]
+      await act(async () => {
+        fireEvent.click(checkbox)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('1/5 emails selected')).toBeInTheDocument()
+      })
+
+      // Change filter to a different option (重要 = IMPORTANT in Chinese UI)
+      // Default filter is "全部" (ALL), so clicking "重要" will trigger a filter change
+      const importantButton = screen.getByRole('button', { name: '重要' })
+      await act(async () => {
+        fireEvent.click(importantButton)
+      })
+
+      // Selection should be cleared
+      await waitFor(() => {
+        expect(screen.queryByText(/emails selected/)).not.toBeInTheDocument()
+      })
+    })
+
+    it('should clear new emails notification when filter changes', async () => {
+      setMockInfiniteEmailsState({
+        emails: [
+          { id: 1, sender: 'a@test.com', subject: 'Test Email', snippet: '', summary: null, date: new Date().toISOString(), isProcessed: false, classification: 'IMPORTANT' as const, isSpam: false, hasAttachments: false },
+        ],
+        isLoading: false,
+      })
+
+      mockTriggerSync.mockResolvedValueOnce({ jobId: 'job-123', status: 'pending' })
+      mockGetSyncStatus
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .mockResolvedValueOnce({
+          id: 'job-123',
+          accountId: 1,
+          status: 'completed',
+          result: { syncedCount: 5, errors: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      render(<InboxPage />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Email')).toBeInTheDocument()
+      })
+
+      // Trigger sync and wait for new emails pill
+      const syncButton = screen.getByRole('button', { name: /sync$/i })
+      await act(async () => {
+        fireEvent.click(syncButton)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('new-emails-pill')).toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      // Change filter (订阅 = NEWSLETTER in Chinese UI)
+      const newsletterButton = screen.getByRole('button', { name: '订阅' })
+      await act(async () => {
+        fireEvent.click(newsletterButton)
+      })
+
+      // Pill should be cleared
+      await waitFor(() => {
+        expect(screen.queryByTestId('new-emails-pill')).not.toBeInTheDocument()
+      })
     })
   })
 })

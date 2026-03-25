@@ -8,11 +8,14 @@ import { EmailCard, EmptyInbox } from './EmailCard'
 import { ClassificationFilter } from './ClassificationFilter'
 import { EmailDetailPanel } from './EmailDetail/EmailDetailPanel'
 import { ComposeEmailModal } from '@/components/email'
+import { NewEmailsPill } from '@/components/NewEmailsPill'
+import { useInfiniteEmails } from '@/hooks/useInfiniteEmails'
 import { Loader2, Sparkles, RefreshCw, Pencil } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
 
 const MAX_SELECTION = 5
 const POLL_INTERVAL = 2000 // 2 seconds
+const MAX_ITEMS = 200
 
 export function InboxPage() {
   const queryClient = useQueryClient()
@@ -30,6 +33,7 @@ export function InboxPage() {
   const [classificationFilter, setClassificationFilter] = useState<EmailClassification | 'ALL'>('ALL')
   const [composeOpen, setComposeOpen] = useState(false)
   const [composeKey, setComposeKey] = useState(0) // Force remount for clean state
+  const [newEmailsCount, setNewEmailsCount] = useState(0)
 
   // Local state for reply action (preserved after router state is cleared)
   const [replySender, setReplySender] = useState<string | undefined>(undefined)
@@ -56,14 +60,33 @@ export function InboxPage() {
     }
   }, [action, activeId, isEmailLoaded, replyEmail, location.pathname, navigate])
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['emails', 1, 10, classificationFilter],
-    queryFn: () => EmailService.getEmails({
-      page: 1,
-      limit: 10,
-      classification: classificationFilter === 'ALL' ? undefined : classificationFilter,
-    }),
+  // Use infinite emails hook
+  const {
+    emails,
+    isFetchingNextPage,
+    isLoading,
+    hasNextPage,
+    error: loadError,
+    fetchNextPage,
+    refetch,
+    triggerRef,
+    containerRef,
+    hasReachedLimit
+  } = useInfiniteEmails({
+    classification: classificationFilter,
+    limit: 10,
+    maxItems: MAX_ITEMS
   })
+
+  // Reset selection when classification filter changes
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [classificationFilter])
+
+  // Clear new emails notification when filter changes
+  useEffect(() => {
+    setNewEmailsCount(0)
+  }, [classificationFilter])
 
   // Polling effect for sync status
   useEffect(() => {
@@ -81,6 +104,10 @@ export function InboxPage() {
           const count = job.result?.syncedCount ?? 0
           toast.success(`Sync completed, ${count} new email${count !== 1 ? 's' : ''}`)
           setSyncingJobId(null)
+          // Show notification instead of auto-refetching
+          if (count > 0) {
+            setNewEmailsCount(count)
+          }
           refetch()
         } else if (job.status === 'failed') {
           toast.error(`Sync failed: ${job.error ?? 'Unknown error'}`)
@@ -149,6 +176,17 @@ export function InboxPage() {
       toast.error('Failed to start sync')
     }
   }
+
+  const handleNewEmailsNotification = useCallback(() => {
+    // Scroll to top
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    // Refresh list
+    refetch()
+    // Hide the notification
+    setNewEmailsCount(0)
+  }, [refetch])
 
   const handleRunAI = async () => {
     if (selectedIds.size === 0) return
@@ -229,7 +267,7 @@ export function InboxPage() {
     )
   }
 
-  if (isError) {
+  if (loadError) {
     return (
       <div className="h-full flex flex-col">
         {/* Header */}
@@ -275,7 +313,7 @@ export function InboxPage() {
     )
   }
 
-  if (!data || data.emails.length === 0) {
+  if (!emails || emails.length === 0) {
     return (
       <div className="h-full flex flex-col">
         {/* Header */}
@@ -361,9 +399,18 @@ export function InboxPage() {
       <div className="flex-1 flex min-h-0">
         {/* Left Pane: Email List */}
         <div
-          className="w-[350px] border-r border-gray-200 overflow-y-auto"
+          ref={containerRef}
+          className="w-[350px] border-r border-gray-200 overflow-y-auto relative"
           data-testid="email-list-pane"
         >
+          {/* New Emails Notification */}
+          {newEmailsCount > 0 && (
+            <NewEmailsPill
+              count={newEmailsCount}
+              onClick={handleNewEmailsNotification}
+            />
+          )}
+
           {/* Selection limit indicator */}
           {selectedIds.size > 0 && (
             <div className="px-4 pt-2 text-sm text-muted-foreground">
@@ -375,7 +422,7 @@ export function InboxPage() {
           )}
 
           <div className="p-4 space-y-2">
-            {data.emails.map((email) => (
+            {emails.map((email) => (
               <EmailCard
                 key={email.id}
                 email={{
@@ -389,6 +436,38 @@ export function InboxPage() {
                 selectionDisabled={isSelectionDisabled(email.id)}
               />
             ))}
+          </div>
+
+          {/* Infinite scroll trigger and bottom loading states */}
+          <div ref={triggerRef} className="h-4 flex items-center justify-center">
+            {isFetchingNextPage && (
+              <Loader2
+                data-testid="loading-more-spinner"
+                className="h-4 w-4 animate-spin text-muted-foreground"
+              />
+            )}
+            {!hasNextPage && !isFetchingNextPage && !loadError && (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                End of list
+              </div>
+            )}
+            {loadError && !isFetchingNextPage && (
+              <div className="py-4 text-center">
+                <p className="text-sm text-destructive mb-2">Failed to load more emails</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchNextPage()}
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+            {hasReachedLimit && (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                Limit reached (200 items). Use filters to narrow down results.
+              </div>
+            )}
           </div>
         </div>
 

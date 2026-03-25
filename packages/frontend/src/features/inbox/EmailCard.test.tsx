@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { EmailCard, type EmailCardProps } from './EmailCard'
 
+// Helper to count re-renders
+let renderCount = 0
+const RenderCounter = ({ children }: { children: React.ReactNode }) => {
+  renderCount++
+  return <>{children}</>
+}
+
 describe('EmailCard', () => {
   const mockEmail: EmailCardProps['email'] = {
     id: 1,
@@ -518,6 +525,158 @@ describe('EmailCard', () => {
       fireEvent.keyDown(card, { key: 'Tab' })
 
       expect(mockOnCardClick).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Memoization', () => {
+    // These tests verify that EmailCard properly re-renders when props change
+    // The component should be wrapped in React.memo without a custom comparison function
+
+    beforeEach(() => {
+      renderCount = 0
+    })
+
+    it('should re-render when email.isProcessed changes', () => {
+      const { rerender } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      // Verify initial state - unprocessed indicator should be visible
+      expect(screen.getByTestId('unprocessed-indicator')).toBeInTheDocument()
+
+      // Update email to processed
+      const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
+      rerender(<EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />)
+
+      // Component should re-render and show processed indicator instead
+      expect(screen.queryByTestId('unprocessed-indicator')).not.toBeInTheDocument()
+      expect(screen.getByTestId('processed-indicator')).toBeInTheDocument()
+    })
+
+    it('should re-render when email.classification changes', () => {
+      const { rerender, container } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      // Initial state - not spam
+      const card = container.firstChild
+      expect(card).not.toHaveClass('opacity-50')
+
+      // Update classification to SPAM
+      const spamEmail = { ...mockEmail, classification: 'SPAM' as const }
+      rerender(<EmailCard email={spamEmail} selected={false} onSelect={mockOnSelect} />)
+
+      // Component should re-render and show spam styling
+      expect(card).toHaveClass('opacity-50')
+    })
+
+    it('should re-render when email.summary changes (enables expansion)', () => {
+      const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
+      const { rerender } = render(
+        <EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      // Initially no expand trigger
+      expect(screen.queryByTestId('expand-trigger')).not.toBeInTheDocument()
+
+      // Add summary
+      const emailWithSummary = { ...mockEmail, isProcessed: true, summary: 'New summary' }
+      rerender(<EmailCard email={emailWithSummary} selected={false} onSelect={mockOnSelect} />)
+
+      // Component should re-render and show expand trigger
+      expect(screen.getByTestId('expand-trigger')).toBeInTheDocument()
+    })
+
+    it('should re-render when selected prop changes', () => {
+      const { rerender, container } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      // Initially not selected - no selected background
+      const card = container.firstChild
+      expect(card).not.toHaveClass('bg-primary/10')
+
+      // Select the email
+      rerender(<EmailCard email={mockEmail} selected={true} onSelect={mockOnSelect} />)
+
+      // Component should re-render with selected styling
+      expect(card).toHaveClass('bg-primary/10')
+    })
+
+    it('should re-render when activeId changes', () => {
+      const { rerender, container } = render(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={undefined}
+        />
+      )
+
+      // Initially no active styling
+      const card = container.firstChild
+      expect(card).toHaveClass('border-l-transparent')
+
+      // Set as active
+      rerender(
+        <EmailCard
+          email={mockEmail}
+          selected={false}
+          onSelect={mockOnSelect}
+          activeId={1}
+        />
+      )
+
+      // Component should re-render with active styling
+      expect(card).toHaveClass('border-l-primary')
+    })
+
+    it('should re-render when selectionDisabled changes', () => {
+      const { rerender } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} selectionDisabled={false} />
+      )
+
+      // Initially checkbox is enabled
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).not.toBeDisabled()
+
+      // Disable selection
+      rerender(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} selectionDisabled={true} />)
+
+      // Component should re-render with disabled checkbox
+      expect(checkbox).toBeDisabled()
+    })
+
+    it('should re-render when email.sender changes', () => {
+      const { rerender } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      expect(screen.getByText('test@example.com')).toBeInTheDocument()
+
+      // Change sender
+      const updatedEmail = { ...mockEmail, sender: 'newsender@example.com' }
+      rerender(<EmailCard email={updatedEmail} selected={false} onSelect={mockOnSelect} />)
+
+      // Component should re-render with new sender
+      expect(screen.getByText('newsender@example.com')).toBeInTheDocument()
+      expect(screen.queryByText('test@example.com')).not.toBeInTheDocument()
+    })
+
+    it('should re-render when email.subject changes', () => {
+      const { rerender } = render(
+        <EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />
+      )
+
+      expect(screen.getByText('Test Subject')).toBeInTheDocument()
+
+      // Change subject
+      const updatedEmail = { ...mockEmail, subject: 'Updated Subject' }
+      rerender(<EmailCard email={updatedEmail} selected={false} onSelect={mockOnSelect} />)
+
+      // Component should re-render with new subject
+      expect(screen.getByText('Updated Subject')).toBeInTheDocument()
+      expect(screen.queryByText('Test Subject')).not.toBeInTheDocument()
     })
   })
 

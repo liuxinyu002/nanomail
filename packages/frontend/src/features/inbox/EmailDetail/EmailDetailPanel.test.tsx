@@ -331,7 +331,7 @@ describe('EmailDetailPanel', () => {
 
       render(<EmailDetailPanel emailId={1} />)
 
-      expect(screen.getByText('Important')).toBeInTheDocument()
+      expect(screen.getByText('重要')).toBeInTheDocument()
     })
 
     it('shows NEWSLETTER badge for newsletter emails', () => {
@@ -346,7 +346,7 @@ describe('EmailDetailPanel', () => {
 
       render(<EmailDetailPanel emailId={1} />)
 
-      expect(screen.getByText('Newsletter')).toBeInTheDocument()
+      expect(screen.getByText('订阅')).toBeInTheDocument()
     })
 
     it('shows SPAM badge for spam emails', () => {
@@ -361,7 +361,7 @@ describe('EmailDetailPanel', () => {
 
       render(<EmailDetailPanel emailId={1} />)
 
-      expect(screen.getByText('Spam')).toBeInTheDocument()
+      expect(screen.getByText('垃圾')).toBeInTheDocument()
     })
   })
 

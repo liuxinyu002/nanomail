@@ -41,20 +41,20 @@ describe('EmailDetailHeader', () => {
     })
   })
 
-  describe('ClassificationBadge rendering', () => {
-    it('shows ClassificationBadge when classification exists', () => {
+  describe('ClassificationTag rendering', () => {
+    it('shows ClassificationTag when classification exists', () => {
       render(<EmailDetailHeader email={createMockEmail({ classification: 'IMPORTANT' })} />)
-      expect(screen.getByText('Important')).toBeInTheDocument()
+      expect(screen.getByText('重要')).toBeInTheDocument()
     })
 
-    it('shows Newsletter badge for NEWSLETTER classification', () => {
+    it('shows Newsletter tag for NEWSLETTER classification', () => {
       render(<EmailDetailHeader email={createMockEmail({ classification: 'NEWSLETTER' })} />)
-      expect(screen.getByText('Newsletter')).toBeInTheDocument()
+      expect(screen.getByText('订阅')).toBeInTheDocument()
     })
 
-    it('shows Spam badge for SPAM classification', () => {
+    it('shows Spam tag for SPAM classification', () => {
       render(<EmailDetailHeader email={createMockEmail({ classification: 'SPAM' })} />)
-      expect(screen.getByText('Spam')).toBeInTheDocument()
+      expect(screen.getByText('垃圾')).toBeInTheDocument()
     })
   })
 
@@ -217,7 +217,7 @@ describe('EmailDetailHeader', () => {
       render(<EmailDetailHeader email={createMockEmail()} onClose={onClose} />)
 
       expect(screen.getByText('Test Subject')).toBeInTheDocument()
-      expect(screen.getByText('Important')).toBeInTheDocument()
+      expect(screen.getByText('重要')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument()
     })
 

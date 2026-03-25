@@ -14,7 +14,7 @@ import { X, Paperclip } from 'lucide-react'
 import { formatAbsoluteDate } from '@/lib/date-format'
 import type { EmailDetail } from '@/services'
 import { Avatar } from './Avatar'
-import { ClassificationBadge } from './ClassificationBadge'
+import { ClassificationTag } from '@/components/ClassificationTag'
 
 interface EmailDetailHeaderProps {
   email: EmailDetail
@@ -42,7 +42,7 @@ export function EmailDetailHeader({ email, onClose }: EmailDetailHeaderProps) {
           <h1 className="text-xl font-semibold text-gray-900 truncate">
             {email.subject || '(No Subject)'}
           </h1>
-          <ClassificationBadge classification={email.classification} />
+          <ClassificationTag classification={email.classification} size="md" variant="solid" />
         </div>
         {onClose && (
           <button

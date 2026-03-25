@@ -68,7 +68,7 @@ describe('EmailCard', () => {
       const { container } = render(<EmailCard email={spamEmail} selected={false} onSelect={mockOnSelect} />)
 
       const card = container.firstChild
-      expect(card).toHaveClass('opacity-60')
+      expect(card).toHaveClass('opacity-50')
     })
   })
 
@@ -116,18 +116,18 @@ describe('EmailCard', () => {
   })
 
   describe('Summary Folding', () => {
-    describe('Sparkles Indicator', () => {
-      it('should show Sparkles indicator for unprocessed emails', () => {
+    describe('Unprocessed Indicator', () => {
+      it('should show unprocessed indicator for unprocessed emails', () => {
         render(<EmailCard email={mockEmail} selected={false} onSelect={mockOnSelect} />)
 
-        expect(screen.getByTestId('sparkles-indicator')).toBeInTheDocument()
+        expect(screen.getByTestId('unprocessed-indicator')).toBeInTheDocument()
       })
 
-      it('should not show Sparkles indicator for processed emails', () => {
+      it('should not show unprocessed indicator for processed emails', () => {
         const processedEmail = { ...mockEmail, isProcessed: true, summary: null }
         render(<EmailCard email={processedEmail} selected={false} onSelect={mockOnSelect} />)
 
-        expect(screen.queryByTestId('sparkles-indicator')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('unprocessed-indicator')).not.toBeInTheDocument()
       })
     })
 
@@ -215,11 +215,10 @@ describe('EmailCard', () => {
 
       const card = container.firstChild
       expect(card).toHaveClass('border-l-4')
-      expect(card).toHaveClass('border-l-blue-600')
-      expect(card).toHaveClass('bg-blue-50')
+      expect(card).toHaveClass('border-l-primary')
     })
 
-    it('should not apply active styling when email.id does not match activeId', () => {
+    it('should not apply active left border when email.id does not match activeId', () => {
       const { container } = render(
         <EmailCard
           email={mockEmail}
@@ -230,8 +229,8 @@ describe('EmailCard', () => {
       )
 
       const card = container.firstChild
-      expect(card).not.toHaveClass('border-l-4')
-      expect(card).not.toHaveClass('border-l-blue-600')
+      // Should have transparent left border (always present for consistent layout)
+      expect(card).toHaveClass('border-l-transparent')
     })
 
     it('should show active left border even when selected (states coexist)', () => {
@@ -245,11 +244,11 @@ describe('EmailCard', () => {
       )
 
       const card = container.firstChild
-      // Selected background should take priority
+      // Selected background
       expect(card).toHaveClass('bg-primary/10')
       // Active left border should still show
       expect(card).toHaveClass('border-l-4')
-      expect(card).toHaveClass('border-l-blue-600')
+      expect(card).toHaveClass('border-l-primary')
     })
 
     it('should not apply active styling when activeId is undefined', () => {
@@ -263,8 +262,8 @@ describe('EmailCard', () => {
       )
 
       const card = container.firstChild
-      expect(card).not.toHaveClass('border-l-4')
-      expect(card).not.toHaveClass('bg-blue-50')
+      // Should have transparent left border (always present for consistent layout)
+      expect(card).toHaveClass('border-l-transparent')
     })
 
     it('should not apply active styling when activeId is NaN', () => {
@@ -278,8 +277,8 @@ describe('EmailCard', () => {
       )
 
       const card = container.firstChild
-      expect(card).not.toHaveClass('border-l-4')
-      expect(card).not.toHaveClass('bg-blue-50')
+      // Should have transparent left border (always present for consistent layout)
+      expect(card).toHaveClass('border-l-transparent')
     })
 
     it('should not apply active styling when activeId is zero (zero is not a valid email ID)', () => {
@@ -294,8 +293,8 @@ describe('EmailCard', () => {
 
       const card = container.firstChild
       // Zero is not a valid email ID (IDs start from 1)
-      expect(card).not.toHaveClass('border-l-4')
-      expect(card).not.toHaveClass('bg-blue-50')
+      // Should have transparent left border (always present for consistent layout)
+      expect(card).toHaveClass('border-l-transparent')
     })
   })
 

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-format'
 import { Checkbox } from '@/components/ui/checkbox'
-import { CheckCircle, Inbox, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { CheckCircle, Inbox, ChevronDown, ChevronUp, Circle } from 'lucide-react'
 import type { EmailClassification } from '@nanomail/shared'
 import { ClassificationTag } from '@/components/ClassificationTag'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -41,7 +41,8 @@ export function EmailCard({
   const isSpam = email.classification === 'SPAM'
   // Computed properties for summary expansion
   const canExpand = email.isProcessed && email.summary !== null
-  const showSparkles = !email.isProcessed
+  // Unprocessed indicator: show solid dot with primary color
+  const showUnprocessedIndicator = !email.isProcessed
   // Active state: check if this card is the currently viewed email
   // Note: activeId must be a positive number (email IDs start from 1)
   const isActive = typeof activeId === 'number' && !Number.isNaN(activeId) && activeId > 0 && email.id === activeId
@@ -75,19 +76,17 @@ export function EmailCard({
       tabIndex={isInteractive ? 0 : undefined}
       onKeyDown={handleKeyDown}
       className={cn(
-        'p-4 rounded-lg transition-colors',
+        'p-4 rounded-lg transition-colors border-l-4',
         canExpand && 'cursor-pointer hover:bg-muted',
 
-        // Background color: selected takes priority over active
-        selected ? 'bg-primary/10' : (isActive ? 'bg-blue-50' : 'bg-transparent'),
+        // Background: selected shows highlight, SPAM gets subtle gray bg
+        selected ? 'bg-primary/10' : (isSpam ? 'bg-gray-50' : 'bg-transparent'),
 
-        // Border styling
-        selected ? 'border border-primary' : 'border border-transparent',
+        // Left border: active always shows primary border, otherwise transparent
+        isActive ? 'border-l-primary' : 'border-l-transparent',
 
-        // Active state: always show left border indicator
-        isActive && 'border-l-4 border-l-blue-600',
-
-        isSpam && 'opacity-60'
+        // SPAM visual downgrade
+        isSpam && 'opacity-50'
       )}
       data-testid="email-card"
     >
@@ -114,15 +113,23 @@ export function EmailCard({
               <ClassificationTag classification={email.classification} />
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {showSparkles && (
-                <Sparkles
-                  className="h-4 w-4 text-muted-foreground opacity-50"
-                  data-testid="sparkles-indicator"
-                />
-              )}
               <span className="text-xs text-muted-foreground">
                 {formatRelativeDate(email.date)}
               </span>
+              {/* Unprocessed indicator: solid dot with primary color */}
+              {showUnprocessedIndicator && (
+                <Circle
+                  className="h-2.5 w-2.5 fill-primary text-primary"
+                  data-testid="unprocessed-indicator"
+                />
+              )}
+              {/* Processed indicator: subtle checkmark */}
+              {email.isProcessed && !canExpand && (
+                <CheckCircle
+                  className="h-4 w-4 text-gray-400"
+                  data-testid="processed-indicator"
+                />
+              )}
             </div>
           </div>
 
@@ -135,28 +142,22 @@ export function EmailCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {email.isProcessed && !canExpand && (
-            <CheckCircle
-              className="h-5 w-5 text-green-500"
-              data-testid="processed-indicator"
-            />
-          )}
-          {canExpand && (
-            <CollapsibleTrigger asChild>
-              <div
-                onClick={(e) => e.stopPropagation()}
-                data-testid="expand-trigger"
-              >
-                {isExpanded ? (
-                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                )}
-              </div>
-            </CollapsibleTrigger>
-          )}
-        </div>
+        {/* Expand arrow on far right */}
+        {canExpand && (
+          <CollapsibleTrigger asChild>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              data-testid="expand-trigger"
+              className="shrink-0"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
+          </CollapsibleTrigger>
+        )}
       </div>
 
       <CollapsibleContent>

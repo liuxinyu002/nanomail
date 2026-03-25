@@ -1,5 +1,4 @@
 export { Avatar } from './Avatar'
-export { ClassificationBadge } from './ClassificationBadge'
 export { EmailDetailEmpty } from './EmailDetailEmpty'
 export { EmailDetailSkeleton } from './EmailDetailSkeleton'
 export { EmailDetailError } from './EmailDetailError'

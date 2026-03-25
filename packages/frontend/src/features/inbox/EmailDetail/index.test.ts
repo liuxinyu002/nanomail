@@ -13,7 +13,6 @@ import { describe, it, expect } from 'vitest'
 // Import everything from barrel
 import {
   Avatar,
-  ClassificationBadge,
   EmailDetailEmpty,
   EmailDetailSkeleton,
   EmailDetailError,
@@ -32,11 +31,6 @@ describe('EmailDetail barrel export', () => {
     it('should export Avatar component', () => {
       expect(Avatar).toBeDefined()
       expect(typeof Avatar).toBe('function')
-    })
-
-    it('should export ClassificationBadge component', () => {
-      expect(ClassificationBadge).toBeDefined()
-      expect(typeof ClassificationBadge).toBe('function')
     })
 
     it('should export EmailDetailEmpty component', () => {

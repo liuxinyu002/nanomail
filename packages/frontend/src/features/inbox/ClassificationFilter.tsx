@@ -7,10 +7,10 @@ interface ClassificationFilterProps {
 }
 
 const options: Array<{ value: EmailClassification | 'ALL'; label: string }> = [
-  { value: 'ALL', label: 'All' },
-  { value: 'IMPORTANT', label: 'Important' },
-  { value: 'NEWSLETTER', label: 'Newsletter' },
-  { value: 'SPAM', label: 'Spam' },
+  { value: 'ALL', label: '全部' },
+  { value: 'IMPORTANT', label: '重要' },
+  { value: 'NEWSLETTER', label: '订阅' },
+  { value: 'SPAM', label: '垃圾' },
 ]
 
 export function ClassificationFilter({ value, onChange }: ClassificationFilterProps) {
@@ -21,7 +21,7 @@ export function ClassificationFilter({ value, onChange }: ClassificationFilterPr
           key={option.value}
           onClick={() => onChange(option.value)}
           className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
             value === option.value
               ? 'bg-background shadow-sm'
               : 'text-muted-foreground hover:text-foreground'

@@ -164,4 +164,30 @@ describe('ToolCallAccordion', () => {
     expect(screen.queryByText('tool_1')).not.toBeInTheDocument()
     expect(screen.queryByText('tool_2')).not.toBeInTheDocument()
   })
+
+  it('stays open when manually expanded for completed tools', () => {
+    render(
+      <ToolCallAccordion
+        toolCalls={[
+          createToolCall({ toolName: 'tool_1', status: 'success' }),
+          createToolCall({ toolName: 'tool_2', status: 'success' }),
+        ]}
+      />
+    )
+
+    const button = screen.getByRole('button')
+
+    // Manually expand
+    fireEvent.click(button)
+    expect(screen.getByText('tool_1')).toBeInTheDocument()
+    expect(screen.getByText('tool_2')).toBeInTheDocument()
+
+    // Should NOT auto-collapse since it was manually expanded (no pending state)
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    expect(screen.getByText('tool_1')).toBeInTheDocument()
+    expect(screen.getByText('tool_2')).toBeInTheDocument()
+  })
 })

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Settings, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ToolStatusBadge } from './ToolStatusBadge'
@@ -39,15 +39,20 @@ function buildSummary(toolCalls: ToolCallStatus[]): string {
 export function ToolCallAccordion({ toolCalls }: ToolCallAccordionProps) {
   const hasPending = toolCalls?.some(tc => tc.status === 'pending') ?? false
   const [expanded, setExpanded] = useState(hasPending)
+  const wasPendingRef = useRef(hasPending)
 
   useEffect(() => {
+    // Only auto-close when transitioning from pending to complete
     if (hasPending) {
       setExpanded(true)
-    } else if (expanded && !hasPending) {
+      wasPendingRef.current = true
+    } else if (wasPendingRef.current && !hasPending) {
+      // was pending, now complete - auto collapse after delay
       const timer = setTimeout(() => setExpanded(false), 800)
+      wasPendingRef.current = false
       return () => clearTimeout(timer)
     }
-  }, [hasPending, expanded])
+  }, [hasPending])
 
   if (!toolCalls || toolCalls.length === 0) return null
 

@@ -5,7 +5,7 @@
  */
 
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { EmailService, type EmailListItem } from '../services/email.service'
 import type { EmailClassification } from '@nanomail/shared'
 
@@ -26,8 +26,8 @@ export interface UseInfiniteEmailsReturn {
   error: Error | null
   fetchNextPage: () => void
   refetch: () => void
-  triggerRef: RefObject<HTMLDivElement>
-  containerRef: RefObject<HTMLDivElement>
+  triggerRef: (node: HTMLDivElement | null) => void
+  containerRef: (node: HTMLDivElement | null) => void
   hasReachedLimit: boolean
 }
 
@@ -38,15 +38,16 @@ export function useInfiniteEmails(options: UseInfiniteEmailsOptions = {}): UseIn
     maxItems = MAX_ITEMS
   } = options
 
-  // ========== Refs ==========
-  const containerRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLDivElement>(null)
+  // ========== Refs for DOM elements ==========
+  const containerElRef = useRef<HTMLDivElement | null>(null)
+  const triggerElRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   // State cache refs (solve Observer closure trap)
   const isFetchingRef = useRef(false)
   const hasNextPageRef = useRef(true)
   const isErrorRef = useRef(false)
+  const fetchNextPageRef = useRef<() => void>(() => {})
 
   // ========== useInfiniteQuery ==========
   const {
@@ -60,11 +61,12 @@ export function useInfiniteEmails(options: UseInfiniteEmailsOptions = {}): UseIn
     refetch
   } = useInfiniteQuery({
     queryKey: ['emails', classification],
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
       const result = await EmailService.getEmails({
         page: pageParam as number,
         limit,
         classification: classification === 'ALL' ? undefined : classification,
+        signal,
       })
       return result
     },
@@ -100,12 +102,25 @@ export function useInfiniteEmails(options: UseInfiniteEmailsOptions = {}): UseIn
     isErrorRef.current = isError
   }, [isError])
 
-  // ========== IntersectionObserver setup ==========
-  // Note: Empty deps to initialize only once, avoid destroy/recreate
   useEffect(() => {
-    const trigger = triggerRef.current
-    if (!trigger) return
+    fetchNextPageRef.current = fetchNextPage
+  }, [fetchNextPage])
 
+  // ========== Setup Observer when both elements are ready ==========
+  const setupObserver = useCallback(() => {
+    // 先清理旧的 observer，防止内存泄漏和重复绑定
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+
+    const container = containerElRef.current
+    const trigger = triggerElRef.current
+
+    // 如果容器或触发器不存在，说明元素处于卸载/未准备好状态
+    if (!container || !trigger) return
+
+    // 两个元素都准备好了，创建新的 Observer
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const [entry] = entries
@@ -114,19 +129,34 @@ export function useInfiniteEmails(options: UseInfiniteEmailsOptions = {}): UseIn
         // Read latest state from refs to avoid closure trap
         if (isFetchingRef.current) return
         if (!hasNextPageRef.current) return
-        if (isErrorRef.current) return // Don't auto-load on error
+        if (isErrorRef.current) return
 
-        fetchNextPage()
+        fetchNextPageRef.current()
       },
-      { root: containerRef.current, threshold: 0.1 }
+      { root: container, threshold: 0.1 }
     )
 
     observerRef.current.observe(trigger)
+  }, [])
 
+  // ========== Callback refs ==========
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    containerElRef.current = node
+    // 即使 node 为 null（元素卸载），也需要调用 setupObserver 执行清理
+    setupObserver()
+  }, [setupObserver])
+
+  const triggerRef = useCallback((node: HTMLDivElement | null) => {
+    triggerElRef.current = node
+    setupObserver()
+  }, [setupObserver])
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       observerRef.current?.disconnect()
     }
-  }, [fetchNextPage])
+  }, [])
 
   return {
     emails: uniqueEmails,

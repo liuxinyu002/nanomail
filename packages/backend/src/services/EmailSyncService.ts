@@ -167,8 +167,9 @@ export class EmailSyncService {
    * Starts the background polling for emails.
    *
    * @param intervalMinutes - Polling interval in minutes (default: 5)
+   * @param timeoutMs - Sync operation timeout in milliseconds (default: 60000 = 1 min)
    */
-  startPolling(intervalMinutes: number = 5): void {
+  startPolling(intervalMinutes: number = 5, timeoutMs: number = 60000): void {
     // Prevent duplicate polling
     if (this.pollingActive) {
       return
@@ -177,9 +178,24 @@ export class EmailSyncService {
     // Create cron expression: every N minutes
     const cronExpression = `*/${intervalMinutes} * * * *`
 
-    // Start the cron job
+    // Start the cron job with timeout protection
     this.cronTask = cron.schedule(cronExpression, async () => {
-      await this.sync()
+      // Skip if sync already in progress (prevents overlap)
+      if (this.isSyncing) {
+        this.log.debug('Previous sync still in progress, skipping')
+        return
+      }
+
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Sync timeout after ${timeoutMs}ms`)), timeoutMs)
+      })
+
+      try {
+        await Promise.race([this.sync(), timeoutPromise])
+      } catch (error) {
+        this.log.error({ err: error }, 'Polling sync failed or timed out')
+      }
     })
 
     this.pollingActive = true

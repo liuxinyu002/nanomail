@@ -47,6 +47,8 @@ vi.mock('imapflow', () => {
     messageFlagsAdd: vi.fn().mockResolvedValue(undefined),
     messageMove: vi.fn().mockResolvedValue(undefined),
     expunge: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    usable: true,
   }
 
   return {
@@ -265,6 +267,7 @@ describe('ImapService - IMailFetcher Implementation', () => {
         messageFlagsAdd: vi.fn(),
         messageMove: vi.fn(),
         expunge: vi.fn(),
+        on: vi.fn(),
       }))
 
       vi.mocked(mockSettingsService.get)

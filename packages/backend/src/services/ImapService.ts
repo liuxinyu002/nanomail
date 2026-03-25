@@ -145,6 +145,7 @@ export class ImapService implements IMailFetcher {
 
   /**
    * Creates an ImapFlow client with the given configuration.
+   * Registers error handler to prevent unhandled errors from crashing the process.
    */
   private createClient(config: ImapConfig): ImapFlow {
     const options: ImapFlowOptions = {
@@ -156,9 +157,23 @@ export class ImapService implements IMailFetcher {
       },
       secure: config.tls,
       logger: false,
+      // Connection timeout (default 90s is too long)
+      connectionTimeout: 30000,
+      // Socket timeout for read/write operations
+      socketTimeout: 60000,
     }
 
-    return new ImapFlow(options)
+    const client = new ImapFlow(options)
+
+    // Handle connection errors (network timeout, disconnect, etc.)
+    // Without this listener, errors will crash the Node.js process
+    client.on('error', (err: Error) => {
+      this.log.error({ err }, 'IMAP connection error')
+      // Mark client as invalid so getActiveClient will recreate it
+      this.client = null
+    })
+
+    return client
   }
 
   /**

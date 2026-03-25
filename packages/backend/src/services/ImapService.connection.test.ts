@@ -10,6 +10,7 @@ vi.mock('imapflow', () => {
     mailboxOpen: vi.fn(),
     search: vi.fn(),
     fetchAll: vi.fn(),
+    on: vi.fn(),
   }
 
   return {

@@ -25,4 +25,4 @@ export {
   useDeleteBoardColumnMutation,
 } from './useBoardColumns'
 
-export { useChat, type UIMessage, type ToolCallStatus, type ChatState } from './useChat'
+export { useChat, type UIMessage, type ToolCallStatus } from './useChat'

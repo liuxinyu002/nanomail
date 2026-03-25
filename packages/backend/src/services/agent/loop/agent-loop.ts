@@ -39,15 +39,6 @@ import { ModelRegistry, modelRegistry, MIN_OUTPUT_RESERVE_TOKENS } from '../../l
 export type { ToolDeps } from './types'
 
 /**
- * Dynamic tool sets for each agent role
- * Maps agent roles to their available tools
- */
-const TOOL_SETS: Record<AgentRole, string[]> = {
-  'todo-agent': ['createTodo', 'updateTodo', 'deleteTodo'],
-  'email-analyzer': ['search_local_emails', 'summarize_email']
-}
-
-/**
  * ReAct Agent Loop
  * Reference: nanobot/agent/loop.py - AgentLoop class
  *

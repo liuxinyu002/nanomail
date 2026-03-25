@@ -20,12 +20,6 @@ export interface UIMessage {
   timestamp: string
 }
 
-export interface ChatState {
-  messages: UIMessage[]
-  isStreaming: boolean
-  error: string | null
-}
-
 const SESSION_STORAGE_KEY = 'nanomail_chat_messages'
 // Todo tool names matching backend naming convention (camelCase)
 const TODO_TOOL_STORAGE_WHITELIST = new Set(['createTodo', 'updateTodo', 'deleteTodo'])

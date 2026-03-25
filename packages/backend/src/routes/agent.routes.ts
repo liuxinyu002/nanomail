@@ -214,10 +214,6 @@ export function createAgentRoutes(deps: AgentRoutesDeps): Router {
       }
     }
 
-    // Single-user scenario: default to inbox (column_id = 1)
-    // Multi-user scenario would need to get default column from user settings
-    const defaultColumnId = 1
-
     // Create agent loop with signal for abort support
     const agentLoop = new AgentLoop({
       provider: deps.llmProvider,

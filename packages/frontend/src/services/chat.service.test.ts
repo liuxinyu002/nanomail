@@ -174,7 +174,7 @@ describe('ChatService', () => {
       const sseData = sseEvent('tool_call_start', {
         type: 'tool_call_start',
         toolCallId: 'call-123',
-        toolName: 'create_todo',
+        toolName: 'createTodo',
         input: { description: 'Test todo' },
       })
       mockFetch.mockResolvedValueOnce({
@@ -191,7 +191,7 @@ describe('ChatService', () => {
       expect(events[0]).toEqual({
         type: 'tool_call_start',
         toolCallId: 'call-123',
-        toolName: 'create_todo',
+        toolName: 'createTodo',
         input: { description: 'Test todo' },
       })
     })

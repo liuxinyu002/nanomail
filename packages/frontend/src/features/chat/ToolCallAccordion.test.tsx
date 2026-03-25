@@ -29,7 +29,7 @@ describe('ToolCallAccordion', () => {
   it('renders a single tool call inline without accordion', () => {
     render(
       <ToolCallAccordion
-        toolCalls={[createToolCall({ toolName: 'create_todo', status: 'success' })]}
+        toolCalls={[createToolCall({ toolName: 'createTodo', status: 'success' })]}
       />
     )
 
@@ -41,10 +41,10 @@ describe('ToolCallAccordion', () => {
     render(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo' }),
-          createToolCall({ toolName: 'update_todo' }),
-          createToolCall({ toolName: 'update_todo' }),
-          createToolCall({ toolName: 'delete_todo' }),
+          createToolCall({ toolName: 'createTodo' }),
+          createToolCall({ toolName: 'updateTodo' }),
+          createToolCall({ toolName: 'updateTodo' }),
+          createToolCall({ toolName: 'deleteTodo' }),
         ]}
       />
     )
@@ -69,7 +69,7 @@ describe('ToolCallAccordion', () => {
     render(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo' }),
+          createToolCall({ toolName: 'createTodo' }),
           createToolCall({ toolName: 'search_mail' }),
         ]}
       />
@@ -103,8 +103,8 @@ describe('ToolCallAccordion', () => {
     render(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo', status: 'pending' }),
-          createToolCall({ toolName: 'update_todo', status: 'success' }),
+          createToolCall({ toolName: 'createTodo', status: 'pending' }),
+          createToolCall({ toolName: 'updateTodo', status: 'success' }),
         ]}
       />
     )
@@ -116,8 +116,8 @@ describe('ToolCallAccordion', () => {
     const { rerender } = render(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo', status: 'pending' }),
-          createToolCall({ toolName: 'update_todo', status: 'pending' }),
+          createToolCall({ toolName: 'createTodo', status: 'pending' }),
+          createToolCall({ toolName: 'updateTodo', status: 'pending' }),
         ]}
       />
     )
@@ -127,8 +127,8 @@ describe('ToolCallAccordion', () => {
     rerender(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo', status: 'success' }),
-          createToolCall({ toolName: 'update_todo', status: 'success' }),
+          createToolCall({ toolName: 'createTodo', status: 'success' }),
+          createToolCall({ toolName: 'updateTodo', status: 'success' }),
         ]}
       />
     )
@@ -142,8 +142,8 @@ describe('ToolCallAccordion', () => {
     rerender(
       <ToolCallAccordion
         toolCalls={[
-          createToolCall({ toolName: 'create_todo', status: 'success' }),
-          createToolCall({ toolName: 'update_todo', status: 'success' }),
+          createToolCall({ toolName: 'createTodo', status: 'success' }),
+          createToolCall({ toolName: 'updateTodo', status: 'success' }),
         ]}
       />
     )

@@ -14,19 +14,19 @@ function createToolCall(overrides: Partial<ToolCallStatus> = {}): ToolCallStatus
 
 describe('ToolStatusBadge', () => {
   it('maps todo tool names to Chinese labels', () => {
-    render(<ToolStatusBadge {...createToolCall({ toolName: 'create_todo', status: 'success' })} />)
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'createTodo', status: 'success' })} />)
 
     expect(screen.getByText('创建待办')).toBeInTheDocument()
   })
 
   it('shows pending todo label with ellipsis', () => {
-    render(<ToolStatusBadge {...createToolCall({ toolName: 'update_todo', status: 'pending' })} />)
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'updateTodo', status: 'pending' })} />)
 
     expect(screen.getByText('修改待办中...')).toBeInTheDocument()
   })
 
   it('uses macaron color chips for todo tools', () => {
-    render(<ToolStatusBadge {...createToolCall({ toolName: 'delete_todo', status: 'success' })} />)
+    render(<ToolStatusBadge {...createToolCall({ toolName: 'deleteTodo', status: 'success' })} />)
 
     const badge = screen.getByText('删除待办').closest('div')
     expect(badge).toHaveStyle({ backgroundColor: '#FFB5BA' })
@@ -46,7 +46,7 @@ describe('ToolStatusBadge', () => {
     render(
       <ToolStatusBadge
         {...createToolCall({
-          toolName: 'delete_todo',
+          toolName: 'deleteTodo',
           status: 'success',
           output: { message: '已删除 1 条待办' },
         })}
@@ -61,7 +61,7 @@ describe('ToolStatusBadge', () => {
     render(
       <ToolStatusBadge
         {...createToolCall({
-          toolName: 'delete_todo',
+          toolName: 'deleteTodo',
           status: 'success',
           output: { result: '删除完成' },
         })}
@@ -75,7 +75,7 @@ describe('ToolStatusBadge', () => {
     render(
       <ToolStatusBadge
         {...createToolCall({
-          toolName: 'delete_todo',
+          toolName: 'deleteTodo',
           status: 'error',
           message: '删除失败',
         })}
@@ -89,11 +89,11 @@ describe('ToolStatusBadge', () => {
     expect(screen.getByText('删除失败')).toBeInTheDocument()
   })
 
-  it('does not render fallback text when create_todo already returns structured todo payload', () => {
+  it('does not render fallback text when createTodo already returns structured todo payload', () => {
     render(
       <ToolStatusBadge
         {...createToolCall({
-          toolName: 'create_todo',
+          toolName: 'createTodo',
           status: 'success',
           output: {
             message: '已创建待办',

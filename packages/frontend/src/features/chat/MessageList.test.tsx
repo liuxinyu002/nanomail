@@ -198,7 +198,7 @@ describe('MessageList', () => {
           toolCalls: [
             {
               id: 'tc-1',
-              toolName: 'create_todo',
+              toolName: 'createTodo',
               status: 'success',
               message: 'Todo created',
             },

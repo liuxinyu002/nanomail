@@ -27,7 +27,8 @@ export interface ChatState {
 }
 
 const SESSION_STORAGE_KEY = 'nanomail_chat_messages'
-const TODO_TOOL_STORAGE_WHITELIST = new Set(['create_todo', 'update_todo', 'delete_todo'])
+// Todo tool names matching backend naming convention (camelCase)
+const TODO_TOOL_STORAGE_WHITELIST = new Set(['createTodo', 'updateTodo', 'deleteTodo'])
 
 function createUIMessage(
   role: 'user' | 'assistant',

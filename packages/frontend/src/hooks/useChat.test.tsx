@@ -232,7 +232,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: { description: 'Test' },
           },
         },
@@ -250,7 +250,7 @@ describe('useChat', () => {
       expect(assistantMessage.toolCalls).toHaveLength(1)
       expect(assistantMessage.toolCalls?.[0]).toEqual({
         id: 'call-1',
-        toolName: 'create_todo',
+        toolName: 'createTodo',
         status: 'pending',
         input: { description: 'Test' },
       })
@@ -262,7 +262,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
           },
         },
@@ -270,7 +270,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: { success: true, id: 1 },
           },
@@ -302,7 +302,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: { description: 'Test' },
           },
         },
@@ -310,7 +310,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: {
               error: 'Database connection failed',
@@ -344,7 +344,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
           },
         },
@@ -352,7 +352,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: { status: 'failed' },
           },
@@ -378,7 +378,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
           },
         },
@@ -386,7 +386,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: {
               error: { message: 'Connection timeout', code: 'ETIMEDOUT' },
@@ -415,7 +415,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
           },
         },
@@ -423,7 +423,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: {
               success: false,
@@ -453,7 +453,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
           },
         },
@@ -461,10 +461,10 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: {
-              result: 'Error: Tool "create_todo" validation failed',
+              result: 'Error: Tool "createTodo" validation failed',
             },
           },
         },
@@ -480,19 +480,19 @@ describe('useChat', () => {
 
       const assistantMessage = result.current.messages[1]
       expect(assistantMessage.toolCalls?.[0].status).toBe('error')
-      expect(assistantMessage.toolCalls?.[0].message).toBe('Error: Tool "create_todo" validation failed')
+      expect(assistantMessage.toolCalls?.[0].message).toBe('Error: Tool "createTodo" validation failed')
     })
 
     it('should preserve mixed success and error tool call statuses', async () => {
       const events: ConversationEvent[] = [
-        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {} } },
-        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {}, toolOutput: { success: true } } },
-        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {} } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'createTodo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'createTodo', toolInput: {}, toolOutput: { success: true } } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'updateTodo', toolInput: {} } },
         {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-2',
-            toolName: 'update_todo',
+            toolName: 'updateTodo',
             toolInput: {},
             toolOutput: { error: 'Not found', status: 'failed' },
           },
@@ -516,10 +516,10 @@ describe('useChat', () => {
 
     it('should handle multiple tool calls', async () => {
       const events: ConversationEvent[] = [
-        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {} } },
-        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'create_todo', toolInput: {}, toolOutput: { done: true } } },
-        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {} } },
-        { type: 'tool_call_end', data: { toolCallId: 'call-2', toolName: 'update_todo', toolInput: {}, toolOutput: { done: true } } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-1', toolName: 'createTodo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-1', toolName: 'createTodo', toolInput: {}, toolOutput: { done: true } } },
+        { type: 'tool_call_start', data: { toolCallId: 'call-2', toolName: 'updateTodo', toolInput: {} } },
+        { type: 'tool_call_end', data: { toolCallId: 'call-2', toolName: 'updateTodo', toolInput: {}, toolOutput: { done: true } } },
         { type: 'session_end', data: null },
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
@@ -532,8 +532,8 @@ describe('useChat', () => {
 
       const assistantMessage = result.current.messages[1]
       expect(assistantMessage.toolCalls).toHaveLength(2)
-      expect(assistantMessage.toolCalls?.[0].toolName).toBe('create_todo')
-      expect(assistantMessage.toolCalls?.[1].toolName).toBe('update_todo')
+      expect(assistantMessage.toolCalls?.[0].toolName).toBe('createTodo')
+      expect(assistantMessage.toolCalls?.[1].toolName).toBe('updateTodo')
     })
 
     it('should handle error event', async () => {
@@ -684,7 +684,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: { description: 'Create one' },
           },
         },
@@ -692,7 +692,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: { todo: { id: 1, description: 'Create one' } },
           },
@@ -701,7 +701,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-2',
-            toolName: 'update_todo',
+            toolName: 'updateTodo',
             toolInput: { id: 1, status: 'completed' },
           },
         },
@@ -709,7 +709,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-2',
-            toolName: 'update_todo',
+            toolName: 'updateTodo',
             toolInput: {},
             toolOutput: { todo: { id: 1, description: 'Create one', status: 'completed' } },
           },
@@ -718,7 +718,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-3',
-            toolName: 'delete_todo',
+            toolName: 'deleteTodo',
             toolInput: { id: 1 },
           },
         },
@@ -726,7 +726,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-3',
-            toolName: 'delete_todo',
+            toolName: 'deleteTodo',
             toolInput: {},
             toolOutput: { success: true, message: 'Deleted' },
           },
@@ -751,21 +751,21 @@ describe('useChat', () => {
       expect(assistantMessage.toolCalls).toHaveLength(3)
       expect(assistantMessage.toolCalls[0]).toMatchObject({
         id: 'call-1',
-        toolName: 'create_todo',
+        toolName: 'createTodo',
         status: 'success',
         input: { description: 'Create one' },
         output: { todo: { id: 1, description: 'Create one' } },
       })
       expect(assistantMessage.toolCalls[1]).toMatchObject({
         id: 'call-2',
-        toolName: 'update_todo',
+        toolName: 'updateTodo',
         status: 'success',
         input: { id: 1, status: 'completed' },
         output: { todo: { id: 1, description: 'Create one', status: 'completed' } },
       })
       expect(assistantMessage.toolCalls[2]).toMatchObject({
         id: 'call-3',
-        toolName: 'delete_todo',
+        toolName: 'deleteTodo',
         status: 'success',
         input: { id: 1 },
         output: { success: true, message: 'Deleted' },
@@ -833,7 +833,7 @@ describe('useChat', () => {
           toolCalls: [
             {
               id: 'call-1',
-              toolName: 'create_todo',
+              toolName: 'createTodo',
               status: 'success',
               input: { description: 'Create one' },
               output: { todo: { id: 1, description: 'Create one' } },
@@ -863,7 +863,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: { description: 'Test' },
           },
         },
@@ -871,7 +871,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: { error: 'Failed', status: 'failed' },
           },
@@ -1005,7 +1005,7 @@ describe('useChat', () => {
           type: 'tool_call_start',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: { description: 'Tool only todo' },
           },
         },
@@ -1013,7 +1013,7 @@ describe('useChat', () => {
           type: 'tool_call_end',
           data: {
             toolCallId: 'call-1',
-            toolName: 'create_todo',
+            toolName: 'createTodo',
             toolInput: {},
             toolOutput: { todo: { id: 1, description: 'Tool only todo' } },
           },
@@ -1046,7 +1046,7 @@ describe('useChat', () => {
             expect.objectContaining({
               id: 'call-1',
               function: {
-                name: 'create_todo',
+                name: 'createTodo',
                 arguments: JSON.stringify({ description: 'Tool only todo' }),
               },
             }),

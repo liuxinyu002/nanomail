@@ -3,21 +3,32 @@ import { Loader2, Check, X } from 'lucide-react'
 import type { ToolCallStatus } from '@/hooks/useChat'
 import { cn } from '@/lib/utils'
 
+// Tool name labels matching backend naming convention (camelCase)
 const TODO_TOOL_LABELS: Record<string, string> = {
-  create_todo: '创建待办',
-  update_todo: '修改待办',
-  delete_todo: '删除待办',
+  createTodo: '创建待办',
+  updateTodo: '修改待办',
+  deleteTodo: '删除待办',
 }
 
 const TODO_TOOL_CHIP_COLORS: Record<string, string> = {
-  create_todo: '#B8E6C1',
-  update_todo: '#FFD8A8',
-  delete_todo: '#FFB5BA',
+  createTodo: '#B8E6C1',
+  updateTodo: '#FFD8A8',
+  deleteTodo: '#FFB5BA',
+}
+
+// Check if tool name is a delete todo operation
+function isDeleteTodoTool(toolName: string): boolean {
+  return toolName === 'deleteTodo'
+}
+
+// Check if tool name is a create or update todo operation
+function isCreateOrUpdateTodoTool(toolName: string): boolean {
+  return toolName === 'createTodo' || toolName === 'updateTodo'
 }
 
 function hasStructuredTodoPayload(toolCall: ToolCallStatus): boolean {
-  if (toolCall.toolName === 'delete_todo') return false
-  if (toolCall.toolName !== 'create_todo' && toolCall.toolName !== 'update_todo') return false
+  if (isDeleteTodoTool(toolCall.toolName)) return false
+  if (!isCreateOrUpdateTodoTool(toolCall.toolName)) return false
   if (!toolCall.output || typeof toolCall.output !== 'object') return false
 
   const output = toolCall.output

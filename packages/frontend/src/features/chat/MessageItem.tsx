@@ -79,6 +79,11 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
   )
 }
 
+// Check if tool name is a create or update todo operation
+function isCreateOrUpdateTodoTool(toolName: string): boolean {
+  return toolName === 'createTodo' || toolName === 'updateTodo'
+}
+
 function extractTodosFromToolCalls(toolCalls?: ToolCallStatus[]): Todo[] {
   if (!toolCalls) return []
 
@@ -86,7 +91,7 @@ function extractTodosFromToolCalls(toolCalls?: ToolCallStatus[]): Todo[] {
 
   for (const toolCall of toolCalls) {
     if (toolCall.status !== 'success') continue
-    if (toolCall.toolName !== 'create_todo' && toolCall.toolName !== 'update_todo') continue
+    if (!isCreateOrUpdateTodoTool(toolCall.toolName)) continue
     if (!toolCall.output) continue
 
     const candidates: unknown[] = []

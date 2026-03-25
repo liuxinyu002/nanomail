@@ -87,7 +87,7 @@ describe('MessageItem', () => {
       <MessageItem
         message={createUIMessage({
           content: 'Done!',
-          toolCalls: [createToolCall({ toolName: 'create_todo', output: { todo } })],
+          toolCalls: [createToolCall({ toolName: 'createTodo', output: { todo } })],
         })}
       />
     )
@@ -108,8 +108,8 @@ describe('MessageItem', () => {
       <MessageItem
         message={createUIMessage({
           toolCalls: [
-            createToolCall({ toolName: 'create_todo', status: 'success', output: { todo: todo1 } }),
-            createToolCall({ toolName: 'update_todo', status: 'success', output: { todos: [todo2] } }),
+            createToolCall({ toolName: 'createTodo', status: 'success', output: { todo: todo1 } }),
+            createToolCall({ toolName: 'updateTodo', status: 'success', output: { todos: [todo2] } }),
           ],
         })}
       />
@@ -129,8 +129,8 @@ describe('MessageItem', () => {
       <MessageItem
         message={createUIMessage({
           toolCalls: [
-            createToolCall({ toolName: 'create_todo', status: 'success', output: { todo: original } }),
-            createToolCall({ toolName: 'update_todo', status: 'success', output: { todo: updated } }),
+            createToolCall({ toolName: 'createTodo', status: 'success', output: { todo: original } }),
+            createToolCall({ toolName: 'updateTodo', status: 'success', output: { todo: updated } }),
           ],
         })}
       />
@@ -141,14 +141,14 @@ describe('MessageItem', () => {
     expect(screen.queryByText('Old description')).not.toBeInTheDocument()
   })
 
-  it('does not create todo cards from delete_todo output', () => {
+  it('does not create todo cards from deleteTodo output', () => {
     const todo = createTodo({ id: 1, description: 'Deleted todo' })
 
     render(
       <MessageItem
         message={createUIMessage({
           toolCalls: [
-            createToolCall({ toolName: 'delete_todo', status: 'success', output: { todo, todos: [todo] } }),
+            createToolCall({ toolName: 'deleteTodo', status: 'success', output: { todo, todos: [todo] } }),
           ],
         })}
       />
@@ -163,7 +163,7 @@ describe('MessageItem', () => {
     render(
       <MessageItem
         message={createUIMessage({
-          toolCalls: [createToolCall({ toolName: 'create_todo', status: 'success', output: { todo } })],
+          toolCalls: [createToolCall({ toolName: 'createTodo', status: 'success', output: { todo } })],
         })}
       />
     )
@@ -181,8 +181,8 @@ describe('MessageItem', () => {
         message={createUIMessage({
           content: 'Some content',
           toolCalls: [
-            createToolCall({ toolName: 'create_todo', status: 'success', output: { todos: [todo1, todo2] } }),
-            createToolCall({ toolName: 'update_todo', status: 'success', output: { todo: todo2Updated } }),
+            createToolCall({ toolName: 'createTodo', status: 'success', output: { todos: [todo1, todo2] } }),
+            createToolCall({ toolName: 'updateTodo', status: 'success', output: { todo: todo2Updated } }),
           ],
         })}
       />
@@ -198,7 +198,7 @@ describe('MessageItem', () => {
       <MessageItem
         message={createUIMessage({
           toolCalls: [
-            createToolCall({ toolName: 'create_todo', status: 'error', output: { todo } }),
+            createToolCall({ toolName: 'createTodo', status: 'error', output: { todo } }),
           ],
         })}
       />
@@ -215,7 +215,7 @@ describe('MessageItem', () => {
         message={createUIMessage({
           toolCalls: [
             createToolCall({
-              toolName: 'create_todo',
+              toolName: 'createTodo',
               status: 'success',
               output: {
                 todo: { id: 'bad-id', description: 'Invalid todo' },
@@ -223,7 +223,7 @@ describe('MessageItem', () => {
               },
             }),
             createToolCall({
-              toolName: 'update_todo',
+              toolName: 'updateTodo',
               status: 'success',
               output: { todo: validTodo },
             }),

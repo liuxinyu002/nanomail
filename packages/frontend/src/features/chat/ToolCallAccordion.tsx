@@ -8,23 +8,19 @@ interface ToolCallAccordionProps {
   toolCalls: ToolCallStatus[]
 }
 
+// Normalize tool names to category
+function normalizeToolName(toolName: string): 'create' | 'update' | 'delete' | 'other' {
+  if (toolName === 'createTodo') return 'create'
+  if (toolName === 'updateTodo') return 'update'
+  if (toolName === 'deleteTodo') return 'delete'
+  return 'other'
+}
+
 function buildSummary(toolCalls: ToolCallStatus[]): string {
   const counts = toolCalls.reduce(
     (acc, toolCall) => {
-      switch (toolCall.toolName) {
-        case 'create_todo':
-          acc.create += 1
-          break
-        case 'update_todo':
-          acc.update += 1
-          break
-        case 'delete_todo':
-          acc.delete += 1
-          break
-        default:
-          acc.other += 1
-          break
-      }
+      const normalized = normalizeToolName(toolCall.toolName)
+      acc[normalized] += 1
       return acc
     },
     { create: 0, update: 0, delete: 0, other: 0 }

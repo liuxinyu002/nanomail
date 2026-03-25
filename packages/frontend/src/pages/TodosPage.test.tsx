@@ -67,6 +67,14 @@ vi.mock('@/hooks', () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  useArchivedTodos: () => ({
+    data: { todos: [], totalCount: 0 },
+    isLoading: false,
+    error: null,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+  }),
 }))
 
 // Mock panel components
@@ -117,6 +125,20 @@ vi.mock('@/features/todos/ResizablePanels', () => ({
     { id: 'planner', defaultSize: '35%', minSize: 320 },
     { id: 'board', defaultSize: '40%', minSize: 280 },
   ],
+}))
+
+// Mock DndContext
+vi.mock('@/contexts/DndContext', () => ({
+  DndProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dnd-provider">{children}</div>
+  ),
+}))
+
+// Mock ArchiveDialog
+vi.mock('@/features/todos/ArchiveDialog', () => ({
+  ArchiveDialog: ({ open }: { open: boolean }) => (
+    open ? <div data-testid="archive-dialog">Archive Dialog</div> : null
+  ),
 }))
 
 describe('TodosPage (Refactored)', () => {
@@ -352,13 +374,17 @@ describe('TodosPage (Refactored)', () => {
   })
 
   describe('Empty State', () => {
-    it('should show empty state when no todos', async () => {
+    it('should still show panels when no todos (allows archive access)', async () => {
       mockTodosData = { todos: [] }
 
       render(<TodosPage />)
 
+      // Panels should still be visible even when empty (allows archive access)
       await waitFor(() => {
-        expect(screen.getByText(/no action items/i)).toBeInTheDocument()
+        expect(screen.getByTestId('panels-container')).toBeInTheDocument()
+        expect(screen.getByTestId('inbox-panel')).toBeInTheDocument()
+        expect(screen.getByTestId('board-panel')).toBeInTheDocument()
+        expect(screen.getByTestId('view-toggle')).toBeInTheDocument()
       })
     })
   })

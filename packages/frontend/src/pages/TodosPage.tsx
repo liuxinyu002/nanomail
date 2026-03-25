@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { CheckSquare, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useTodos, useBoardColumns, useUpdateTodoMutation, useCreateBoardColumnMutation, useDeleteBoardColumnMutation, useUpdateBoardColumnMutation } from '@/hooks'
 import { toast } from 'sonner'
 import { DndProvider } from '@/contexts/DndContext'
@@ -285,8 +285,6 @@ export function TodosPage() {
     return children
   }, [showInbox, showPlanner, showBoard, todos, columns, handleViewArchive, highlightedTodoId, handleCreateColumn, handleDeleteColumn, handleUpdateColumn])
 
-  const isEmpty = todos.length === 0
-
   if (isLoading) {
     return (
       <div className="p-6">
@@ -303,28 +301,17 @@ export function TodosPage() {
   return (
     <div className="flex flex-col h-full p-6">
       <DndProvider onDragEnd={handleDragEnd}>
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <CheckSquare className="h-12 w-12 text-muted-foreground mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No Action Items</h2>
-            <p className="text-muted-foreground max-w-md">
-              Action items extracted from your emails will be displayed here.
-              Process some emails to see your to-dos.
-            </p>
-          </div>
-        ) : (
-          <div
-            data-testid="panels-container"
-            className="flex-1 min-h-0 overflow-hidden"
+        <div
+          data-testid="panels-container"
+          className="flex-1 min-h-0 overflow-hidden"
+        >
+          <ResizablePanels
+            panelConfigs={panelConfigs}
+            className="h-full"
           >
-            <ResizablePanels
-              panelConfigs={panelConfigs}
-              className="h-full"
-            >
-              {panelChildren}
-            </ResizablePanels>
-          </div>
-        )}
+            {panelChildren}
+          </ResizablePanels>
+        </div>
 
         <ViewToggle
           activeViews={activeViews}

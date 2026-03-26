@@ -360,9 +360,18 @@ export class AgentLoop {
               return
             }
 
-            // Accumulate content
+            // Accumulate content and yield incremental chunks
             if (chunk.content) {
-              accumulatedContent += chunk.content
+              accumulatedContent += chunk.content  // 保留累积，后续保存上下文需要
+
+              // 立即发送增量内容实现流式响应
+              yield {
+                type: 'result_chunk',
+                sessionId,
+                messageId,
+                timestamp: timestamp(),
+                data: { content: chunk.content }
+              }
             }
 
             // Capture final tool calls
@@ -401,18 +410,6 @@ export class AgentLoop {
             } as ErrorData
           }
           return
-        }
-
-        // Yield content to frontend BEFORE processing tool calls (if any)
-        // This ensures users see the LLM's thinking/acknowledgment even when tools are being called
-        if (accumulatedContent) {
-          yield {
-            type: 'result_chunk',
-            sessionId,
-            messageId,
-            timestamp: timestamp(),
-            data: { content: accumulatedContent }
-          }
         }
 
         // No tool calls means final answer - end session and exit

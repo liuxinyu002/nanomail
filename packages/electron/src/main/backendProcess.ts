@@ -1,8 +1,13 @@
 import { utilityProcess, UtilityProcess } from 'electron'
-import { app, dialog } from 'electron'
+import { app, dialog, safeStorage } from 'electron'
 import path from 'path'
 import http from 'http'
 import fs from 'fs'
+import crypto from 'crypto'
+import Store from 'electron-store'
+
+// Initialize electron-store
+const store = new Store()
 
 // 日志文件路径
 function getLogPath(): string {
@@ -20,6 +25,80 @@ function logToFile(message: string): void {
     // 忽略写入错误
   }
   console.log(message)
+}
+
+/**
+ * Get or generate MASTER_KEY for encryption service.
+ * Uses Electron's safeStorage API to securely store the key using OS credential manager.
+ * - Windows: DPAPI
+ * - macOS: Keychain
+ * - Linux: Secret Service (libsecret)
+ */
+function getOrCreateMasterKey(): string {
+  try {
+    const storedEncryptedKey = store.get('ENCRYPTED_MASTER_KEY') as string | undefined
+
+    if (storedEncryptedKey) {
+      // Key exists, decrypt it
+      logToFile('[Security] Found existing encrypted MASTER_KEY')
+      const encryptedBuffer = Buffer.from(storedEncryptedKey, 'hex')
+
+      if (safeStorage.isEncryptionAvailable()) {
+        const decryptedKey = safeStorage.decryptString(encryptedBuffer)
+        logToFile('[Security] MASTER_KEY decrypted successfully')
+        return decryptedKey
+      } else {
+        // Fallback: system doesn't support encryption (e.g., headless Linux)
+        // Try to get the plaintext fallback key
+        const fallbackKey = store.get('MASTER_KEY_FALLBACK') as string | undefined
+        if (fallbackKey) {
+          logToFile('[Security] Using MASTER_KEY_FALLBACK (safeStorage unavailable)')
+          return fallbackKey
+        }
+        // No fallback available, need to regenerate
+        logToFile('[Security] WARNING: No fallback key found, regenerating')
+      }
+    }
+
+    // No existing key or need to regenerate: create new 32-byte key (64 hex chars for AES-256)
+    const newKey = crypto.randomBytes(32).toString('hex')
+    logToFile('[Security] Generated new MASTER_KEY')
+
+    if (safeStorage.isEncryptionAvailable()) {
+      const encryptedBuffer = safeStorage.encryptString(newKey)
+      store.set('ENCRYPTED_MASTER_KEY', encryptedBuffer.toString('hex'))
+      logToFile('[Security] MASTER_KEY encrypted and stored using safeStorage')
+    } else {
+      // Fallback: store as plaintext (only on systems without encryption support)
+      logToFile('[Security] WARNING: safeStorage not available, storing MASTER_KEY as plaintext fallback')
+      store.set('MASTER_KEY_FALLBACK', newKey)
+    }
+
+    return newKey
+  } catch (error) {
+    logToFile(`[Security] ERROR: Failed to initialize MASTER_KEY: ${error}`)
+
+    // In case of corruption or other errors, generate a new key
+    // This will invalidate any previously encrypted data
+    const newKey = crypto.randomBytes(32).toString('hex')
+    logToFile('[Security] Generated new MASTER_KEY after error')
+
+    // Try to store it
+    try {
+      if (safeStorage.isEncryptionAvailable()) {
+        const encryptedBuffer = safeStorage.encryptString(newKey)
+        store.set('ENCRYPTED_MASTER_KEY', encryptedBuffer.toString('hex'))
+        // Clear any old fallback
+        store.delete('MASTER_KEY_FALLBACK')
+      } else {
+        store.set('MASTER_KEY_FALLBACK', newKey)
+      }
+    } catch (storeError) {
+      logToFile(`[Security] WARNING: Failed to store new MASTER_KEY: ${storeError}`)
+    }
+
+    return newKey
+  }
 }
 
 export class BackendProcess {
@@ -64,6 +143,9 @@ export class BackendProcess {
       return this.start()
     }
 
+    // Get or create MASTER_KEY before starting backend
+    const masterKey = getOrCreateMasterKey()
+
     // In production:
     // - __dirname = app.asar/dist/main (where main process JS lives)
     // - Backend is at app.asar/dist/backend/index.cjs
@@ -97,7 +179,8 @@ export class BackendProcess {
         ...process.env,
         PORT: String(this.port),
         NODE_ENV: 'production',
-        USER_DATA_PATH: userDataPath
+        USER_DATA_PATH: userDataPath,
+        MASTER_KEY: masterKey  // Pass the encryption key to backend
       },
       // 继承 stdout/stderr 以便在控制台看到日志
       stdio: 'pipe'

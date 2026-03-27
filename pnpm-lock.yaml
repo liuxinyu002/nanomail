@@ -147,6 +147,9 @@ importers:
       electron-store:
         specifier: ^8.1.0
         version: 8.2.0
+      file-uri-to-path:
+        specifier: ^1.0.0
+        version: 1.0.0
       prebuild-install:
         specifier: ^7.1.1
         version: 7.1.3

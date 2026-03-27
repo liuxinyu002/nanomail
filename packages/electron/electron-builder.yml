@@ -36,6 +36,9 @@ extraResources:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
+  # 输出文件名格式：NanoMail-{version}-{arch}.{ext}
+  # arch: x64, arm64, universal
+  artifactName: ${productName}-${version}-${arch}.${ext}
   target:
     - dmg
     - zip
@@ -43,6 +46,7 @@ mac:
   gatekeeperAssess: false
 
 dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
   contents:
     - x: 130
       y: 220
@@ -54,6 +58,9 @@ dmg:
 # Windows 配置
 win:
   icon: build/icon.ico
+  # 输出文件名格式：NanoMail-{version}-{arch}.{ext}
+  # arch: x64, arm64, ia32
+  artifactName: ${productName}-${version}-${arch}.${ext}
   target:
     - target: nsis
       arch:
@@ -69,6 +76,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  # 安装程序文件名格式
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  # 使用自定义图标
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 
 # 通用配置
 asar: true

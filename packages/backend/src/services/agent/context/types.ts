@@ -107,11 +107,14 @@ export class ContextBuilder {
   /**
    * Constructor with flexible path resolution
    * Priority: constructor param > PROMPTS_DIR env var > default path
+   *
+   * Note: In production (Electron), __dirname points to dist/backend/
+   * and prompts are packaged alongside the bundle at dist/backend/prompts/
    */
   constructor(promptsDir?: string) {
     this.promptsDir = promptsDir
       ?? process.env.PROMPTS_DIR
-      ?? path.resolve(__dirname, '../prompts')
+      ?? path.join(__dirname, 'prompts')
 
     // Log initialization for debugging
     this.log.info({

@@ -70,6 +70,9 @@ jobs:
         run: |
           mkdir -p packages/electron/dist/backend
           cp -r packages/backend/dist/* packages/electron/dist/backend/
+          # Copy prompts directory (required by ContextBuilder for agent prompts)
+          mkdir -p packages/electron/dist/backend/prompts
+          cp -r packages/backend/src/services/agent/prompts/* packages/electron/dist/backend/prompts/
 
       - name: Build Electron app (Windows x64)
         run: |

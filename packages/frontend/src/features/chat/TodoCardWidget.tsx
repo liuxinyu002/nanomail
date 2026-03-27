@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { CheckSquare, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { todoService } from '@/services/todo.service'
+import { useUpdateTodoMutation, useDeleteTodoMutation } from '@/hooks/useTodoMutations'
 import type { Todo, TodoStatus } from '@nanomail/shared'
 
 interface TodoCardWidgetProps {
   todos: Todo[]
-  onUpdate?: () => void
   onEdit?: (todoId: string) => void
   onDelete?: (todoId: string) => void
   readonly?: boolean
 }
 
-export function TodoCardWidget({ todos, onUpdate, onEdit, onDelete, readonly = false }: TodoCardWidgetProps) {
+export function TodoCardWidget({ todos, onEdit, onDelete, readonly = false }: TodoCardWidgetProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const updateMutation = useUpdateTodoMutation()
+  const deleteMutation = useDeleteTodoMutation()
 
   const handleToggle = async (todoId: string, currentStatus: TodoStatus) => {
     if (readonly) return
@@ -21,12 +22,22 @@ export function TodoCardWidget({ todos, onUpdate, onEdit, onDelete, readonly = f
     const newStatus: TodoStatus = currentStatus === 'completed' ? 'pending' : 'completed'
     setUpdatingId(todoId)
     try {
-      await todoService.update(todoId, { status: newStatus })
-      onUpdate?.()
+      await updateMutation.mutateAsync({
+        id: Number(todoId),
+        data: { status: newStatus },
+      })
     } catch (error) {
       console.error('Failed to update todo:', error)
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  const handleDelete = async (todoId: string) => {
+    try {
+      await deleteMutation.mutateAsync(Number(todoId))
+    } catch (error) {
+      console.error('Failed to delete todo:', error)
     }
   }
 
@@ -84,7 +95,7 @@ export function TodoCardWidget({ todos, onUpdate, onEdit, onDelete, readonly = f
                 {onDelete && (
                   <button
                     type="button"
-                    onClick={() => onDelete(String(todo.id))}
+                    onClick={() => handleDelete(String(todo.id))}
                     className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
                     aria-label="Delete todo"
                   >

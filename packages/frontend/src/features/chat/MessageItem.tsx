@@ -12,11 +12,10 @@ import { LoadingIndicator } from './LoadingIndicator'
 interface MessageItemProps {
   message: UIMessage
   isStreaming?: boolean
-  onTodoUpdate?: () => void
   isCompact?: boolean
 }
 
-export function MessageItem({ message, isStreaming, onTodoUpdate, isCompact }: MessageItemProps) {
+export function MessageItem({ message, isStreaming, isCompact }: MessageItemProps) {
   const isUser = message.role === 'user'
 
   const todosFromToolCalls = useMemo(
@@ -70,7 +69,6 @@ export function MessageItem({ message, isStreaming, onTodoUpdate, isCompact }: M
           <>
             <MarkdownRenderer
               content={message.content}
-              onTodoToggle={onTodoUpdate}
               todoIds={todoIds}
               isCompact={isCompact}
             />
@@ -80,7 +78,6 @@ export function MessageItem({ message, isStreaming, onTodoUpdate, isCompact }: M
             {hasStructuredTodoWidget && (
               <TodoCardWidget
                 todos={todosFromToolCalls}
-                onUpdate={onTodoUpdate}
                 readonly
               />
             )}

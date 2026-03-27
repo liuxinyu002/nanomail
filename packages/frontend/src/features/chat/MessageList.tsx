@@ -8,10 +8,9 @@ const SCROLL_THRESHOLD = 100  // px from bottom to consider "near bottom"
 interface MessageListProps {
   messages: UIMessage[]
   isStreaming: boolean
-  onTodoUpdate?: () => void
 }
 
-export function MessageList({ messages, isStreaming, onTodoUpdate }: MessageListProps) {
+export function MessageList({ messages, isStreaming }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -85,7 +84,6 @@ export function MessageList({ messages, isStreaming, onTodoUpdate }: MessageList
                   key={msg.id}
                   message={msg}
                   isStreaming={isStreaming && msg.role === 'assistant' && !msg.content}
-                  onTodoUpdate={onTodoUpdate}
                 />
               ))}
           </div>

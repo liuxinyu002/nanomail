@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useChat, type UIMessage } from './useChat'
 import type { ConversationEvent } from '@/services/chat.service'
 
@@ -12,6 +13,22 @@ vi.mock('@/services/chat.service', () => ({
 
 // Import after mock
 import { ChatService } from '@/services/chat.service'
+
+// Create wrapper with QueryClient for tests
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  })
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+  }
+}
 
 // Mock sessionStorage
 const sessionStorageMock = (() => {
@@ -30,8 +47,29 @@ const sessionStorageMock = (() => {
   }
 })()
 
+// Mock localStorage (used by useChat for message persistence)
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: vi.fn(() => {
+      store = {}
+    }),
+  }
+})()
+
 Object.defineProperty(window, 'sessionStorage', {
   value: sessionStorageMock,
+})
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
 })
 
 // Mock requestAnimationFrame - execute immediately (synchronous)
@@ -71,6 +109,7 @@ describe('useChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sessionStorageMock.clear()
+    localStorageMock.clear()
   })
 
   afterEach(() => {
@@ -79,7 +118,7 @@ describe('useChat', () => {
 
   describe('initial state', () => {
     it('should initialize with empty messages', () => {
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual([])
       expect(result.current.isStreaming).toBe(false)
@@ -101,18 +140,18 @@ describe('useChat', () => {
           timestamp: '2024-01-01T00:00:01.000Z',
         },
       ]
-      sessionStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
+      localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual(cachedMessages)
     })
 
     it('should handle invalid sessionStorage data gracefully', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      sessionStorageMock.getItem.mockReturnValueOnce('invalid-json')
+      localStorageMock.getItem.mockReturnValueOnce('invalid-json')
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual([])
       expect(consoleWarnSpy).toHaveBeenCalled()
@@ -120,9 +159,9 @@ describe('useChat', () => {
     })
 
     it('should handle empty sessionStorage gracefully', () => {
-      sessionStorageMock.getItem.mockReturnValueOnce(null)
+      localStorageMock.getItem.mockReturnValueOnce(null)
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual([])
     })
@@ -132,7 +171,7 @@ describe('useChat', () => {
     it('should add user message to state', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -146,7 +185,7 @@ describe('useChat', () => {
     it('should create assistant message placeholder', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -169,7 +208,7 @@ describe('useChat', () => {
         yield { type: 'session_end', data: null }
       })
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       act(() => {
         result.current.sendMessage('Hello')
@@ -186,7 +225,7 @@ describe('useChat', () => {
     it('should call ChatService.streamChat with correct parameters', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Test message')
@@ -216,7 +255,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hi')
@@ -240,7 +279,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')
@@ -279,7 +318,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')
@@ -294,6 +333,145 @@ describe('useChat', () => {
       const toolMessage = result.current.messages.find(m => m.role === 'tool')
       expect(toolMessage).toBeDefined()
       expect(toolMessage?.toolCallId).toBe('call-1')
+    })
+
+    it('should invalidate todo queries when todo tools complete successfully', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'createTodo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'createTodo',
+            toolInput: {},
+            toolOutput: { success: true, id: 1 },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      // Create a wrapper with a queryClient that we can spy on
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        )
+      }
+
+      const { result } = renderHook(() => useChat(), { wrapper })
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      // Should invalidate todo queries after successful createTodo
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
+    })
+
+    it('should not invalidate todo queries for non-todo tools', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'search_mail',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'search_mail',
+            toolInput: {},
+            toolOutput: { success: true },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        )
+      }
+
+      const { result } = renderHook(() => useChat(), { wrapper })
+
+      await act(async () => {
+        await result.current.sendMessage('Search mail')
+      })
+
+      // Should NOT invalidate todo queries for non-todo tools
+      expect(invalidateSpy).not.toHaveBeenCalled()
+    })
+
+    it('should not invalidate todo queries when todo tool fails', async () => {
+      const events: ConversationEvent[] = [
+        {
+          type: 'tool_call_start',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'createTodo',
+            toolInput: {},
+          },
+        },
+        {
+          type: 'tool_call_end',
+          data: {
+            toolCallId: 'call-1',
+            toolName: 'createTodo',
+            toolInput: {},
+            toolOutput: { error: 'Failed', status: 'failed' },
+          },
+        },
+        { type: 'session_end', data: null },
+      ]
+      mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        )
+      }
+
+      const { result } = renderHook(() => useChat(), { wrapper })
+
+      await act(async () => {
+        await result.current.sendMessage('Create a todo')
+      })
+
+      // Should NOT invalidate todo queries when tool fails
+      expect(invalidateSpy).not.toHaveBeenCalled()
     })
 
     it('should mark tool calls as error when tool execution fails', async () => {
@@ -322,7 +500,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')
@@ -361,7 +539,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')
@@ -398,7 +576,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')
@@ -436,7 +614,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Update todo 1')
@@ -472,7 +650,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create todo')
@@ -501,7 +679,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Do stuff')
@@ -524,7 +702,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Do stuff')
@@ -543,7 +721,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -555,7 +733,7 @@ describe('useChat', () => {
     it('should handle fetch errors', async () => {
       mockStreamChat.mockReturnValueOnce(createErrorGenerator(new Error('Network error')))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -581,7 +759,7 @@ describe('useChat', () => {
         yield { type: 'session_end', data: null }
       })
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       act(() => {
         result.current.sendMessage('Hello')
@@ -613,7 +791,7 @@ describe('useChat', () => {
         throw error
       })
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -629,7 +807,7 @@ describe('useChat', () => {
     it('should clear messages and error', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -646,13 +824,13 @@ describe('useChat', () => {
     })
 
     it('should remove messages from sessionStorage', () => {
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       act(() => {
         result.current.clearSession()
       })
 
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('nanomail_chat_messages')
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('nanomail_chat_messages')
     })
   })
 
@@ -660,7 +838,7 @@ describe('useChat', () => {
     it('should save messages to sessionStorage on change', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -668,13 +846,13 @@ describe('useChat', () => {
 
       // Wait for sessionStorage.setItem to be called
       await waitFor(() => {
-        expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
+        expect(localStorageMock.setItem).toHaveBeenCalledWith(
           'nanomail_chat_messages',
           expect.any(String)
         )
       })
 
-      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       expect(savedData).toHaveLength(2)
     })
 
@@ -735,17 +913,17 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Manage todos')
       })
 
       await waitFor(() => {
-        expect(sessionStorageMock.setItem).toHaveBeenCalled()
+        expect(localStorageMock.setItem).toHaveBeenCalled()
       })
 
-      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
 
       expect(assistantMessage.toolCalls).toHaveLength(3)
@@ -795,17 +973,17 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Search mail')
       })
 
       await waitFor(() => {
-        expect(sessionStorageMock.setItem).toHaveBeenCalled()
+        expect(localStorageMock.setItem).toHaveBeenCalled()
       })
 
-      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
 
       expect(assistantMessage.toolCalls[0]).toMatchObject({
@@ -846,9 +1024,9 @@ describe('useChat', () => {
           ],
         },
       ]
-      sessionStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
+      localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual(cachedMessages)
       expect(result.current.messages[1].toolCalls?.[0].input).toEqual({ description: 'Create one' })
@@ -880,17 +1058,17 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create todo')
       })
 
       await waitFor(() => {
-        expect(sessionStorageMock.setItem).toHaveBeenCalled()
+        expect(localStorageMock.setItem).toHaveBeenCalled()
       })
 
-      const savedData = JSON.parse(sessionStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls.at(-1)?.[1] || '[]')
       const assistantMessage = savedData.find((m: UIMessage) => m.role === 'assistant')
 
       expect(assistantMessage.toolCalls[0]).toMatchObject({
@@ -903,7 +1081,7 @@ describe('useChat', () => {
 
     it('should handle QuotaExceededError gracefully', async () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      sessionStorageMock.setItem.mockImplementationOnce(() => {
+      localStorageMock.setItem.mockImplementationOnce(() => {
         const error = new Error('Quota exceeded')
         error.name = 'QuotaExceededError'
         throw error
@@ -911,7 +1089,7 @@ describe('useChat', () => {
 
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -932,7 +1110,7 @@ describe('useChat', () => {
       ]
       mockStreamChat.mockReturnValueOnce(createEventGenerator(events))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Hello')
@@ -947,7 +1125,7 @@ describe('useChat', () => {
     it('should handle empty message', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('')
@@ -961,7 +1139,7 @@ describe('useChat', () => {
         .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', data: { content: 'Response 1' } }, { type: 'session_end', data: null }]))
         .mockReturnValueOnce(createEventGenerator([{ type: 'result_chunk', data: { content: 'Response 2' } }, { type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Message 1')
@@ -983,7 +1161,7 @@ describe('useChat', () => {
     it('should preserve message order', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('First')
@@ -1021,7 +1199,7 @@ describe('useChat', () => {
         { type: 'session_end', data: null },
       ]))
 
-      const { result } = renderHook(() => useChat())
+      const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       await act(async () => {
         await result.current.sendMessage('Create a todo')

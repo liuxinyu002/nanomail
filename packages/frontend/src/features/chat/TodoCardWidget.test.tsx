@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TodoCardWidget } from './TodoCardWidget'
-import { todoService } from '@/services/todo.service'
 import type { Todo } from '@nanomail/shared'
 
-vi.mock('@/services/todo.service', () => ({
-  todoService: {
-    update: vi.fn(),
-  },
+// Mock the mutation hooks
+const mockMutateAsync = vi.fn()
+vi.mock('@/hooks/useTodoMutations', () => ({
+  useUpdateTodoMutation: () => ({
+    mutateAsync: mockMutateAsync,
+  }),
+  useDeleteTodoMutation: () => ({
+    mutateAsync: vi.fn(),
+  }),
 }))
 
 function createTodo(overrides: Partial<Todo> = {}): Todo {
@@ -26,15 +31,31 @@ function createTodo(overrides: Partial<Todo> = {}): Todo {
   }
 }
 
-describe('TodoCardWidget', () => {
-  const mockTodoService = vi.mocked(todoService)
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+  }
+}
 
+describe('TodoCardWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('renders the neutral card shell', () => {
-    const { container } = render(<TodoCardWidget todos={[createTodo()]} readonly />)
+    const { container } = render(<TodoCardWidget todos={[createTodo()]} readonly />, {
+      wrapper: createWrapper(),
+    })
 
     const wrapper = container.firstChild as HTMLElement
     expect(wrapper).toHaveClass('border', 'border-gray-200', 'rounded-lg', 'bg-white')
@@ -48,7 +69,8 @@ describe('TodoCardWidget', () => {
         readonly
         onEdit={() => {}}
         onDelete={() => {}}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
@@ -57,34 +79,38 @@ describe('TodoCardWidget', () => {
   })
 
   it('does not trigger updates in readonly mode', async () => {
-    render(<TodoCardWidget todos={[createTodo({ id: 1, status: 'pending' })]} readonly />)
+    render(<TodoCardWidget todos={[createTodo({ id: 1, status: 'pending' })]} readonly />, {
+      wrapper: createWrapper(),
+    })
 
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-    expect(mockTodoService.update).not.toHaveBeenCalled()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('keeps non-readonly interactions working', async () => {
-    const onUpdate = vi.fn()
-    mockTodoService.update.mockResolvedValueOnce(createTodo({ status: 'completed' }))
+    mockMutateAsync.mockResolvedValueOnce(createTodo({ status: 'completed' }))
 
     render(
       <TodoCardWidget
         todos={[createTodo({ id: 1, status: 'pending' })]}
-        onUpdate={onUpdate}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     fireEvent.click(screen.getByRole('checkbox'))
 
     await waitFor(() => {
-      expect(mockTodoService.update).toHaveBeenCalledWith('1', { status: 'completed' })
-      expect(onUpdate).toHaveBeenCalledTimes(1)
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        id: 1,
+        data: { status: 'completed' },
+      })
     })
   })
 
   it('shows completed todos with gray strikethrough styling in readonly mode', () => {
     const { container } = render(
-      <TodoCardWidget todos={[createTodo({ status: 'completed' })]} readonly />
+      <TodoCardWidget todos={[createTodo({ status: 'completed' })]} readonly />,
+      { wrapper: createWrapper() }
     )
 
     const description = container.querySelector('.line-through.text-gray-400')
@@ -97,7 +123,8 @@ describe('TodoCardWidget', () => {
       <TodoCardWidget
         todos={[createTodo({ deadline: '2024-03-15T14:30:00.000Z' })]}
         readonly
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     expect(screen.getByText(/\d{2}\/\d{2}\s+\d{2}:\d{2}/)).toBeInTheDocument()

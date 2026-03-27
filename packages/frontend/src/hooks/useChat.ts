@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ChatService, type ConversationEvent, type ChatServiceRequest } from '@/services/chat.service'
 import type { ChatMessage, ChatContext } from '@nanomail/shared'
+
+// Todo tool names matching backend naming convention (camelCase)
+const TODO_TOOL_NAMES = new Set(['createTodo', 'updateTodo', 'deleteTodo'])
 
 export interface ToolCallStatus {
   id: string
@@ -196,6 +200,7 @@ class StreamingBuffer {
 }
 
 export function useChat() {
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -387,6 +392,12 @@ export function useChat() {
             event.data.toolCallId
           )
           setMessages(prev => [...prev, toolMessage])
+
+          // Invalidate todo queries when todo-related tools complete successfully
+          // This ensures Todos page reflects changes made by AI agent
+          if (status === 'success' && TODO_TOOL_NAMES.has(event.data.toolName)) {
+            queryClient.invalidateQueries({ queryKey: ['todos'] })
+          }
         }
         break
 
@@ -394,7 +405,7 @@ export function useChat() {
         setError(event.data.message)
         break
     }
-  }, [])
+  }, [queryClient])
 
   const sendMessage = useCallback(async (content: string) => {
     setError(null)

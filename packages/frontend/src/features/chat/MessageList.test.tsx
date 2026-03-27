@@ -5,11 +5,10 @@ import type { UIMessage } from '@/hooks/useChat'
 
 // Mock MessageItem component
 vi.mock('./MessageItem', () => ({
-  MessageItem: vi.fn(({ message, isStreaming, onTodoUpdate }) => (
+  MessageItem: vi.fn(({ message, isStreaming }) => (
     <div
       data-testid={`message-item-${message.id}`}
       data-is-streaming={isStreaming}
-      data-has-todo-update={!!onTodoUpdate}
     >
       {message.content || 'empty-content'}
     </div>
@@ -136,27 +135,6 @@ describe('MessageList', () => {
 
       const messageItem = screen.getByTestId('message-item-msg-user')
       expect(messageItem).toHaveAttribute('data-is-streaming', 'false')
-    })
-  })
-
-  describe('onTodoUpdate callback', () => {
-    it('should pass onTodoUpdate callback to MessageItem', () => {
-      const onTodoUpdate = vi.fn()
-      const messages: UIMessage[] = [createUIMessage({ id: 'msg-1' })]
-
-      render(<MessageList messages={messages} isStreaming={false} onTodoUpdate={onTodoUpdate} />)
-
-      const messageItem = screen.getByTestId('message-item-msg-1')
-      expect(messageItem).toHaveAttribute('data-has-todo-update', 'true')
-    })
-
-    it('should not pass onTodoUpdate when undefined', () => {
-      const messages: UIMessage[] = [createUIMessage({ id: 'msg-1' })]
-
-      render(<MessageList messages={messages} isStreaming={false} />)
-
-      const messageItem = screen.getByTestId('message-item-msg-1')
-      expect(messageItem).toHaveAttribute('data-has-todo-update', 'false')
     })
   })
 

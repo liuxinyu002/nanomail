@@ -1,4 +1,3 @@
-import { useCallback } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -21,11 +20,6 @@ export function ChatPage() {
   // 检测是否在 Electron 主窗口环境中
   const electronAPI = window.electronAPI
   const isMainWindow = electronAPI && isMainWindowAPI(electronAPI)
-
-  // TODO: Implement todo update handler to refresh todo list after AI modifications
-  const handleTodoUpdate = useCallback(() => {
-    // Placeholder - will be connected to todo state management
-  }, [])
 
   return (
     <div className="flex flex-col h-full">
@@ -81,7 +75,7 @@ export function ChatPage() {
 
       {/* Message List - scrollable middle area */}
       <div className="flex-1 overflow-y-auto bg-gray-50">
-        <MessageList messages={messages} isStreaming={isStreaming} onTodoUpdate={handleTodoUpdate} />
+        <MessageList messages={messages} isStreaming={isStreaming} />
       </div>
 
       {/* Chat Input - fixed at bottom */}

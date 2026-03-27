@@ -108,6 +108,14 @@ jobs:
           path: packages/electron/release/win-unpacked/**
           retention-days: 30
 
+      - name: Delete existing release if exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          gh release delete v$VERSION --yes --cleanup-tag=false || true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -17,8 +17,6 @@ import { Email } from '../entities/Email.entity'
 import { Todo } from '../entities/Todo.entity'
 import { Label } from '../entities/Label.entity'
 import { BoardColumn } from '../entities/BoardColumn.entity'
-import * as path from 'path'
-import * as fs from 'fs'
 
 /**
  * Get database path based on environment
@@ -57,12 +55,33 @@ function getDatabasePath(): string {
   return devPath
 }
 
+/**
+ * Check if this is a fresh installation (no existing database)
+ */
+function isFreshInstall(): boolean {
+  const dbPath = getDatabasePath()
+  return !fs.existsSync(dbPath)
+}
+
+const dbPath = getDatabasePath()
+const freshInstall = isFreshInstall()
+
+// In production, enable synchronize for fresh installs to create initial schema
+// This is safe because:
+// 1. Only runs once when database doesn't exist
+// 2. TypeORM's synchronize only creates missing tables, it doesn't drop existing ones
+// 3. For subsequent runs, synchronize is disabled to prevent accidental schema changes
+const shouldSynchronize = process.env.NODE_ENV !== 'production' || freshInstall
+
+console.log('[Database] Fresh install:', freshInstall)
+console.log('[Database] Synchronize enabled:', shouldSynchronize)
+
 export const AppDataSource = new DataSource({
   type: 'better-sqlite3',
   driver: BetterSqlite3,
-  database: getDatabasePath(),
+  database: dbPath,
   entities: [Settings, Email, Todo, Label, BoardColumn],
-  synchronize: process.env.NODE_ENV !== 'production',
+  synchronize: shouldSynchronize,
   logging: false
 })
 

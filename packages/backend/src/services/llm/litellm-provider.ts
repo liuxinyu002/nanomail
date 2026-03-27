@@ -252,6 +252,18 @@ export class LiteLLMProvider extends LLMProvider {
     }
     const message = choice.message
 
+    // DEBUG: Log raw message object to check for reasoning_content
+    // Some providers (GLM-5, DeepSeek-R1, Kimi) use reasoning_content for thinking
+    const rawMessage = message as Record<string, unknown>
+    if ('reasoning_content' in rawMessage || 'reasoningContent' in rawMessage) {
+      log.debug({
+        hasReasoningContent: 'reasoning_content' in rawMessage,
+        hasReasoningContentCamel: 'reasoningContent' in rawMessage,
+        reasoningContentLength: (rawMessage['reasoning_content'] as string)?.length ?? (rawMessage['reasoningContent'] as string)?.length,
+        contentLength: message.content?.length ?? 0
+      }, '[parseResponse] Found reasoning_content in response')
+    }
+
     // Parse tool calls
     const toolCalls: ToolCallRequest[] = []
     if (message.tool_calls) {
@@ -285,6 +297,10 @@ export class LiteLLMProvider extends LLMProvider {
       finishReason = 'stop'
     }
 
+    // Extract reasoning_content for models that support extended thinking
+    // (DeepSeek-R1, Kimi, GLM-5, etc.)
+    const reasoningContent = (rawMessage['reasoning_content'] as string | undefined) ?? undefined
+
     return {
       content: message.content ?? null,
       toolCalls,
@@ -293,7 +309,9 @@ export class LiteLLMProvider extends LLMProvider {
         promptTokens: response.usage?.prompt_tokens ?? 0,
         completionTokens: response.usage?.completion_tokens ?? 0,
         totalTokens: response.usage?.total_tokens ?? 0
-      }
+      },
+      // Include reasoning content for models that use extended thinking
+      ...(reasoningContent ? { reasoningContent } : {})
     }
   }
 
@@ -387,14 +405,23 @@ export class LiteLLMProvider extends LLMProvider {
     const maxTokens = Math.max(1, params.maxTokens ?? 4096)
 
     try {
-      const response = await client.chat.completions.create({
+      // Build request options
+      const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
         model: resolvedModel,
         messages: openaiMessages,
         max_tokens: maxTokens,
         temperature: params.temperature ?? 0.7,
         tools: params.tools as OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
         tool_choice: params.tools ? 'auto' : undefined
-      })
+      }
+
+      // Add response_format if specified (for JSON mode)
+      // Note: Not all providers support this, but OpenAI-compatible APIs typically do
+      if (params.responseFormat) {
+        requestOptions.response_format = params.responseFormat as OpenAI.Chat.Completions.ChatCompletionCreateParams['response_format']
+      }
+
+      const response = await client.chat.completions.create(requestOptions)
 
       const result = this.parseResponse(response)
 

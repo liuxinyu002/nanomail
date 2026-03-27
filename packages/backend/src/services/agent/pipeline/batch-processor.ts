@@ -4,7 +4,7 @@
  */
 
 import type { DataSource } from 'typeorm'
-import { EmailAnalyzer, type EmailData } from './email-analyzer'
+import { EmailAnalyzer, type EmailData, type AnalysisResult } from './email-analyzer'
 import { Email } from '../../../entities/Email.entity'
 
 /**
@@ -56,14 +56,14 @@ export class BatchEmailProcessor {
     emails: EmailData[],
     onProgress?: ProgressCallback
   ): Promise<BatchResult> {
-    const result: BatchResult = {
+    const batchResult: BatchResult = {
       processed: 0,
       failed: 0,
       errors: []
     }
 
     if (emails.length === 0) {
-      return result
+      return batchResult
     }
 
     let processedCount = 0
@@ -74,25 +74,40 @@ export class BatchEmailProcessor {
       const batch = emails.slice(i, i + this.maxConcurrency)
 
       // Process batch concurrently using Promise.allSettled
-      const batchResults = await Promise.allSettled(
+      const settledResults = await Promise.allSettled(
         batch.map(async (email) => {
-          await this.analyzer.analyzeAndPersist(email)
-          return { emailId: email.id, success: true }
+          const analysisResult = await this.analyzer.analyzeAndPersist(email)
+          return { emailId: email.id, analysisResult }
         })
       )
 
       // Collect results using forEach with explicit index for accurate error tracking
-      batchResults.forEach((batchResult, index) => {
-        if (batchResult.status === 'fulfilled') {
-          result.processed++
+      settledResults.forEach((settledResult, index) => {
+        const failedEmail = batch[index]
+
+        if (settledResult.status === 'fulfilled') {
+          const analysisResult: AnalysisResult = settledResult.value.analysisResult
+
+          // TypeScript narrows based on success discriminant
+          if (analysisResult.success && analysisResult.persisted) {
+            batchResult.processed++
+          } else {
+            // Either analysis failed or not persisted
+            batchResult.failed++
+            batchResult.errors.push({
+              emailId: settledResult.value.emailId,
+              error: analysisResult.success
+                ? 'Analysis succeeded but not persisted'
+                : analysisResult.error
+            })
+          }
         } else {
-          result.failed++
-          // Use explicit index to get the correct email (indexOf can return wrong match)
-          const failedEmail = batch[index]
+          // Exception thrown during processing
+          batchResult.failed++
           if (failedEmail) {
-            result.errors.push({
+            batchResult.errors.push({
               emailId: failedEmail.id,
-              error: batchResult.reason?.message || 'Unknown error'
+              error: settledResult.reason?.message || 'Unknown error'
             })
           }
         }
@@ -106,7 +121,7 @@ export class BatchEmailProcessor {
       }
     }
 
-    return result
+    return batchResult
   }
 
   /**

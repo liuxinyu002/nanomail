@@ -101,6 +101,13 @@ export interface ChatParams {
   maxTokens?: number
   temperature?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
+  /**
+   * Response format for structured output
+   * Note: Not all providers support this. OpenAI-compatible providers typically support:
+   * - { type: "json_object" } - Forces JSON output (requires "JSON" in system/user message)
+   * - { type: "text" } - Default text output
+   */
+  responseFormat?: { type: 'json_object' | 'text' }
 }
 
 /**

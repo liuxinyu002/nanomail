@@ -6,7 +6,7 @@
  * Supports role-based prompt assembly with required/optional file handling.
  */
 
-import { promises as fs } from 'fs'
+import { promises as fs, existsSync } from 'fs'
 import path from 'path'
 import type { Logger } from '../../../config/logger'
 import type { LLMResponse, ToolCallRequest } from '../../llm/types'
@@ -106,20 +106,41 @@ export class ContextBuilder {
 
   /**
    * Constructor with flexible path resolution
-   * Priority: constructor param > PROMPTS_DIR env var > default path
+   * Priority: constructor param > PROMPTS_DIR env var > auto-detect
    *
-   * Note: In production (Electron), __dirname points to dist/backend/
-   * and prompts are packaged alongside the bundle at dist/backend/prompts/
+   * Auto-detect logic:
+   * - Production (Electron): __dirname points to dist/backend/, prompts at dist/backend/prompts/
+   * - Development: __dirname points to src/services/agent/context/, prompts at ../prompts/
    */
   constructor(promptsDir?: string) {
-    this.promptsDir = promptsDir
-      ?? process.env.PROMPTS_DIR
-      ?? path.join(__dirname, 'prompts')
+    // Priority 1: Constructor param
+    if (promptsDir) {
+      this.promptsDir = promptsDir
+    }
+    // Priority 2: Environment variable
+    else if (process.env.PROMPTS_DIR) {
+      this.promptsDir = process.env.PROMPTS_DIR
+    }
+    // Priority 3: Auto-detect
+    else {
+      const prodPath = path.join(__dirname, 'prompts') // dist/backend/prompts
+      const devPath = path.resolve(__dirname, '../prompts') // src/services/agent/prompts
+
+      if (existsSync(prodPath)) {
+        this.promptsDir = prodPath
+      } else if (existsSync(devPath)) {
+        this.promptsDir = devPath
+      } else {
+        throw new Error(
+          `[Agent Context] Cannot find prompts directory. Checked paths:\n- Prod: ${prodPath}\n- Dev: ${devPath}`
+        )
+      }
+    }
 
     // Log initialization for debugging
     this.log.info({
       promptsDir: this.promptsDir,
-      userId: 'default'  // Current version fixed to 'default'
+      userId: 'default' // Current version fixed to 'default'
     }, 'ContextBuilder initialized')
   }
 

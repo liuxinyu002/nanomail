@@ -103,10 +103,13 @@ describe('EmailAnalyzer', () => {
 
       const result = await analyzer.analyze(email as any)
 
-      expect(result.classification).toBe('IMPORTANT')
-      expect(result.confidence).toBe(0.95)
-      expect(result.summary).toBe('Meeting invitation for project review')
-      expect(result.actionItems).toHaveLength(1)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.analysis.classification).toBe('IMPORTANT')
+        expect(result.analysis.confidence).toBe(0.95)
+        expect(result.analysis.summary).toBe('Meeting invitation for project review')
+        expect(result.analysis.actionItems).toHaveLength(1)
+      }
     })
 
     it('should use XML tags to isolate email content', async () => {
@@ -160,11 +163,9 @@ describe('EmailAnalyzer', () => {
 
       const result = await analyzer.analyze(email as any)
 
-      // Should return default fallback
-      expect(result.classification).toBe('IMPORTANT')
-      expect(result.confidence).toBe(0.5)
-      expect(result.summary).toBe('')
-      expect(result.actionItems).toEqual([])
+      // Should return failure result (discriminated union)
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Failed to parse LLM response as JSON')
     })
 
     it('should return default fallback for schema validation failures', async () => {
@@ -190,8 +191,8 @@ describe('EmailAnalyzer', () => {
 
       const result = await analyzer.analyze(email as any)
 
-      expect(result.classification).toBe('IMPORTANT')
-      expect(result.confidence).toBe(0.5)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Schema validation failed')
     })
 
     it('should handle LLM errors gracefully', async () => {
@@ -207,8 +208,8 @@ describe('EmailAnalyzer', () => {
 
       const result = await analyzer.analyze(email as any)
 
-      expect(result.classification).toBe('IMPORTANT')
-      expect(result.confidence).toBe(0.5)
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('LLM API Error')
     })
   })
 
@@ -427,9 +428,39 @@ describe('EmailAnalyzer', () => {
 
       const result = await analyzer.analyzeAndPersist(email as any)
 
-      expect(result.analysis.classification).toBe('IMPORTANT')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.analysis.classification).toBe('IMPORTANT')
+        expect(result.persisted).toBe(true)
+      }
       expect(mockEmailRepo.update).toHaveBeenCalled()
       expect(mockTodoRepo.save).toHaveBeenCalled()
+    })
+
+    it('should not persist when analysis fails', async () => {
+      mockLLMProvider.chat.mockResolvedValueOnce({
+        content: '',  // Empty content triggers failure
+        toolCalls: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 0, totalTokens: 100 }
+      })
+
+      const email = {
+        id: 1,
+        subject: 'Test',
+        bodyText: 'Body',
+        sender: 'test@test.com',
+        date: new Date()
+      }
+
+      const result = await analyzer.analyzeAndPersist(email as any)
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toContain('LLM call failed')
+        expect(result.persisted).toBe(false)
+      }
+      expect(mockEmailRepo.update).not.toHaveBeenCalled()
     })
   })
 
@@ -492,18 +523,17 @@ describe('EmailAnalyzer', () => {
   })
 
   describe('Default Fallback', () => {
-    it('should return consistent default values', async () => {
+    it('should return failure result with error message', async () => {
       mockLLMProvider.chat.mockRejectedValueOnce(new Error('Network error'))
 
       const email = { id: 1, subject: 'Test', bodyText: 'Body', sender: 't@t.com', date: new Date() }
       const result = await analyzer.analyze(email as any)
 
-      expect(result).toEqual({
-        classification: 'IMPORTANT',
-        confidence: 0.5,
-        summary: '',
-        actionItems: []
-      })
+      // Failed analysis returns discriminated union with success: false
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBe('Network error')
+      }
     })
   })
 })

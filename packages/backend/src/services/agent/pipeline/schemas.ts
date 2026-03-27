@@ -21,6 +21,7 @@ export type EmailClassification = 'SPAM' | 'NEWSLETTER' | 'IMPORTANT'
 
 /**
  * Email analysis schema for LLM response
+ * Pure data structure - no failure flag (failures handled via Result type)
  */
 export const EmailAnalysisSchema = z.object({
   classification: z.enum(['SPAM', 'NEWSLETTER', 'IMPORTANT']),

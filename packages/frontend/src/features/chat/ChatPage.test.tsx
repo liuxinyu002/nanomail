@@ -49,7 +49,7 @@ describe('ChatPage', () => {
     it('should render header with title', () => {
       render(<ChatPage />)
 
-      expect(screen.getByText('AI Assistant')).toBeInTheDocument()
+      expect(screen.getByText('NanoMail')).toBeInTheDocument()
     })
 
     it('should render MessageList component', () => {
@@ -224,7 +224,7 @@ describe('ChatPage', () => {
       render(<ChatPage />)
 
       const heading = screen.getByRole('heading', { level: 1 })
-      expect(heading).toHaveTextContent('AI Assistant')
+      expect(heading).toHaveTextContent('NanoMail')
     })
 
     it('should have accessible textarea', () => {

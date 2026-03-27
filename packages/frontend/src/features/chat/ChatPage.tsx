@@ -35,7 +35,7 @@ export function ChatPage() {
           <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-600/10">
             <CoffeeIcon className="h-[18px] w-[18px]" />
           </div>
-          <h1 className="text-lg font-semibold text-gray-900">AI Assistant</h1>
+          <h1 className="text-lg font-semibold text-gray-900">NanoMail</h1>
         </div>
         <div className="flex items-center gap-2">
           {/* Float button - only visible in Electron main window */}

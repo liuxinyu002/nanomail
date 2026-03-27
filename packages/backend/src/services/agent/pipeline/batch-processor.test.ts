@@ -58,7 +58,9 @@ describe('BatchEmailProcessor', () => {
       ]
 
       mockAnalyzer.analyzeAndPersist.mockResolvedValue({
-        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }
+        success: true,
+        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] },
+        persisted: true
       })
 
       const result = await processor.processBatch(emails as any)
@@ -85,7 +87,7 @@ describe('BatchEmailProcessor', () => {
         maxConcurrent = Math.max(maxConcurrent, concurrentCount)
         await new Promise(resolve => setTimeout(resolve, 10))
         concurrentCount--
-        return { analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] } }
+        return { success: true, analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }, persisted: true }
       })
 
       await processor.processBatch(emails as any)
@@ -101,9 +103,9 @@ describe('BatchEmailProcessor', () => {
       ]
 
       mockAnalyzer.analyzeAndPersist
-        .mockResolvedValueOnce({ analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] } })
+        .mockResolvedValueOnce({ success: true, analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }, persisted: true })
         .mockRejectedValueOnce(new Error('Processing failed'))
-        .mockResolvedValueOnce({ analysis: { classification: 'SPAM', confidence: 0.99, summary: '', actionItems: [] } })
+        .mockResolvedValueOnce({ success: true, analysis: { classification: 'SPAM', confidence: 0.99, summary: '', actionItems: [] }, persisted: true })
 
       const result = await processor.processBatch(emails as any)
 
@@ -122,7 +124,9 @@ describe('BatchEmailProcessor', () => {
       }))
 
       mockAnalyzer.analyzeAndPersist.mockResolvedValue({
-        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }
+        success: true,
+        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] },
+        persisted: true
       })
 
       const startTime = Date.now()
@@ -152,7 +156,9 @@ describe('BatchEmailProcessor', () => {
 
       mockEmailRepo.find.mockResolvedValue(emails)
       mockAnalyzer.analyzeAndPersist.mockResolvedValue({
-        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }
+        success: true,
+        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] },
+        persisted: true
       })
 
       const result = await processor.processUnprocessed()
@@ -211,7 +217,7 @@ describe('BatchEmailProcessor', () => {
 
       mockAnalyzer.analyzeAndPersist
         .mockRejectedValueOnce(new Error('Error on first'))
-        .mockResolvedValueOnce({ analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] } })
+        .mockResolvedValueOnce({ success: true, analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }, persisted: true })
         .mockRejectedValueOnce(new Error('Error on third'))
 
       const result = await processor.processBatch(emails as any)
@@ -229,7 +235,9 @@ describe('BatchEmailProcessor', () => {
       ]
 
       mockAnalyzer.analyzeAndPersist.mockResolvedValue({
-        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }
+        success: true,
+        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] },
+        persisted: true
       })
 
       const progressCalls: Array<{ processed: number; total: number }> = []
@@ -258,7 +266,9 @@ describe('BatchEmailProcessor', () => {
       })
 
       mockAnalyzer.analyzeAndPersist.mockResolvedValue({
-        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] }
+        success: true,
+        analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: '', actionItems: [] },
+        persisted: true
       })
 
       const startTime = Date.now()
@@ -269,6 +279,35 @@ describe('BatchEmailProcessor', () => {
       expect(result.failed).toBe(0)
       // Should complete in reasonable time (concurrency helps)
       expect(duration).toBeLessThan(5000) // 5 seconds max
+    })
+  })
+
+  describe('Failed Analysis Handling', () => {
+    it('should count as failed when analysis returns success: false', async () => {
+      const emails = [
+        { id: 1, subject: 'Email 1', bodyText: 'Body', sender: 'test@test.com', date: new Date() },
+        { id: 2, subject: 'Email 2', bodyText: 'Body', sender: 'test@test.com', date: new Date() }
+      ]
+
+      mockAnalyzer.analyzeAndPersist
+        .mockResolvedValueOnce({
+          success: false,
+          error: 'LLM call failed (finishReason: error)',
+          persisted: false
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          analysis: { classification: 'IMPORTANT', confidence: 0.9, summary: 'OK', actionItems: [] },
+          persisted: true
+        })
+
+      const result = await processor.processBatch(emails as any)
+
+      expect(result.processed).toBe(1)
+      expect(result.failed).toBe(1)
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0].emailId).toBe(1)
+      expect(result.errors[0].error).toBe('LLM call failed (finishReason: error)')
     })
   })
 })

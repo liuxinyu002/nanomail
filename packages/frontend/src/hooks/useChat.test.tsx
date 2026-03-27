@@ -3,6 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useChat, type UIMessage } from './useChat'
 import type { ConversationEvent } from '@/services/chat.service'
+import { useChatStore, resetStorageSync, hydrateMessagesFromStorage } from '@/stores/chatStore'
 
 // Mock ChatService module
 vi.mock('@/services/chat.service', () => ({
@@ -110,6 +111,10 @@ describe('useChat', () => {
     vi.clearAllMocks()
     sessionStorageMock.clear()
     localStorageMock.clear()
+    // Reset Zustand store state (singleton pattern requires explicit reset)
+    useChatStore.getState().reset()
+    // Reset the storage sync tracking variable
+    resetStorageSync()
   })
 
   afterEach(() => {
@@ -125,7 +130,7 @@ describe('useChat', () => {
       expect(result.current.error).toBeNull()
     })
 
-    it('should restore messages from sessionStorage on mount', () => {
+    it('should restore messages from localStorage on mount', () => {
       const cachedMessages: UIMessage[] = [
         {
           id: 'msg-1',
@@ -142,14 +147,22 @@ describe('useChat', () => {
       ]
       localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
 
+      // Hydrate from mocked localStorage (simulates store initialization)
+      const hydrated = hydrateMessagesFromStorage()
+      useChatStore.getState().setMessages(hydrated)
+
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       expect(result.current.messages).toEqual(cachedMessages)
     })
 
-    it('should handle invalid sessionStorage data gracefully', () => {
+    it('should handle invalid localStorage data gracefully', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       localStorageMock.getItem.mockReturnValueOnce('invalid-json')
+
+      // Hydrate from mocked localStorage (simulates store initialization)
+      const hydrated = hydrateMessagesFromStorage()
+      useChatStore.getState().setMessages(hydrated)
 
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
@@ -158,8 +171,12 @@ describe('useChat', () => {
       consoleWarnSpy.mockRestore()
     })
 
-    it('should handle empty sessionStorage gracefully', () => {
+    it('should handle empty localStorage gracefully', () => {
       localStorageMock.getItem.mockReturnValueOnce(null)
+
+      // Hydrate from mocked localStorage (simulates store initialization)
+      const hydrated = hydrateMessagesFromStorage()
+      useChatStore.getState().setMessages(hydrated)
 
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
@@ -823,7 +840,7 @@ describe('useChat', () => {
       expect(result.current.error).toBeNull()
     })
 
-    it('should remove messages from sessionStorage', () => {
+    it('should remove messages from localStorage', () => {
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
       act(() => {
@@ -834,8 +851,8 @@ describe('useChat', () => {
     })
   })
 
-  describe('sessionStorage backup', () => {
-    it('should save messages to sessionStorage on change', async () => {
+  describe('localStorage persistence', () => {
+    it('should save messages to localStorage on change', async () => {
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
 
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
@@ -856,7 +873,7 @@ describe('useChat', () => {
       expect(savedData).toHaveLength(2)
     })
 
-    it('should preserve input/output for todo tools when saving to sessionStorage', async () => {
+    it('should preserve input/output for todo tools when saving to localStorage', async () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
@@ -950,7 +967,7 @@ describe('useChat', () => {
       })
     })
 
-    it('should still prune non-todo tool input/output before saving to sessionStorage', async () => {
+    it('should still prune non-todo tool input/output before saving to localStorage', async () => {
       const events: ConversationEvent[] = [
         {
           type: 'tool_call_start',
@@ -995,7 +1012,7 @@ describe('useChat', () => {
       expect(assistantMessage.toolCalls[0].output).toBeUndefined()
     })
 
-    it('should restore persisted todo tool payloads from sessionStorage', () => {
+    it('should restore persisted todo tool payloads from localStorage', () => {
       const cachedMessages: UIMessage[] = [
         {
           id: 'user-1',
@@ -1025,6 +1042,10 @@ describe('useChat', () => {
         },
       ]
       localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(cachedMessages))
+
+      // Hydrate from mocked localStorage (simulates store initialization)
+      const hydrated = hydrateMessagesFromStorage()
+      useChatStore.getState().setMessages(hydrated)
 
       const { result } = renderHook(() => useChat(), { wrapper: createWrapper() })
 
@@ -1081,10 +1102,14 @@ describe('useChat', () => {
 
     it('should handle QuotaExceededError gracefully', async () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      localStorageMock.setItem.mockImplementationOnce(() => {
-        const error = new Error('Quota exceeded')
-        error.name = 'QuotaExceededError'
-        throw error
+
+      // Mock setItem to throw QuotaExceededError only for STORAGE_KEY
+      localStorageMock.setItem.mockImplementation((key: string) => {
+        if (key === 'nanomail_chat_messages') {
+          const error = new Error('Quota exceeded')
+          error.name = 'QuotaExceededError'
+          throw error
+        }
       })
 
       mockStreamChat.mockReturnValueOnce(createEventGenerator([{ type: 'session_end', data: null }]))
@@ -1100,8 +1125,8 @@ describe('useChat', () => {
     })
   })
 
-  describe('StreamingBuffer', () => {
-    it('should batch result_chunk updates and flush on completion', async () => {
+  describe('result_chunk handling', () => {
+    it('should accumulate result_chunk events directly (synchronous processing)', async () => {
       const events: ConversationEvent[] = [
         { type: 'result_chunk', data: { content: 'A' } },
         { type: 'result_chunk', data: { content: 'B' } },
@@ -1116,7 +1141,7 @@ describe('useChat', () => {
         await result.current.sendMessage('Hello')
       })
 
-      // After streaming ends and flush is called, content should be accumulated
+      // After streaming ends, content should be accumulated directly
       expect(result.current.messages[1].content).toBe('ABC')
     })
   })

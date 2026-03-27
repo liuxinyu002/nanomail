@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 白色圆角背景 -->
+  <rect width="512" height="512" rx="96" fill="#ffffff"/>
+
+  <!-- 咖啡杯图标 - 放大到 512x512 画布 -->
+  <g transform="translate(96, 96) scale(13.33)">
+    <!-- 杯子把手 -->
+    <path d="M17 8h1a4 4 0 1 1 0 8h-1" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 杯身 -->
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 蒸汽线 -->
+    <path d="M6 2v2" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 2v2" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M14 2v2" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 眼睛 -->
+    <circle cx="8" cy="13" r="1.2" fill="#2563eb"/>
+    <circle cx="12" cy="13" r="1.2" fill="#2563eb"/>
+    <!-- 笑脸 -->
+    <path d="M8 16c1 1.5 3 1.5 4 0" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

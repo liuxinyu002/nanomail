@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { useSensors, DndContext as DndKitContext } from '@dnd-kit/core'
+import { render, screen } from '@testing-library/react'
+import { useSensors } from '@dnd-kit/core'
 import {
   DndProvider,
   useDndContext,
-  type ActiveItem,
-  type DragData,
 } from './DndContext'
 
 // Mock the dnd-kit hooks and components
@@ -210,7 +208,7 @@ describe('DndContext', () => {
 
   describe('handleDragCancel', () => {
     it('should clear activeItem when drag is cancelled', async () => {
-      let capturedContext: ReturnType<typeof useDndContext> | null = null
+      let capturedContext: ReturnType<typeof useDndContext> | undefined = undefined
 
       const TestComponent = () => {
         const context = useDndContext()
@@ -234,7 +232,7 @@ describe('DndContext', () => {
       expect(screen.getByTestId('active-item')).toHaveTextContent('null')
 
       // Verify context properly tracks activeItem as null initially
-      expect(capturedContext).not.toBeNull()
+      expect(capturedContext).toBeDefined()
       expect(capturedContext?.activeItem).toBeNull()
     })
 

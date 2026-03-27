@@ -20,9 +20,15 @@ export interface UIMessage {
   timestamp: string
 }
 
-const SESSION_STORAGE_KEY = 'nanomail_chat_messages'
+const STORAGE_KEY = 'nanomail_chat_messages'
+const GENERATING_WINDOW_KEY = 'nanomail_generating_window'
 // Todo tool names matching backend naming convention (camelCase)
 const TODO_TOOL_STORAGE_WHITELIST = new Set(['createTodo', 'updateTodo', 'deleteTodo'])
+
+// 生成当前窗口的唯一 ID
+function generateWindowId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
 
 function createUIMessage(
   role: 'user' | 'assistant',
@@ -193,11 +199,14 @@ export function useChat() {
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isInputDisabled, setIsInputDisabled] = useState(false)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const currentAssistantMessageRef = useRef<UIMessage | null>(null)
   const streamingBufferRef = useRef<StreamingBuffer | null>(null)
   const messagesRef = useRef<UIMessage[]>([])
+  // 当前窗口的唯一 ID，用于判断是否为生成发起窗口
+  const windowIdRef = useRef<string>(generateWindowId())
 
   useEffect(() => {
     messagesRef.current = messages
@@ -222,7 +231,7 @@ export function useChat() {
 
   useEffect(() => {
     try {
-      const cached = sessionStorage.getItem(SESSION_STORAGE_KEY)
+      const cached = localStorage.getItem(STORAGE_KEY)
       if (cached) {
         const parsed = JSON.parse(cached) as UIMessage[]
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -230,20 +239,68 @@ export function useChat() {
         }
       }
     } catch (e) {
-      console.warn('Failed to restore chat from session storage:', e)
+      console.warn('Failed to restore chat from localStorage:', e)
     }
   }, [])
 
+  // 写入逻辑：阻断"回声写入"性能损耗
   useEffect(() => {
     if (messages.length > 0) {
       try {
         const prunedMessages = pruneMessagesForStorage(messages)
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(prunedMessages))
+        const newValue = JSON.stringify(prunedMessages)
+
+        // 只在数据确实变更时才写入，阻止跨窗口同步引发的"回声写入"
+        if (localStorage.getItem(STORAGE_KEY) !== newValue) {
+          localStorage.setItem(STORAGE_KEY, newValue)
+        }
       } catch (e) {
-        console.warn('Session storage quota exceeded even after pruning. Chat history not saved.', e)
+        console.warn('localStorage quota exceeded even after pruning...', e)
       }
     }
   }, [messages])
+
+  // 监听 storage event 实现跨窗口同步
+  // storage event 只在其他窗口触发，天生防循环
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // 处理聊天消息同步
+      if (e.key === STORAGE_KEY) {
+        if (!e.newValue) {
+          setMessages([])
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(e.newValue) as UIMessage[]
+          if (Array.isArray(parsed)) {
+            // 直接更新，无需判断 id 变化
+            // 原因：storage event 只在"其他窗口"触发，当前窗口修改不会触发
+            // 这样可以完美支持流式输出（streaming）的跨窗口实时同步
+            // React 会自动处理重绘优化
+            setMessages(parsed)
+          }
+        } catch (err) {
+          console.warn('Failed to parse synced messages:', err)
+        }
+        return
+      }
+
+      // 处理生成窗口状态同步
+      if (e.key === GENERATING_WINDOW_KEY) {
+        if (!e.newValue) {
+          // 其他窗口完成生成，恢复输入
+          setIsInputDisabled(false)
+        } else if (e.newValue !== windowIdRef.current) {
+          // 其他窗口正在生成，禁用当前窗口输入
+          setIsInputDisabled(true)
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
 
   const buildContext = useCallback((): ChatContext => {
     return {
@@ -364,6 +421,8 @@ export function useChat() {
     request.messages = [...allHistoryMessages, { role: 'user' as const, content }]
 
     setIsStreaming(true)
+    // 标记当前窗口为生成发起窗口，其他窗口将禁用输入
+    localStorage.setItem(GENERATING_WINDOW_KEY, windowIdRef.current)
     abortControllerRef.current = new AbortController()
 
     try {
@@ -380,6 +439,8 @@ export function useChat() {
       streamingBufferRef.current?.flush()
       setIsStreaming(false)
       currentAssistantMessageRef.current = null
+      // 清除生成窗口标记
+      localStorage.removeItem(GENERATING_WINDOW_KEY)
     }
   }, [toChatMessages, buildContext, handleEvent])
 
@@ -390,12 +451,13 @@ export function useChat() {
   const clearSession = useCallback(() => {
     setMessages([])
     setError(null)
-    sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    localStorage.removeItem(STORAGE_KEY)
   }, [])
 
   return {
     messages,
     isStreaming,
+    isInputDisabled,
     error,
     sendMessage,
     stopGeneration,

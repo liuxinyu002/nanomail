@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ChatInput } from './ChatInput'
 
@@ -174,15 +174,6 @@ describe('ChatInput', () => {
       // React's synthetic event doesn't easily support mocking nativeEvent.isComposing
       // We test the implementation by verifying the code path exists
       // The actual IME behavior is best tested in E2E tests with real browser
-
-      // Create a mock keyboard event that simulates composition state
-      const mockKeyDownHandler = vi.fn((e) => {
-        // This simulates what happens in the component
-        if ((e as React.KeyboardEvent<HTMLTextAreaElement>).nativeEvent?.isComposing) {
-          return // Should not call onSend
-        }
-        mockOnSend('Hello')
-      })
 
       // Verify our implementation has the isComposing check
       // by checking the component's behavior with normal Enter

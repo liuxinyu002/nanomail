@@ -23,3 +23,4 @@ The skill format and metadata structure follow OpenClaw's conventions to maintai
 | `tmux` | Remote-control tmux sessions |
 | `clawhub` | Search and install skills from ClawHub registry |
 | `skill-creator` | Create new skills |
+| `electron-bdd` | Electron BDD工作流：类型优先 → 连续编码 → BDD验收清单 → 风险报告。适用于主进程/渲染进程/预加载脚本开发。 |

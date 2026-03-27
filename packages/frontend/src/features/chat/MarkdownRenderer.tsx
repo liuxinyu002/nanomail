@@ -2,11 +2,13 @@ import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
+import { cn } from '@/lib/utils'
 
 interface MarkdownRendererProps {
   content: string
   onTodoToggle?: (todoId: string, checked: boolean) => void
   todoIds?: Set<string>  // IDs of todos in TodoCardWidget for deduplication
+  isCompact?: boolean
 }
 
 /**
@@ -21,7 +23,7 @@ interface MarkdownRendererProps {
  * 3. More maintainable - we work with structured data, not string manipulation
  * 4. react-markdown already parses the AST; we just filter at render time
  */
-export function MarkdownRenderer({ content, onTodoToggle, todoIds }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, onTodoToggle, todoIds, isCompact }: MarkdownRendererProps) {
   // Determine if a task list item should be filtered out
   const shouldSkipTaskItem = (textContent: string): boolean => {
     if (!todoIds || todoIds.size === 0) return false
@@ -87,7 +89,21 @@ export function MarkdownRenderer({ content, onTodoToggle, todoIds }: MarkdownRen
     },
   }
   return (
-    <div className="prose prose-sm max-w-none">
+    <div className={cn(
+      isCompact ? "prose prose-sm max-w-none text-sm" : "prose prose-sm max-w-none",
+      // Compact mode: reduce vertical margins for higher information density
+      isCompact && [
+        "[&_p]:my-1",
+        "[&_ul]:my-1",
+        "[&_ol]:my-1",
+        "[&_li]:my-0.5",
+        "[&_h1]:my-2",
+        "[&_h2]:my-2",
+        "[&_h3]:my-1.5",
+        "[&_pre]:my-1.5",
+        "[&_blockquote]:my-1.5",
+      ]
+    )}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}

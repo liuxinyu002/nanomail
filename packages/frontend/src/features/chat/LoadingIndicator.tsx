@@ -1,5 +1,11 @@
 import { Sparkles } from 'lucide-react'
 
+import { cn } from '@/lib/utils'
+
+interface LoadingIndicatorProps {
+  size?: 'sm' | 'md'
+}
+
 /**
  * LoadingIndicator - Blinking cursor for AI text generation
  *
@@ -8,10 +14,13 @@ import { Sparkles } from 'lucide-react'
  *
  * Per docs/SPEC/design-system.md: Uses 150ms ease-out fade-in animation
  */
-export function LoadingIndicator() {
+export function LoadingIndicator({ size = 'md' }: LoadingIndicatorProps) {
   return (
     <span
-      className="inline-block w-2 h-5 bg-gray-800 animate-pulse"
+      className={cn(
+        "inline-block bg-gray-800 animate-pulse",
+        size === 'sm' ? "w-1.5 h-4" : "w-2 h-5"
+      )}
       aria-label="AI is thinking"
     />
   )

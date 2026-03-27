@@ -1,15 +1,66 @@
 import 'reflect-metadata'
 import { DataSource } from 'typeorm'
+import * as path from 'path'
+import * as fs from 'fs'
+
+console.log('[Database] Loading better-sqlite3...')
+let BetterSqlite3: any
+try {
+  BetterSqlite3 = require('better-sqlite3')
+  console.log('[Database] better-sqlite3 loaded successfully')
+} catch (error) {
+  console.error('[Database] Failed to load better-sqlite3:', error)
+  throw error
+}
 import { Settings } from '../entities/Settings.entity'
 import { Email } from '../entities/Email.entity'
 import { Todo } from '../entities/Todo.entity'
 import { Label } from '../entities/Label.entity'
 import { BoardColumn } from '../entities/BoardColumn.entity'
 import * as path from 'path'
+import * as fs from 'fs'
+
+/**
+ * Get database path based on environment
+ * - Production: Use USER_DATA_PATH (passed from Electron main process)
+ * - Development: Use project-relative path
+ */
+function getDatabasePath(): string {
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  console.log('[Database] getDatabasePath called')
+  console.log('[Database] NODE_ENV:', process.env.NODE_ENV)
+  console.log('[Database] isProduction:', isProduction)
+  console.log('[Database] USER_DATA_PATH:', process.env.USER_DATA_PATH)
+
+  if (isProduction && process.env.USER_DATA_PATH) {
+    // Production: use userData directory (persistent across app updates)
+    const userDataPath = process.env.USER_DATA_PATH
+    const dataDir = path.join(userDataPath, 'data')
+
+    console.log('[Database] Production mode, dataDir:', dataDir)
+
+    // Ensure data directory exists
+    if (!fs.existsSync(dataDir)) {
+      console.log('[Database] Creating data directory...')
+      fs.mkdirSync(dataDir, { recursive: true })
+    }
+
+    const dbPath = path.join(dataDir, 'database.sqlite')
+    console.log('[Database] Database path:', dbPath)
+    return dbPath
+  }
+
+  // Development: use project-relative path
+  const devPath = path.resolve(__dirname, '../../data/database.sqlite')
+  console.log('[Database] Development mode, path:', devPath)
+  return devPath
+}
 
 export const AppDataSource = new DataSource({
-  type: 'sqlite',
-  database: path.resolve(__dirname, '../../data/database.sqlite'),
+  type: 'better-sqlite3',
+  driver: BetterSqlite3,
+  database: getDatabasePath(),
   entities: [Settings, Email, Todo, Label, BoardColumn],
   synchronize: process.env.NODE_ENV !== 'production',
   logging: false
@@ -27,7 +78,15 @@ const DEFAULT_COLUMNS = [
 ]
 
 export async function initializeDatabase(): Promise<void> {
-  await AppDataSource.initialize()
+  console.log('[Database] initializeDatabase called')
+  console.log('[Database] Attempting to initialize DataSource...')
+  try {
+    await AppDataSource.initialize()
+    console.log('[Database] DataSource initialized successfully')
+  } catch (error) {
+    console.error('[Database] DataSource initialization failed:', error)
+    throw error
+  }
 
   // Seed default board columns if they don't exist
   const columnRepository = AppDataSource.getRepository(BoardColumn)

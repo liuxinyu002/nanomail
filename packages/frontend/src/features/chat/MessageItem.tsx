@@ -13,9 +13,10 @@ interface MessageItemProps {
   message: UIMessage
   isStreaming?: boolean
   onTodoUpdate?: () => void
+  isCompact?: boolean
 }
 
-export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemProps) {
+export function MessageItem({ message, isStreaming, onTodoUpdate, isCompact }: MessageItemProps) {
   const isUser = message.role === 'user'
 
   const todosFromToolCalls = useMemo(
@@ -30,37 +31,48 @@ export function MessageItem({ message, isStreaming, onTodoUpdate }: MessageItemP
   )
 
   return (
-    <div className="py-4 animate-in fade-in duration-150 ease-out">
-      <div className="mb-2 flex items-center gap-2">
+    <div className={cn(
+      "animate-in fade-in duration-150 ease-out",
+      isCompact ? "py-2" : "py-4"
+    )}>
+      <div className={cn("flex items-center gap-2", isCompact ? "mb-1" : "mb-2")}>
         <div className={cn(
-          'w-7 h-7 rounded-full flex items-center justify-center shrink-0',
+          'rounded-full flex items-center justify-center shrink-0',
+          isCompact ? 'w-5 h-5' : 'w-7 h-7',
           isUser
             ? 'bg-blue-600'
             : 'bg-blue-50 border border-blue-600/10'
         )}>
           {isUser ? (
-            <User className="h-4 w-4 text-white" />
+            <User className={isCompact ? "h-3 w-3 text-white" : "h-4 w-4 text-white"} />
           ) : (
-            <CoffeeIcon className="h-4 w-4 text-blue-600" />
+            <CoffeeIcon className={isCompact ? "h-3 w-3 text-blue-600" : "h-4 w-4 text-blue-600"} />
           )}
         </div>
-        <span className="text-sm font-semibold text-gray-900">
-          {isUser ? 'You' : 'AI Assistant'}
+        <span className={cn(
+          "font-semibold text-gray-900",
+          isCompact ? "text-xs" : "text-sm"
+        )}>
+          {isUser ? 'You' : 'AI'}
         </span>
         {isStreaming && !message.content && (
-          <LoadingIndicator />
+          <LoadingIndicator size={isCompact ? 'sm' : 'md'} />
         )}
       </div>
 
-      <div className="ml-9">
+      <div className={isCompact ? 'ml-6' : 'ml-9'}>
         {isUser ? (
-          <p className="whitespace-pre-wrap text-gray-800">{message.content}</p>
+          <p className={cn(
+            "whitespace-pre-wrap text-gray-800",
+            isCompact ? "text-sm" : "text-base"
+          )}>{message.content}</p>
         ) : (
           <>
             <MarkdownRenderer
               content={message.content}
               onTodoToggle={onTodoUpdate}
               todoIds={todoIds}
+              isCompact={isCompact}
             />
             {message.toolCalls && message.toolCalls.length > 0 && (
               <ToolCallAccordion toolCalls={message.toolCalls} />

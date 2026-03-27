@@ -4,6 +4,7 @@
  */
 
 import type { EmailClassification, SendEmailInput, SendEmailResponse } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 // Re-export types for convenience
 export type { EmailClassification, SendEmailInput, SendEmailResponse } from '@nanomail/shared'
@@ -100,7 +101,7 @@ export const EmailService = {
       params.set('classification', classification)
     }
 
-    const response = await fetch(`/api/emails?${params.toString()}`, {
+    const response = await fetch(buildApiUrl(`/api/emails?${params.toString()}`), {
       signal,
     })
 
@@ -123,7 +124,7 @@ export const EmailService = {
       throw new Error('Maximum 5 emails can be processed at once')
     }
 
-    const response = await fetch('/api/agent/process-emails', {
+    const response = await fetch(buildApiUrl('/api/agent/process-emails'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ emailIds }),
@@ -140,7 +141,7 @@ export const EmailService = {
    * Get a single email by ID
    */
   async getEmail(id: number): Promise<EmailDetail> {
-    const response = await fetch(`/api/emails/${id}`)
+    const response = await fetch(buildApiUrl(`/api/emails/${id}`))
 
     if (!response.ok) {
       throw new Error('Failed to fetch email')
@@ -155,7 +156,7 @@ export const EmailService = {
    * Optional fields (cc, bcc, isHtml) have sensible defaults on the backend
    */
   async sendEmail(data: SendEmailInput): Promise<SendEmailResponse> {
-    const response = await fetch('/api/emails/send', {
+    const response = await fetch(buildApiUrl('/api/emails/send'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -172,7 +173,7 @@ export const EmailService = {
    * Trigger an async email sync
    */
   async triggerSync(accountId: number = 1): Promise<TriggerSyncResponse> {
-    const response = await fetch('/api/emails/sync', {
+    const response = await fetch(buildApiUrl('/api/emails/sync'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountId }),
@@ -189,7 +190,7 @@ export const EmailService = {
    * Get sync job status
    */
   async getSyncStatus(jobId: string): Promise<SyncJobStatus> {
-    const response = await fetch(`/api/emails/sync/${jobId}`)
+    const response = await fetch(buildApiUrl(`/api/emails/sync/${jobId}`))
 
     if (!response.ok) {
       if (response.status === 404) {

@@ -76,8 +76,17 @@ export async function createApp(): Promise<{
   app: express.Application
   services: AppServices
 }> {
+  console.log('[Backend createApp] Starting initialization...')
+
   // Initialize database
-  await initializeDatabase()
+  console.log('[Backend createApp] Initializing database...')
+  try {
+    await initializeDatabase()
+    console.log('[Backend createApp] Database initialized successfully')
+  } catch (error) {
+    console.error('[Backend createApp] Database initialization failed:', error)
+    throw error
+  }
 
   // Create services
   const encryptionService = new EncryptionService()
@@ -219,12 +228,16 @@ export async function createApp(): Promise<{
  * Starts the server
  */
 export async function startServer(port: number = 3000): Promise<void> {
+  console.log('[Backend startServer] Starting server on port:', port)
   const { app, services } = await createApp()
 
+  console.log('[Backend startServer] App created, starting email sync polling...')
   // Start email sync polling (every 5 minutes)
   services.emailSyncService.startPolling(5)
 
+  console.log('[Backend startServer] Starting HTTP server...')
   const server = app.listen(port, () => {
+    console.log('[Backend startServer] Server is now listening on port:', port)
     logger.info({ port }, 'Server started')
     logger.info({ url: `http://localhost:${port}/health` }, 'Health check available')
   })
@@ -249,7 +262,15 @@ export async function startServer(port: number = 3000): Promise<void> {
 
 // Start server if run directly
 if (require.main === module) {
+  console.log('[Backend Main] Starting server...')
+  console.log('[Backend Main] NODE_ENV:', process.env.NODE_ENV)
+  console.log('[Backend Main] USER_DATA_PATH:', process.env.USER_DATA_PATH)
+  console.log('[Backend Main] PORT:', process.env.PORT)
+  console.log('[Backend Main] __dirname:', __dirname)
+  console.log('[Backend Main] cwd:', process.cwd())
+
   startServer(parseInt(process.env.PORT || '3000', 10)).catch((error) => {
+    console.error('[Backend Main] Failed to start server:', error)
     logger.error({ err: error }, 'Failed to start server')
     process.exit(1)
   })

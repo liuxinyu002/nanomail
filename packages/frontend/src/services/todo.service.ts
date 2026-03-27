@@ -4,6 +4,7 @@
  */
 
 import type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo, ArchivedTodosResponse } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 // Re-export types for convenience
 export type { TodoStatus, TodoDateRangeQuery, UpdateTodo, UpdateTodoPosition, Todo } from '@nanomail/shared'
@@ -64,7 +65,7 @@ export const TodoService = {
     }
 
     const queryString = params.toString()
-    const url = queryString ? `/api/todos?${queryString}` : '/api/todos'
+    const url = buildApiUrl(queryString ? `/api/todos?${queryString}` : '/api/todos')
 
     const response = await fetch(url)
 
@@ -79,7 +80,7 @@ export const TodoService = {
    * Update todo status
    */
   async updateTodoStatus(id: number, status: TodoStatus): Promise<TodoItem> {
-    const response = await fetch(`/api/todos/${id}/status`, {
+    const response = await fetch(buildApiUrl(`/api/todos/${id}/status`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -100,7 +101,7 @@ export const TodoService = {
     params.set('startDate', query.startDate)
     params.set('endDate', query.endDate)
 
-    const response = await fetch(`/api/todos?${params.toString()}`)
+    const response = await fetch(buildApiUrl(`/api/todos?${params.toString()}`))
 
     if (!response.ok) {
       throw new Error('Failed to fetch todos by date range')
@@ -113,7 +114,7 @@ export const TodoService = {
    * Update a todo item
    */
   async updateTodo(id: number, data: UpdateTodo): Promise<TodoItem> {
-    const response = await fetch(`/api/todos/${id}`, {
+    const response = await fetch(buildApiUrl(`/api/todos/${id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -130,7 +131,7 @@ export const TodoService = {
    * Delete a todo item
    */
   async deleteTodo(id: number): Promise<void> {
-    const response = await fetch(`/api/todos/${id}`, {
+    const response = await fetch(buildApiUrl(`/api/todos/${id}`), {
       method: 'DELETE',
     })
 
@@ -144,7 +145,7 @@ export const TodoService = {
    * Moves todo to a different column and/or position
    */
   async updateTodoPosition(id: number, data: UpdateTodoPosition): Promise<TodoItem> {
-    const response = await fetch(`/api/todos/${id}/position`, {
+    const response = await fetch(buildApiUrl(`/api/todos/${id}/position`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -164,7 +165,7 @@ export const TodoService = {
   async batchUpdatePositions(
     updates: Array<{ id: number; boardColumnId: number; position: number }>
   ): Promise<void> {
-    const response = await fetch('/api/todos/batch-position', {
+    const response = await fetch(buildApiUrl('/api/todos/batch-position'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -185,7 +186,7 @@ export const TodoService = {
       params.set('cursor', query.cursor)
     }
 
-    const response = await fetch(`/api/todos/archive?${params.toString()}`)
+    const response = await fetch(buildApiUrl(`/api/todos/archive?${params.toString()}`))
 
     if (!response.ok) {
       throw new Error('Failed to fetch archived todos')
@@ -198,7 +199,7 @@ export const TodoService = {
    * Restore a completed todo to pending status
    */
   async restoreTodo(id: number): Promise<TodoItem> {
-    const response = await fetch(`/api/todos/${id}/restore`, {
+    const response = await fetch(buildApiUrl(`/api/todos/${id}/restore`), {
       method: 'POST',
     })
 
@@ -214,7 +215,7 @@ export const TodoService = {
    * Works for all columns including Inbox (column id 1)
    */
   async getTodosByColumn(columnId: number): Promise<TodosResponse> {
-    const response = await fetch(`/api/todos?boardColumnId=${columnId}`)
+    const response = await fetch(buildApiUrl(`/api/todos?boardColumnId=${columnId}`))
 
     if (!response.ok) {
       throw new Error('Failed to fetch todos by column')

@@ -1,0 +1,92 @@
+name: Build Electron (Windows x64)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 0.1.0)'
+        required: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+        id: pnpm-cache
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @nanomail/shared build
+
+      - name: Build backend
+        run: pnpm --filter @nanomail/backend build
+
+      - name: Build frontend
+        run: pnpm --filter @nanomail/frontend build
+
+      - name: Build Electron main/preload
+        run: pnpm --filter @nanomail/electron build
+
+      - name: Rebuild native modules for Electron
+        run: |
+          cd packages/electron
+          npx electron-builder install-app-deps
+
+      - name: Prepare backend for Electron packaging
+        shell: bash
+        run: |
+          mkdir -p packages/electron/dist/backend
+          cp -r packages/backend/dist/* packages/electron/dist/backend/
+
+      - name: Build Electron app (Windows x64)
+        run: |
+          cd packages/electron
+          npx electron-builder --win --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanomail-windows-x64-installer
+          path: |
+            packages/electron/release/*.exe
+            packages/electron/release/*.yml
+          retention-days: 30
+
+      - name: Upload Windows portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanomail-windows-x64-portable
+          path: packages/electron/release/win-unpacked/**
+          retention-days: 30

@@ -1,5 +1,6 @@
 import { createParser } from 'eventsource-parser'
 import { ChatRequestSchema, type ChatMessage, type ChatContext } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 /**
  * Chat service request type - wraps messages and context for API calls
@@ -43,7 +44,7 @@ export const ChatService = {
     // Validate request before sending (defense-in-depth)
     const validatedRequest = ChatRequestSchema.parse({ ...request, stream: true })
 
-    const response = await fetch('/api/agent/chat', {
+    const response = await fetch(buildApiUrl('/api/agent/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validatedRequest),

@@ -42,6 +42,9 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Electron release builds
+packages/electron/release/
+
 # Temporary files
 *.tmp
 *.temp

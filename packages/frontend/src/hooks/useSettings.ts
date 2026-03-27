@@ -9,6 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import type { SettingsForm } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 /**
  * Fetch user settings from the API
@@ -35,7 +36,7 @@ export function useSettings() {
   return useQuery<SettingsForm>({
     queryKey: ['settings'],
     queryFn: async () => {
-      const response = await fetch('/api/settings')
+      const response = await fetch(buildApiUrl('/api/settings'))
       if (!response.ok) {
         throw new Error('Failed to fetch settings')
       }

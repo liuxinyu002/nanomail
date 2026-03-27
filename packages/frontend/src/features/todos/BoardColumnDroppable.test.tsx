@@ -24,9 +24,9 @@ vi.mock('@/contexts/DndContext', () => ({
 
 // Mock DraggableTodoItem
 vi.mock('./DraggableTodoItem', () => ({
-  DraggableTodoItem: ({ todo, index }: { todo: { id: number; title: string }; index?: number }) => (
+  DraggableTodoItem: ({ todo, index }: { todo: { id: number; description: string }; index?: number }) => (
     <div data-testid={`todo-item-${todo.id}`} data-index={index}>
-      {todo.title}
+      {todo.description}
     </div>
   ),
 }))
@@ -51,9 +51,25 @@ describe('BoardColumnDroppable', () => {
     createdAt: new Date('2024-01-01T00:00:00.000Z'),
   }
 
+  // Helper function to create valid TodoItem mock data
+  const createMockTodo = (id: number, description: string, boardColumnId: number, position: number): TodoItem => ({
+    id,
+    emailId: null,
+    description,
+    status: 'pending',
+    deadline: null,
+    boardColumnId,
+    position,
+    notes: null,
+    color: null,
+    source: 'manual',
+    completedAt: null,
+    createdAt: new Date(),
+  })
+
   const mockTodos: TodoItem[] = [
-    { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-    { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+    createMockTodo(1, 'Task 1', 2, 0),
+    createMockTodo(2, 'Task 2', 2, 1),
   ]
 
   const defaultProps: BoardColumnDroppableProps = {
@@ -407,9 +423,9 @@ describe('BoardColumnDroppable', () => {
 
     it('should maintain todo order within SortableContext', () => {
       const threeTodos: TodoItem[] = [
-        { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 3, title: 'Task 3', description: '', completed: false, boardColumnId: 2, position: 2, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+        createMockTodo(1, 'Task 1', 2, 0),
+        createMockTodo(2, 'Task 2', 2, 1),
+        createMockTodo(3, 'Task 3', 2, 2),
       ]
 
       render(<BoardColumnDroppable {...defaultProps} todos={threeTodos} />)
@@ -422,7 +438,7 @@ describe('BoardColumnDroppable', () => {
 
     it('should handle single todo item correctly in SortableContext', () => {
       const singleTodo: TodoItem[] = [
-        { id: 1, title: 'Only Task', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+        createMockTodo(1, 'Only Task', 2, 0),
       ]
 
       render(<BoardColumnDroppable {...defaultProps} todos={singleTodo} />)
@@ -484,9 +500,9 @@ describe('BoardColumnDroppable', () => {
 
     it('should handle three items with correct shifts when dragging middle item down', () => {
       const threeTodos: TodoItem[] = [
-        { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 3, title: 'Task 3', description: '', completed: false, boardColumnId: 2, position: 2, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+        createMockTodo(1, 'Task 1', 2, 0),
+        createMockTodo(2, 'Task 2', 2, 1),
+        createMockTodo(3, 'Task 3', 2, 2),
       ]
 
       // Simulate dragging item 2 (id: 2, index 1) over item 3 (id: 3, index 2)
@@ -508,9 +524,9 @@ describe('BoardColumnDroppable', () => {
 
     it('should handle three items with correct shifts when dragging first item to last', () => {
       const threeTodos: TodoItem[] = [
-        { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 3, title: 'Task 3', description: '', completed: false, boardColumnId: 2, position: 2, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+        createMockTodo(1, 'Task 1', 2, 0),
+        createMockTodo(2, 'Task 2', 2, 1),
+        createMockTodo(3, 'Task 3', 2, 2),
       ]
 
       // Simulate dragging item 1 (id: 1, index 0) over item 3 (id: 3, index 2)
@@ -532,9 +548,9 @@ describe('BoardColumnDroppable', () => {
 
     it('should handle three items with correct shifts when dragging last item to first', () => {
       const threeTodos: TodoItem[] = [
-        { id: 1, title: 'Task 1', description: '', completed: false, boardColumnId: 2, position: 0, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 2, title: 'Task 2', description: '', completed: false, boardColumnId: 2, position: 1, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
-        { id: 3, title: 'Task 3', description: '', completed: false, boardColumnId: 2, position: 2, createdAt: new Date(), updatedAt: new Date() } as TodoItem,
+        createMockTodo(1, 'Task 1', 2, 0),
+        createMockTodo(2, 'Task 2', 2, 1),
+        createMockTodo(3, 'Task 3', 2, 2),
       ]
 
       // Simulate dragging item 3 (id: 3, index 2) over item 1 (id: 1, index 0)

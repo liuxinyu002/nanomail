@@ -2,6 +2,7 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import { SettingsFormSchema, defaultSettings, type SettingsForm } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsForm>(defaultSettings)
@@ -11,7 +12,7 @@ export function SettingsPage() {
   useEffect(() => {
     async function loadSettings() {
       try {
-        const response = await fetch('/api/settings')
+        const response = await fetch(buildApiUrl('/api/settings'))
         if (response.ok) {
           const data = await response.json()
           // Validate response with schema
@@ -29,7 +30,7 @@ export function SettingsPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const response = await fetch('/api/settings', {
+      const response = await fetch(buildApiUrl('/api/settings'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

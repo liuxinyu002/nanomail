@@ -8,10 +8,10 @@ import { cn } from '@/lib/utils'
 export interface PanelConfig {
   /** Unique identifier for the panel */
   id: string
-  /** Default size as percentage string (e.g. "25%") or number in pixels */
-  defaultSize: number | string
-  /** Minimum size in pixels (e.g. 280) or as percentage string (e.g. "15%") */
-  minSize: number | string
+  /** Default size as percentage (0-100) */
+  defaultSize: number
+  /** Minimum size in pixels */
+  minSize: number
   /** Additional CSS classes for the panel */
   className?: string
 }
@@ -42,13 +42,13 @@ type Layout = Record<string, number>
  * Default panel configurations for the Todo page
  * These match the design specifications from plan_2_phase_2.md
  *
- * minSize: Pixel values ensure absolute minimum widths
- * defaultSize: Percentage strings for proportional layout
+ * defaultSize: Percentage values (0-100)
+ * minSize: Pixel values for absolute minimum widths
  */
 export const DEFAULT_PANEL_CONFIGS: PanelConfig[] = [
-  { id: 'inbox', defaultSize: '25%', minSize: 280 },
-  { id: 'planner', defaultSize: '35%', minSize: 320 },
-  { id: 'board', defaultSize: '40%', minSize: 280 },
+  { id: 'inbox', defaultSize: 25, minSize: 280 },
+  { id: 'planner', defaultSize: 35, minSize: 320 },
+  { id: 'board', defaultSize: 40, minSize: 280 },
 ]
 
 /**

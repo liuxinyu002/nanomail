@@ -199,6 +199,20 @@ log.error({ err: error }, 'Failed to connect to IMAP server')
 
 ---
 
+## Electron 打包注意事项
+
+### exFAT 文件系统导致 ASAR 打包失败
+
+项目位于外置硬盘（exFAT 文件系统）上时，macOS 会自动为每个文件创建 `._` 开头的 AppleDouble 元数据文件。这些文件会导致 electron-builder 的 ASAR 打包失败，报错：
+
+```
+RangeError [ERR_OUT_OF_RANGE]: The value of "offset" is out of range
+```
+
+**解决方案**：将 electron-builder 的输出目录设置在原生文件系统（如 `/tmp`）上，打包完成后再复制回项目目录。当前配置已在 `packages/electron/electron-builder.yml` 和 `package.json` 中处理。
+
+---
+
 ## Git 工作流
 
 - 提交格式：`<type>: <description>`

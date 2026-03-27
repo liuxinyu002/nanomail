@@ -4,6 +4,7 @@
  */
 
 import type { BoardColumn, CreateBoardColumn, UpdateBoardColumn } from '@nanomail/shared'
+import { buildApiUrl } from '@/config/api.config'
 
 // Re-export types for convenience
 export type { BoardColumn, CreateBoardColumn, UpdateBoardColumn } from '@nanomail/shared'
@@ -16,7 +17,7 @@ export const BoardColumnService = {
    * Fetch all board columns
    */
   async getBoardColumns(): Promise<BoardColumn[]> {
-    const response = await fetch('/api/board-columns')
+    const response = await fetch(buildApiUrl('/api/board-columns'))
 
     if (!response.ok) {
       throw new Error('Failed to fetch board columns')
@@ -30,7 +31,7 @@ export const BoardColumnService = {
    * Create a new board column
    */
   async createBoardColumn(data: CreateBoardColumn): Promise<BoardColumn> {
-    const response = await fetch('/api/board-columns', {
+    const response = await fetch(buildApiUrl('/api/board-columns'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -57,7 +58,7 @@ export const BoardColumnService = {
    * Update a board column
    */
   async updateBoardColumn(id: number, data: UpdateBoardColumn): Promise<BoardColumn> {
-    const response = await fetch(`/api/board-columns/${id}`, {
+    const response = await fetch(buildApiUrl(`/api/board-columns/${id}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -87,7 +88,7 @@ export const BoardColumnService = {
    * @returns Object with message and count of moved tasks
    */
   async deleteBoardColumn(id: number): Promise<{ message: string; movedTasks: number }> {
-    const response = await fetch(`/api/board-columns/${id}`, {
+    const response = await fetch(buildApiUrl(`/api/board-columns/${id}`), {
       method: 'DELETE',
     })
 

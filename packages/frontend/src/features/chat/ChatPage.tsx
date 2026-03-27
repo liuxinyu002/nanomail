@@ -2,12 +2,25 @@ import { useCallback } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
-import { Trash2 } from 'lucide-react'
+import { Trash2, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CoffeeIcon } from '@/components/icons'
+import type { MainWindowAPI } from '@nanomail/shared'
+
+/**
+ * 类型守卫：检查是否为主窗口 API
+ * 主窗口 API 包含 toggleFloatingWindow 方法
+ */
+function isMainWindowAPI(api: unknown): api is MainWindowAPI {
+  return typeof api === 'object' && api !== null && 'toggleFloatingWindow' in api
+}
 
 export function ChatPage() {
-  const { messages, isStreaming, error, sendMessage, stopGeneration, clearSession } = useChat()
+  const { messages, isStreaming, isInputDisabled, error, sendMessage, stopGeneration, clearSession } = useChat()
+
+  // 检测是否在 Electron 主窗口环境中
+  const electronAPI = window.electronAPI
+  const isMainWindow = electronAPI && isMainWindowAPI(electronAPI)
 
   // TODO: Implement todo update handler to refresh todo list after AI modifications
   const handleTodoUpdate = useCallback(() => {
@@ -24,17 +37,37 @@ export function ChatPage() {
           </div>
           <h1 className="text-lg font-semibold text-gray-900">AI Assistant</h1>
         </div>
-        {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearSession}
-            className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-          >
-            <Trash2 className="h-4 w-4 mr-1" />
-            Clear
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Float button - only visible in Electron main window */}
+          {isMainWindow && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (isMainWindowAPI(electronAPI)) {
+                  electronAPI.toggleFloatingWindow()
+                }
+              }}
+              title="Open Floating Window (⌘+Shift+Space / Ctrl+Shift+Space)"
+              className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+            >
+              <MessageSquare className="h-4 w-4 mr-1" />
+              Float
+            </Button>
+          )}
+          {/* Clear button - only visible when there are messages */}
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSession}
+              className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
       </header>
 
       {/* Error display */}
@@ -57,6 +90,7 @@ export function ChatPage() {
           onSend={sendMessage}
           onStop={stopGeneration}
           isStreaming={isStreaming}
+          disabled={isInputDisabled}
         />
       </div>
     </div>

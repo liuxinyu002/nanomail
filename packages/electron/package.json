@@ -1,0 +1,39 @@
+{
+  "name": "@nanomail/electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite build -c vite.main.config.ts --watch\" \"vite build -c vite.preload.config.ts --watch\" \"wait-on dist/main/index.js dist/preload/index.js && electron .\"",
+    "build": "tsc && vite build -c vite.main.config.ts && vite build -c vite.preload.config.ts",
+    "build:all": "pnpm --filter @nanomail/shared build && pnpm --filter @nanomail/backend build && pnpm --filter @nanomail/frontend build && pnpm build",
+    "rebuild:electron": "electron-builder install-app-deps",
+    "copy-release": "rm -rf release && mkdir -p release && cp -r /tmp/nanomail-electron-release/* release/ && rm -rf release/mac-universal-*-temp",
+    "package": "./scripts/package.sh",
+    "package:mac": "./scripts/package.sh --mac",
+    "package:win": "./scripts/package.sh --win --x64",
+    "package:win-arm64": "./scripts/package.sh --win --arm64"
+  },
+  "build": {
+    "extends": "./electron-builder.yml"
+  },
+  "dependencies": {
+    "@nanomail/shared": "workspace:*",
+    "better-sqlite3": "^12.0.0",
+    "bcryptjs": "^2.4.3",
+    "bindings": "^1.5.0",
+    "prebuild-install": "^7.1.1",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.24",
+    "concurrently": "^8.2.2",
+    "electron": "^41.0.4",
+    "electron-builder": "^24.9.1",
+    "prebuild-install": "^7.1.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0",
+    "wait-on": "^7.2.0"
+  }
+}

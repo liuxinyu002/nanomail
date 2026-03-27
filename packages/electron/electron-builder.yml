@@ -1,0 +1,81 @@
+appId: com.nanomail.app
+productName: NanoMail
+directories:
+  # 重要：输出目录必须设置在原生文件系统（如 /tmp），
+  # 因为 exFAT 文件系统会创建 ._ AppleDouble 文件导致 ASAR 损坏
+  # 打包完成后会自动复制到项目 release 目录
+  output: /tmp/nanomail-electron-release
+  buildResources: build
+
+# 过滤掉 macOS AppleDouble 文件（._*），这些文件会导致 ASAR 打包失败
+# 同时排除 release 目录，避免把之前构建的产物打包进去
+# 后端编译产物通过构建脚本复制到 electron/dist/backend 目录
+files:
+  - "dist/**/*"
+  - "package.json"
+  - "node_modules/**/*"
+  - "!node_modules/better-sqlite3/deps/**/*"
+  - "!node_modules/better-sqlite3/src/**/*"
+  - "!node_modules/better-sqlite3/build/Release/obj/**/*"
+  - "!node_modules/better-sqlite3/build/Makefile"
+  - "!**/*.ts"
+  - "!**/*.test.*"
+  - "!**/__tests__/**/*"
+  - "!**/._*"
+  - "!**/.DS_Store"
+  - "!release/**/*"
+
+# 前端保持为外部资源（通过 loadFile 加载 HTML）
+extraResources:
+  - from: "../frontend/dist"
+    to: "frontend"
+    filter:
+      - "**/*"
+
+# macOS 配置
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Windows 配置
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+    - target: portable
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+# 通用配置
+asar: true
+# 将含有 .node 文件的原生模块从 ASAR 中解压出来
+# Node.js 无法直接从 ASAR 压缩包内执行 .node 文件
+# 注意：只解压 better-sqlite3，不解压 bindings（bindings 是纯 JS，可在 ASAR 内运行）
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/better-sqlite3/**/*"
+compression: maximum

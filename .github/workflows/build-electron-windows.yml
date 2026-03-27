@@ -48,6 +48,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set version from git tag
+        shell: bash
+        run: |
+          # Extract version from tag (e.g., v1.0.1 -> 1.0.1)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Setting version to $VERSION"
+          # Update version in all package.json files
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+          jq --arg v "$VERSION" '.version = $v' packages/shared/package.json > tmp.json && mv tmp.json packages/shared/package.json
+          jq --arg v "$VERSION" '.version = $v' packages/backend/package.json > tmp.json && mv tmp.json packages/backend/package.json
+          jq --arg v "$VERSION" '.version = $v' packages/frontend/package.json > tmp.json && mv tmp.json packages/frontend/package.json
+          jq --arg v "$VERSION" '.version = $v' packages/electron/package.json > tmp.json && mv tmp.json packages/electron/package.json
+
       - name: Build shared package
         run: pnpm --filter @nanomail/shared build
 

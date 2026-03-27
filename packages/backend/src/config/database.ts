@@ -56,15 +56,31 @@ function getDatabasePath(): string {
 }
 
 /**
- * Check if this is a fresh installation (no existing database)
+ * Check if database has any tables (indicates proper initialization)
+ * Returns true if database exists and has tables, false otherwise
  */
-function isFreshInstall(): boolean {
-  const dbPath = getDatabasePath()
-  return !fs.existsSync(dbPath)
+function hasExistingTables(dbPath: string): boolean {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return false
+    }
+
+    // Open database and check for tables
+    const db = new BetterSqlite3(dbPath, { readonly: true, fileMustExist: true })
+    const result = db.prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table'").get() as { count: number }
+    db.close()
+
+    console.log('[Database] Existing tables count:', result.count)
+    return result.count > 0
+  } catch (error) {
+    // Database file exists but can't be opened (corrupted or empty)
+    console.log('[Database] Error checking tables:', error)
+    return false
+  }
 }
 
 const dbPath = getDatabasePath()
-const freshInstall = isFreshInstall()
+const freshInstall = !hasExistingTables(dbPath)
 
 // In production, enable synchronize for fresh installs to create initial schema
 // This is safe because:

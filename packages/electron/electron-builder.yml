@@ -1,10 +1,7 @@
 appId: com.nanomail.app
 productName: NanoMail
 directories:
-  # 重要：输出目录必须设置在原生文件系统（如 /tmp），
-  # 因为 exFAT 文件系统会创建 ._ AppleDouble 文件导致 ASAR 损坏
-  # 打包完成后会自动复制到项目 release 目录
-  output: /tmp/nanomail-electron-release
+  output: release
   buildResources: build
 
 # 过滤掉 macOS AppleDouble 文件（._*），这些文件会导致 ASAR 打包失败

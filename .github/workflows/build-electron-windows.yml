@@ -96,3 +96,13 @@ jobs:
           name: nanomail-windows-x64-portable
           path: packages/electron/release/win-unpacked/**
           retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packages/electron/release/*.exe
+            packages/electron/release/*.yml
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

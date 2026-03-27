@@ -88,3 +88,6 @@ asarUnpack:
   - "**/*.node"
   - "node_modules/better-sqlite3/**/*"
 compression: maximum
+
+# 禁用生成调试和自动更新元数据文件
+generateUpdatesFilesForAllChannels: false

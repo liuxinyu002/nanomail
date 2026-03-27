@@ -2,6 +2,13 @@
   "name": "@nanomail/electron",
   "version": "0.1.0",
   "private": true,
+  "description": "NanoMail Desktop Application",
+  "author": "liuxinyu002",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuxinyu002/nanomail.git",
+    "directory": "packages/electron"
+  },
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently -k \"vite build -c vite.main.config.ts --watch\" \"vite build -c vite.preload.config.ts --watch\" \"wait-on dist/main/index.js dist/preload/index.js && electron .\"",

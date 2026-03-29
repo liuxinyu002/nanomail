@@ -8,7 +8,6 @@ import { IPC_CHANNELS } from '@nanomail/shared'
 let mainWindow: BrowserWindow | null = null
 let floatingWindow: BrowserWindow | null = null
 let backendProcess: BackendProcess | null = null
-let isFirstLoad = true  // 标记是否为首次加载，防止刷新窗口误清 localStorage
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -30,17 +29,6 @@ async function bootstrap() {
 
   // 创建主窗口
   mainWindow = createMainWindow(isDev)
-
-  // 启动时清理 localStorage（模拟 Session 生命周期）
-  // 使用 isFirstLoad 判定，仅在首次加载时清理，防止刷新窗口误清
-  mainWindow.webContents.once('did-finish-load', async () => {
-    if (isFirstLoad) {
-      await mainWindow?.webContents.executeJavaScript(
-        `localStorage.removeItem('nanomail_chat_messages')`
-      )
-      isFirstLoad = false
-    }
-  })
 
   // 注册全局快捷键
   registerShortcuts(() => {

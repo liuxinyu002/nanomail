@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const BoardColumnIds = {
   INBOX: 1,
-  TODO: 2,
+  // TODO: 2, // Deprecated - Inbox (id=1) serves as the pending items container
   IN_PROGRESS: 3,
   DONE: 4,
 } as const

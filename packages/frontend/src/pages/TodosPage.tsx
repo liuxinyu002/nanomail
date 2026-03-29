@@ -130,7 +130,7 @@ export function TodosPage() {
         break
 
       case 'planner':
-        // Dropping to Planner hour slot: set deadline AND boardColumnId = 2
+        // Dropping to Planner hour slot: set deadline only, keep original boardColumnId
         if (!targetDate) return
 
         // Create ISO datetime from date + hour (if hour is specified and valid)
@@ -140,7 +140,7 @@ export function TodosPage() {
           targetDateTime.setHours(targetHour, 0, 0, 0)
         }
         updatePayload.deadline = targetDateTime.toISOString()
-        updatePayload.boardColumnId = 2 // Move to Todo column
+        // Note: boardColumnId is NOT changed - task stays in its original column
         break
 
       default:

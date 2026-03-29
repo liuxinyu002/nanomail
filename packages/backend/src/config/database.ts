@@ -17,6 +17,7 @@ import { Email } from '../entities/Email.entity'
 import { Todo } from '../entities/Todo.entity'
 import { Label } from '../entities/Label.entity'
 import { BoardColumn } from '../entities/BoardColumn.entity'
+import { BoardColumnIds } from '@nanomail/shared'
 
 /**
  * Get database path based on environment
@@ -104,12 +105,12 @@ export const AppDataSource = new DataSource({
 /**
  * Default board columns to seed on first initialization
  * Inbox (id: 1) is a system column that cannot be deleted
+ * Note: "待处理" column (id: 2) has been deprecated - Inbox serves as the pending items container
  */
 const DEFAULT_COLUMNS = [
   { id: 1, name: '收件箱', color: '#C9CDD4', order: 0, isSystem: 1 },  // Inbox - system column (Macaron Gray)
-  { id: 2, name: '待处理', color: '#f59e0b', order: 1, isSystem: 0 },  // Todo
-  { id: 3, name: '进行中', color: '#10b981', order: 2, isSystem: 0 },  // In Progress
-  { id: 4, name: '已完成', color: '#3b82f6', order: 3, isSystem: 0 },  // Done
+  { id: 3, name: '进行中', color: '#10b981', order: 1, isSystem: 0 },  // In Progress
+  { id: 4, name: '已完成', color: '#3b82f6', order: 2, isSystem: 0 },  // Done
 ]
 
 export async function initializeDatabase(): Promise<void> {
@@ -125,12 +126,32 @@ export async function initializeDatabase(): Promise<void> {
 
   // Seed default board columns if they don't exist
   const columnRepository = AppDataSource.getRepository(BoardColumn)
+  const todoRepository = AppDataSource.getRepository(Todo)
   const existingColumns = await columnRepository.count()
 
   if (existingColumns === 0) {
     await columnRepository.save(
       DEFAULT_COLUMNS.map(col => columnRepository.create(col))
     )
+    console.log('[Database] Default columns seeded')
+  }
+
+  // Migration: Clean up deprecated "待处理" column (id=2) if it exists
+  // Move all tasks from id=2 to Inbox (id=1) and delete the column
+  const deprecatedTodoColumn = await columnRepository.findOne({ where: { id: 2 } })
+  if (deprecatedTodoColumn) {
+    console.log('[Database] Found deprecated Todo column (id=2), migrating tasks to Inbox')
+
+    // Move all tasks from id=2 column to Inbox
+    const updateResult = await todoRepository.update(
+      { boardColumnId: 2 },
+      { boardColumnId: BoardColumnIds.INBOX }
+    )
+
+    // Delete the deprecated column
+    await columnRepository.delete(2)
+
+    console.log('[Database] Migration complete: moved', updateResult.affected ?? 0, 'tasks to Inbox, deleted deprecated column')
   }
 }
 

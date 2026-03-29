@@ -27,9 +27,6 @@ export function createMainWindow(isDev: boolean): BrowserWindow {
     win.loadFile(frontendPath)
       .then(() => console.log('[Electron] Frontend loaded successfully'))
       .catch((err) => console.error('[Electron] Failed to load frontend:', err))
-
-    // 生产环境也打开 DevTools 用于调试
-    win.webContents.openDevTools()
   }
 
   // 监听控制台消息
